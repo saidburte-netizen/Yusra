@@ -1,12 +1,17 @@
 import 'package:go_router/go_router.dart';
 
-import '../../core/widgets/feedback.dart';
+import 'screens/suppliers_screen.dart';
 
-/// Route stub created by Agent A. The owning agent overwrites this file.
+/// Agent B owns this file.
 final List<RouteBase> suppliersRoutes = [
   GoRoute(
     path: '/suppliers',
-    builder: (context, state) =>
-        const ComingSoonScreen(title: 'Suppliers'),
+    builder: (context, state) => const SuppliersScreen(),
+  ),
+  GoRoute(
+    path: '/suppliers/:id',
+    builder: (context, state) => SupplierDetailScreen(
+      supplierId: state.pathParameters['id'] ?? '',
+    ),
   ),
 ];

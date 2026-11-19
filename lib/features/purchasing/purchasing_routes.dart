@@ -1,22 +1,22 @@
 import 'package:go_router/go_router.dart';
 
-import '../../core/widgets/feedback.dart';
+import 'screens/purchase_order_screen.dart';
+import 'screens/purchase_orders_screen.dart';
 
-/// Route stub created by Agent A. The owning agent overwrites this file.
+/// Agent B owns this file.
 final List<RouteBase> purchasingRoutes = [
   GoRoute(
     path: '/purchasing/orders',
-    builder: (context, state) =>
-        const ComingSoonScreen(title: 'Purchasing'),
+    builder: (context, state) => const PurchaseOrdersScreen(),
   ),
   GoRoute(
     path: '/purchasing/orders/new',
-    builder: (context, state) =>
-        const ComingSoonScreen(title: 'Purchasing — new'),
+    builder: (context, state) => const PurchaseOrderScreen(orderId: 'new'),
   ),
   GoRoute(
     path: '/purchasing/orders/:id',
-    builder: (context, state) =>
-        const ComingSoonScreen(title: 'Purchasing — id'),
+    builder: (context, state) => PurchaseOrderScreen(
+      orderId: state.pathParameters['id'] ?? '',
+    ),
   ),
 ];
