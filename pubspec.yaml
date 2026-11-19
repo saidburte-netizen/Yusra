@@ -33,6 +33,13 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^4.0.0
 
+# app_links 6.4.1 uses `flutter.compileSdkVersion` from a plugin buildscript and
+# pulls AGP 8.6.1, which cannot be evaluated by the Gradle 8.3 toolchain that
+# ships with the pinned Flutter 3.24.5 SDK. 6.2.0 satisfies supabase_flutter's
+# `>=6.2.0 <8.0.0` constraint and builds with the app's AGP 8.1.0.
+dependency_overrides:
+  app_links: 6.2.0
+
 flutter:
   uses-material-design: true
   assets:
