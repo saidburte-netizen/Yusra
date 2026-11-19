@@ -41,10 +41,12 @@ jobs:
       - name: Set up Android SDK (platform 34, build-tools 34.0.0)
         uses: android-actions/setup-android@v3
         with:
-          api-level: 34
-          build-tools: 34.0.0
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: false
+          packages: |
+            platform-tools
+            platforms;android-34
+            build-tools;34.0.0
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
