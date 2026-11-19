@@ -36,6 +36,9 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Pinned to the stable release the whole team develops against, so
+          # local analysis and the Actions run behave identically.
+          flutter-version: '3.24.5'
           cache: true
 
       - name: Set up Android SDK (platform 34, build-tools 34.0.0)
