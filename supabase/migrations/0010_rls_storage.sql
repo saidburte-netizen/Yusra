@@ -1,0 +1,14 @@
+-- 0010 — Row Level Security and Storage buckets.
+--
+-- IMPORTANT (integration note, not a database change):
+-- The SQL steps supplied by the owner for this project did not include any
+-- `create policy`, `alter table ... enable row level security`, or
+-- `storage.buckets` statements. This file is deliberately left with no
+-- executable statements so that the migration folder honestly matches what
+-- the owner actually ran in the Supabase SQL Editor.
+--
+-- Without RLS, Supabase tables are reachable directly with the anon key,
+-- so the role rules in app (and the smoke test) cannot be enforced by the
+-- database. A proposed, idempotent hardening script is provided as
+-- 0012_rls_hardening.sql. It has NOT been applied and must be reviewed and
+-- run by the owner in the SQL Editor. See supabase/README.md.
