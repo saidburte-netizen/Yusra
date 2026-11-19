@@ -1,11 +1,11 @@
 {
-    "name": "pharmacy",
-    "short_name": "pharmacy",
+    "name": "Yusra Pharmacy",
+    "short_name": "Yusra",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFF5F8",
+    "theme_color": "#D63384",
+    "description": "Yusra Pharmacy — Care made easy.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

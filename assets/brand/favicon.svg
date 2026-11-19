@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="64" height="64" role="img" aria-label="Yusra">
+  <rect width="512" height="512" rx="96" fill="#FFF5F8"/>
+  <circle cx="256" cy="256" r="186" fill="#FFFFFF" stroke="#D4AF37" stroke-width="10"/>
+  <g fill="#D63384">
+    <rect x="220" y="154" width="72" height="204" rx="24"/>
+    <rect x="154" y="220" width="204" height="72" rx="24"/>
+  </g>
+  <path d="M324 164 C 350 122, 388 116, 400 128 C 396 164, 364 188, 328 180 Z" fill="#D4AF37"/>
+</svg>
