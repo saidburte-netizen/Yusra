@@ -68,7 +68,8 @@ declare
   v_amount_due numeric(14,2) := 0;
   v_remaining int;
 begin
-  if not has_role('super_admin','admin','pharmacist','cashier') then
+  -- Sale returns are edit rights for S/A/P only; cashiers have view on sales.
+  if not has_role('super_admin','admin','pharmacist') then
     raise exception 'You are not allowed to process returns';
   end if;
   if coalesce(trim(v_reason), '') = '' then raise exception 'A return reason is required'; end if;

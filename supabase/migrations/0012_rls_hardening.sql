@@ -192,10 +192,16 @@ grant execute on function create_sale(uuid, uuid, uuid, uuid, jsonb, jsonb, nume
 -- run that file first). Their grants live there so 0012 stays runnable alone.
 
 -- ---------------------------------------------------------------------------
--- Private Storage bucket for prescription images: <branch_id>/<rx_id>/<file>
+-- Storage buckets. prescriptions and receipts are private; the remaining
+-- three are public brand/catalogue/avatar assets. Prescription paths are
+-- <branch_id>/<rx_id>/<file> so the policy can scope by the first folder.
 -- ---------------------------------------------------------------------------
-insert into storage.buckets (id, name, public, file_size_limit)
-values ('prescriptions', 'prescriptions', false, 5242880)
+insert into storage.buckets (id, name, public, file_size_limit) values
+  ('prescriptions',  'prescriptions',  false, 5242880),
+  ('receipts',       'receipts',       false, 5242880),
+  ('medicine-images','medicine-images', true, 5242880),
+  ('branding',       'branding',        true, 5242880),
+  ('avatars',        'avatars',         true, 5242880)
 on conflict (id) do nothing;
 
 drop policy if exists rls_rx_storage_read on storage.objects;

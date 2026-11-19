@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yusra_pharmacy/core/permissions.dart';
 import 'package:yusra_pharmacy/features/sales/logic/cart.dart';
-import 'package:yusra_pharmacy/features/sales/logic/held_carts.dart';
 
 CartLine line({
   String id = 'm1',
@@ -56,7 +55,7 @@ void main() {
     });
 
     test('out of stock products are not added', () {
-      expect(Cart().add(line(available: 0)).isEmpty, isTrue);
+      expect(const Cart().add(line(available: 0)).isEmpty, isTrue);
     });
   });
 

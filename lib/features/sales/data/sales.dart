@@ -58,6 +58,34 @@ class Shift {
 
   bool get isOpen => status == 'open';
 
+  Shift copyWith({
+    String? id,
+    String? branchId,
+    String? cashierId,
+    DateTime? openedAt,
+    DateTime? closedAt,
+    double? openingCash,
+    double? expectedCash,
+    double? closingCash,
+    double? difference,
+    String? status,
+    String? note,
+    String? cashierName,
+  }) => Shift(
+        id: id ?? this.id,
+        branchId: branchId ?? this.branchId,
+        cashierId: cashierId ?? this.cashierId,
+        openedAt: openedAt ?? this.openedAt,
+        closedAt: closedAt ?? this.closedAt,
+        openingCash: openingCash ?? this.openingCash,
+        expectedCash: expectedCash ?? this.expectedCash,
+        closingCash: closingCash ?? this.closingCash,
+        difference: difference ?? this.difference,
+        status: status ?? this.status,
+        note: note ?? this.note,
+        cashierName: cashierName ?? this.cashierName,
+      );
+
   factory Shift.fromJson(Map<String, dynamic> json) {
     final profile = json['profiles'];
     return Shift(
