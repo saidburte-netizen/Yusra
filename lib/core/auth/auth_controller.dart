@@ -21,12 +21,14 @@ class UserProfile {
     this.phone,
     this.avatarUrl,
     this.branchId,
+    this.roleLabel,
   });
 
   final String id;
   final String email;
   final String fullName;
   final AppRole role;
+  final String? roleLabel;
   final bool isActive;
   final String? phone;
   final String? avatarUrl;
@@ -38,6 +40,7 @@ class UserProfile {
       email: email,
       fullName: (json['full_name'] as String?) ?? email.split('@').first,
       role: AppRoleX.fromDb(json['role'] as String?) ?? AppRole.cashier,
+      roleLabel: json['role'] as String?,
       isActive: json['is_active'] as bool? ?? true,
       phone: json['phone'] as String?,
       avatarUrl: json['avatar_url'] as String?,
@@ -145,11 +148,22 @@ class AuthController extends StateNotifier<AuthState> {
       return;
     }
     try {
-      final row = await client
-          .from('profiles')
-          .select()
-          .eq('id', user.id)
-          .single();
+      // Prefer a SECURITY DEFINER RPC so a missing RLS policy or table grant
+      // cannot turn into a fake "cashier" profile and a false access denial.
+      // The direct read stays as a fallback for databases where the RPC has
+      // not been applied yet.
+      late final Map<String, dynamic> row;
+      try {
+        final rpcResult = await client.rpc('get_my_profile');
+        if (rpcResult == null) throw StateError('Empty profile response');
+        row = Map<String, dynamic>.from(rpcResult as Map);
+      } catch (_) {
+        row = await client
+            .from('profiles')
+            .select()
+            .eq('id', user.id)
+            .single();
+      }
       state = AuthState(
         status: AuthStatus.authenticated,
         profile: UserProfile.fromJson(row, email: user.email ?? ''),
@@ -165,6 +179,7 @@ class AuthController extends StateNotifier<AuthState> {
           email: user.email ?? '',
           fullName: user.email ?? '',
           role: AppRole.cashier,
+          roleLabel: S.roleUnknown,
           isActive: false,
         ),
         error: AppErrorMapper.from(e).message,

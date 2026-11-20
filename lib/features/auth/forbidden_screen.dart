@@ -40,7 +40,7 @@ class ForbiddenScreen extends ConsumerWidget {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   Text(
-                    '${S.role}: ${auth.profile?.role.label ?? '—'}',
+                    '${S.role}: ${auth.profile?.roleLabel ?? auth.profile?.role.label ?? '—'}',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium
                         ?.copyWith(fontWeight: FontWeight.bold),
