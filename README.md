@@ -68,13 +68,14 @@ settings with teammates exclusively through the proposed 0015 RPCs.
 2. In the SQL Editor, run the migration files in `supabase/migrations/` in
    filename order, one file per query. See `supabase/README.md` for the
    details, the already-applied status and the change protocol.
-3. Run `supabase/checks/schema_check.sql`. It must report no `MISSING` rows.
-4. Replace `PUT-THE-EMAIL-HERE` in `0011_seed.sql` (or run the equivalent
+3. Replace `PUT-THE-EMAIL-HERE` in `0011_seed.sql` (or run the equivalent
    `UPDATE profiles SET role = 'admin' WHERE email = ...` after the first
    user signs up).
-5. Review and run `0012_rls_hardening.sql`, `0013_rpc_gaps.sql`,
-   `0014_report_views.sql` and `0015_team_management.sql`, then run the smoke
-   test below.
+4. Review and run `0012_rls_hardening.sql`, `0013_rpc_gaps.sql`,
+   `0014_report_views.sql` and `0015_team_management.sql`.
+5. Run `supabase/checks/schema_check.sql`. It must report no `MISSING` rows
+   once all four proposed scripts have been applied, then run the smoke test
+   below.
 
 ## 2. Create the first super admin
 
