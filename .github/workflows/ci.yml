@@ -70,15 +70,63 @@ jobs:
           "$SDK/cmdline-tools/latest/bin/sdkmanager" --list_installed | \
             grep -E 'platforms;android-34|build-tools;34.0.0'
 
+      - name: Verify pinned platform-tools
+        run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          PIN="35.0.2"
+          PROPS="$SDK/platform-tools/source.properties"
+          CURRENT=""
+          if [ -f "$PROPS" ]; then
+            CURRENT="$(grep '^Pkg.Revision=' "$PROPS" | cut -d= -f2 | tr -d '[:space:]')"
+          fi
+          if [ "$CURRENT" != "$PIN" ]; then
+            yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" \
+              "platform-tools;$PIN"
+          fi
+          grep '^Pkg.Revision=' "$PROPS"
+          "$SDK/platform-tools/adb" version | head -1
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Print tool versions
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Set up PostgreSQL 16 client
         run: |
+          if ! psql --version | grep -q ' 16\.'; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client-16
+          fi
+          psql --version
+
+      - name: Print and verify all tool versions
+        run: |
+          echo "=== Flutter / Dart ==="
           flutter --version
           dart --version
+          echo "=== Java ==="
           java -version
+          echo "=== Gradle wrapper ==="
+          bash ./android/gradlew --version
+          echo "=== Deno ==="
+          deno --version
+          echo "=== PostgreSQL ==="
+          psql --version
+          echo "=== Android SDK ==="
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --list_installed | \
+            grep -E 'platforms;android-34|build-tools;34.0.0|platform-tools'
+          echo "=== Flutter doctor ==="
           flutter doctor -v
+
+          flutter --version | head -1 | grep -q '3.24.5'
+          dart --version 2>&1 | grep -q 'Dart SDK version: 3\.'
+          java -version 2>&1 | head -1 | grep -q '"17\.'
+          deno --version | head -1 | grep -q '^deno '
+          psql --version | grep -q ' 16\.'
 
       - name: Install dependencies
         run: flutter pub get
