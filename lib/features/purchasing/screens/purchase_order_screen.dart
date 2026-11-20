@@ -87,7 +87,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
         _loading = false;
         _order = null;
       });
-      if (mounted) AppSnackbar.error(context, '$e');
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 
@@ -149,7 +149,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
         await _load();
       }
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, '$e');
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -167,7 +167,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
       AppSnackbar.success(context, 'Order $status.');
       await _load();
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, '$e');
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -267,7 +267,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
         items: _lines,
       );
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, '$e');
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 
@@ -285,7 +285,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
         goodsReceivedNote: true,
       );
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, '$e');
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 
@@ -335,7 +335,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
       AppSnackbar.success(context, 'Goods received and stock updated.');
       await _load();
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, '$e');
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     } finally {
       if (mounted) setState(() => _saving = false);
     }

@@ -12,6 +12,7 @@ import '../../../core/widgets.dart';
 import '../data/inventory_models.dart';
 import '../data/inventory_providers.dart';
 import '../logic/stock_rules.dart';
+import '../../../core/errors/app_error.dart';
 
 /// B9 — device-persisted stock take with live variance and RPC-backed apply.
 class StocktakeScreen extends ConsumerStatefulWidget {
@@ -93,7 +94,7 @@ class _StocktakeScreenState extends ConsumerState<StocktakeScreen> {
       });
     } catch (e) {
       setState(() {
-        _error = '$e';
+        _error = AppErrorMapper.from(e).message;
         _loading = false;
       });
     }
@@ -170,7 +171,7 @@ class _StocktakeScreenState extends ConsumerState<StocktakeScreen> {
       ref.invalidate(movementsProvider((medicineId: null, type: null)));
       await _load();
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, '$e');
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     } finally {
       if (mounted) setState(() => _applying = false);
     }

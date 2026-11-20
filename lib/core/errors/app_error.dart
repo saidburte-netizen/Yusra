@@ -120,7 +120,11 @@ class AppErrorMapper {
     if (lower.contains('rate limit') || lower.contains('too many')) {
       return 'Too many attempts. Please wait a moment and try again.';
     }
-    return raw.isEmpty ? S.somethingWrong : raw;
+    if (raw.isEmpty) return S.somethingWrong;
+    if (lower.contains('network') || lower.contains('failed to fetch')) {
+      return 'No connection. Check your internet and try again.';
+    }
+    return S.somethingWrong;
   }
 
   static AppErrorKind _postgrestKind(PostgrestException error) {

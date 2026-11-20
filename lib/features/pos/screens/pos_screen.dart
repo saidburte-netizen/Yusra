@@ -530,7 +530,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               ? const LoadingSkeleton(lines: 5)
               : medicinesState.hasError || stockState.hasError
                   ? ErrorState(
-                      message: (medicinesState.error ?? stockState.error).toString(),
+                      message: AppErrorMapper.from((medicinesState.error ?? stockState.error)!).message,
                       onRetry: () {
                         ref.invalidate(medicinesProvider);
                         ref.invalidate(stockSummaryProvider);

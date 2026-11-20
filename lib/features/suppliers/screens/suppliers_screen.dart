@@ -233,7 +233,7 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
       AppSnackbar.success(context, 'Supplier saved.');
       ref.invalidate(suppliersProvider(_query));
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, '$e');
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 
@@ -252,7 +252,7 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
       if (!mounted) return;
       ref.invalidate(suppliersProvider(_query));
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, '$e');
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 }

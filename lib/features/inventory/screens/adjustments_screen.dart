@@ -7,6 +7,7 @@ import '../../../core/permissions.dart';
 import '../../../core/widgets.dart';
 import '../data/inventory_providers.dart';
 import '../widgets/stock_widgets.dart';
+import '../../../core/errors/app_error.dart';
 
 class AdjustmentsScreen extends ConsumerWidget {
   const AdjustmentsScreen({super.key});
@@ -185,7 +186,7 @@ class AdjustmentsScreen extends ConsumerWidget {
                       );
                   if (context.mounted) Navigator.pop(context, true);
                 } catch (e) {
-                  if (context.mounted) AppSnackbar.error(context, '$e');
+                  if (context.mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
                 } finally {
                   if (context.mounted) setState(() => busy = false);
                 }
