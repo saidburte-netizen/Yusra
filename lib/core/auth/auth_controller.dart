@@ -90,13 +90,17 @@ class AuthController extends StateNotifier<AuthState> {
       if (change.session?.user == null) {
         state = AuthState.unauthenticated;
         _bump();
-      } else if (state.profile == null) {
+      } else {
+        // Roles can change in the database while a session is live (for example
+        // when an admin promotes a teammate). Re-read the profile on every auth
+        // event so the router guard never keeps a stale role.
         unawaited(_loadProfile());
       }
     });
   }
 
   StreamSubscription<Object>? _subscription;
+  bool _loadingProfile = false;
 
   void _bump() => authRevision.value++;
 
@@ -122,6 +126,16 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> _loadProfile() async {
+    if (_loadingProfile) return;
+    _loadingProfile = true;
+    try {
+      await _loadProfileUnchecked();
+    } finally {
+      _loadingProfile = false;
+    }
+  }
+
+  Future<void> _loadProfileUnchecked() async {
     final client = SupabaseService.client;
     final user = client.auth.currentUser;
     if (user == null) {

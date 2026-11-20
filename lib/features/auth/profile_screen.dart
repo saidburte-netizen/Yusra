@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/permissions.dart';
 import '../../core/strings.dart';
 import '../../core/supabase_client.dart';
 import '../../core/theme/app_colors.dart';
@@ -135,6 +136,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                     style: Theme.of(context).textTheme.titleMedium),
                                 Text(profile?.email ?? '',
                                     style: Theme.of(context).textTheme.bodySmall),
+                                Text(
+                                  '${S.role}: ${profile?.role.label ?? '—'}',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
                                 TextButton.icon(
                                   onPressed: _pickAvatar,
                                   icon: const Icon(Icons.upload, size: 18),
