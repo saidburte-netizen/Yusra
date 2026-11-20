@@ -30,7 +30,44 @@ Future<void> main() async {
   runApp(
     UncontrolledProviderScope(
       container: container,
-      child: const YusraApp(),
+      child: const AuthRefreshOnResume(child: YusraApp()),
     ),
   );
+}
+
+/// Role changes made in Supabase while the app is in the background must be
+/// picked up as soon as the user returns, without waiting for a token refresh.
+class AuthRefreshOnResume extends ConsumerStatefulWidget {
+  const AuthRefreshOnResume({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  ConsumerState<AuthRefreshOnResume> createState() =>
+      _AuthRefreshOnResumeState();
+}
+
+class _AuthRefreshOnResumeState extends ConsumerState<AuthRefreshOnResume>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.read(authProvider.notifier).refreshProfile();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
