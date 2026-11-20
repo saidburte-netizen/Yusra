@@ -111,6 +111,10 @@ abstract final class S {
   static const branch = 'Branch';
   static const status = 'Status';
   static const fullName = 'Full name';
+  static const teamActivity = 'Team activity';
+  static const shiftOpen = 'Shift open';
+  static const noShift = 'No open shift';
+  static const lastActive = 'Last active';
   static const phone = 'Phone';
   static const pharmacyName = 'Pharmacy name';
   static const taglineLabel = 'Tagline';
