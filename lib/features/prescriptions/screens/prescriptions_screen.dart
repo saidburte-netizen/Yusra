@@ -14,6 +14,7 @@ import '../../../core/widgets.dart';
 import '../../../core/strings.dart';
 import '../../inventory/data/inventory_providers.dart';
 import '../data/prescriptions.dart';
+import '../../../core/errors/app_error.dart';
 
 class PrescriptionsScreen extends ConsumerStatefulWidget {
   const PrescriptionsScreen({super.key});
@@ -170,7 +171,7 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
       ref.invalidate(prescriptionsProvider);
       if (mounted) AppSnackbar.success(context, 'Prescription ${created.rxNo} registered.');
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, error.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -190,7 +191,7 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
       await ref.read(prescriptionsRepositoryProvider).cancel(rx.id);
       ref.invalidate(prescriptionsProvider);
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, error.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
     }
   }
 
@@ -316,7 +317,7 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
                 },
                 loading: () => const LoadingSkeleton(lines: 4),
                 error: (error, _) => ErrorState(
-                  message: error.toString(),
+                  message: AppErrorMapper.from(error).message,
                   onRetry: () => ref.invalidate(prescriptionsProvider),
                 ),
               ),

@@ -10,6 +10,7 @@ import '../../../core/widgets.dart';
 import '../../../core/strings.dart';
 import '../../sales/data/sales.dart';
 import '../data/customers.dart';
+import '../../../core/errors/app_error.dart';
 
 class CustomersScreen extends ConsumerStatefulWidget {
   const CustomersScreen({super.key});
@@ -101,7 +102,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
         AppSnackbar.success(context, customer == null ? 'Customer added.' : 'Customer updated.');
       }
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, error.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
     }
   }
 
@@ -121,7 +122,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
           .setActive(customer.id, !customer.isActive);
       ref.invalidate(customersProvider);
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, error.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
     }
   }
 
@@ -222,7 +223,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                 },
                 loading: () => const LoadingSkeleton(lines: 4),
                 error: (error, _) => ErrorState(
-                  message: error.toString(),
+                  message: AppErrorMapper.from(error).message,
                   onRetry: () => ref.invalidate(customersProvider),
                 ),
               ),
@@ -324,7 +325,7 @@ class CustomerDetailScreen extends ConsumerWidget {
             );
           },
           loading: () => const LoadingSkeleton(lines: 4),
-          error: (error, _) => ErrorState(message: error.toString()),
+          error: (error, _) => ErrorState(message: AppErrorMapper.from(error).message),
         ),
       ),
     );

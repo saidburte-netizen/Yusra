@@ -12,6 +12,7 @@ import '../../../core/strings.dart';
 import '../../inventory/data/inventory_providers.dart';
 import '../../sales/data/sales.dart';
 import '../../sales/logic/receipts.dart';
+import '../../../core/errors/app_error.dart';
 
 class ShiftsScreen extends ConsumerStatefulWidget {
   const ShiftsScreen({super.key});
@@ -69,7 +70,7 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
       ref.invalidate(shiftsProvider);
       if (mounted) AppSnackbar.success(context, 'Shift started.');
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, error.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -154,7 +155,7 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
         );
       }
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, error.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -175,7 +176,7 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
         expectedCash: shift.openingCash,
       );
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, error.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
     }
   }
 
@@ -296,7 +297,7 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
                 );
               },
               loading: () => const LoadingSkeleton(lines: 1),
-              error: (error, _) => ErrorState(message: error.toString()),
+              error: (error, _) => ErrorState(message: AppErrorMapper.from(error).message),
             ),
             const SizedBox(height: 12),
             Row(
@@ -363,7 +364,7 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
                 },
                 loading: () => const LoadingSkeleton(lines: 4),
                 error: (error, _) => ErrorState(
-                  message: error.toString(),
+                  message: AppErrorMapper.from(error).message,
                   onRetry: () => ref.invalidate(shiftsProvider),
                 ),
               ),

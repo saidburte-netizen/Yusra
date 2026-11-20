@@ -8,6 +8,7 @@ import '../../../core/money.dart';
 import '../../../core/permissions.dart';
 import '../../../core/widgets.dart';
 import '../data/purchasing.dart';
+import '../../../core/errors/app_error.dart';
 
 class PurchaseOrdersScreen extends ConsumerStatefulWidget {
   const PurchaseOrdersScreen({super.key});
@@ -74,7 +75,7 @@ class _PurchaseOrdersScreenState extends ConsumerState<PurchaseOrdersScreen> {
               child: state.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (error, _) => ErrorState(
-                  message: error.toString(),
+                  message: AppErrorMapper.from(error).message,
                   onRetry: () => ref.invalidate(purchaseOrdersProvider),
                 ),
                 data: (orders) {

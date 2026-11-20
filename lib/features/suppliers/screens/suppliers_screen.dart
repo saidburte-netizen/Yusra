@@ -9,6 +9,7 @@ import '../../../core/permissions.dart';
 import '../../../core/widgets.dart';
 import '../../purchasing/data/purchasing.dart';
 import '../data/suppliers.dart';
+import '../../../core/errors/app_error.dart';
 
 class SuppliersScreen extends ConsumerStatefulWidget {
   const SuppliersScreen({super.key});
@@ -66,7 +67,7 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
               child: state.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (error, _) => ErrorState(
-                  message: error.toString(),
+                  message: AppErrorMapper.from(error).message,
                   onRetry: () => ref.invalidate(suppliersProvider(_query)),
                 ),
                 data: (items) => DataTablePlus(
@@ -293,7 +294,7 @@ class SupplierDetailScreen extends ConsumerWidget {
             Expanded(
               child: orders.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => ErrorState(message: error.toString()),
+                error: (error, _) => ErrorState(message: AppErrorMapper.from(error).message),
                 data: (all) {
                   final items =
                       all.where((order) => order.supplierId == supplierId).toList();

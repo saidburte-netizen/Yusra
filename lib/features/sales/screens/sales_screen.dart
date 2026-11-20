@@ -11,6 +11,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets.dart';
 import '../../../core/strings.dart';
 import '../data/sales.dart';
+import '../../../core/errors/app_error.dart';
 
 typedef SaleFilterArgs = ({
   DateTime? from,
@@ -107,7 +108,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
       ref.invalidate(salesProvider);
       if (mounted) AppSnackbar.success(context, 'Sale voided.');
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, error.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
     }
   }
 
@@ -309,7 +310,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                 },
                 loading: () => const LoadingSkeleton(lines: 5),
                 error: (error, _) => ErrorState(
-                  message: error.toString(),
+                  message: AppErrorMapper.from(error).message,
                   onRetry: () => ref.invalidate(salesProvider),
                 ),
               ),

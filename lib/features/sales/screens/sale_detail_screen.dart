@@ -11,6 +11,7 @@ import '../../../core/widgets.dart';
 import '../../../core/strings.dart';
 import '../data/sales.dart';
 import '../logic/receipts.dart';
+import '../../../core/errors/app_error.dart';
 
 class SaleDetailScreen extends ConsumerStatefulWidget {
   const SaleDetailScreen({super.key, required this.id});
@@ -38,7 +39,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
         reprint: true,
       );
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, error.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
     }
   }
 
@@ -197,7 +198,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
       );
       if (mounted) AppSnackbar.success(context, 'Return processed.');
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, error.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -294,7 +295,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                           ],
                         ),
                         loading: () => const LoadingSkeleton(lines: 3),
-                        error: (error, _) => ErrorState(message: error.toString()),
+                        error: (error, _) => ErrorState(message: AppErrorMapper.from(error).message),
                       ),
                       const SizedBox(height: 18),
                       Text('Payments', style: Theme.of(context).textTheme.titleMedium),
@@ -312,7 +313,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                           ],
                         ),
                         loading: () => const LoadingSkeleton(lines: 2),
-                        error: (error, _) => ErrorState(message: error.toString()),
+                        error: (error, _) => ErrorState(message: AppErrorMapper.from(error).message),
                       ),
                       const SizedBox(height: 18),
                       Row(
@@ -334,7 +335,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
             ],
           ),
           loading: () => const LoadingSkeleton(lines: 5),
-          error: (error, _) => ErrorState(message: error.toString()),
+          error: (error, _) => ErrorState(message: AppErrorMapper.from(error).message),
         ),
       ),
     );
