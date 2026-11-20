@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 
+import '../errors/app_error.dart';
 import '../permissions.dart';
 import '../strings.dart';
 import '../supabase_client.dart';
@@ -153,9 +154,10 @@ class AuthController extends StateNotifier<AuthState> {
         status: AuthStatus.authenticated,
         profile: UserProfile.fromJson(row, email: user.email ?? ''),
       );
-    } catch (_) {
-      // A missing profile row is treated as an inactive account rather than
-      // leaking an unauthenticated app state.
+    } catch (e) {
+      // Keep the user signed in, but surface the real reason the profile could
+      // not be read. Silently turning this into "inactive" made genuine RLS,
+      // project-configuration and missing-row problems look like access denied.
       state = AuthState(
         status: AuthStatus.authenticated,
         profile: UserProfile(
@@ -165,6 +167,7 @@ class AuthController extends StateNotifier<AuthState> {
           role: AppRole.cashier,
           isActive: false,
         ),
+        error: AppErrorMapper.from(e).message,
       );
     }
     _bump();
