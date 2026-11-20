@@ -15,6 +15,7 @@ import '../data/inventory_models.dart';
 import '../data/inventory_providers.dart';
 import '../logic/medicine_csv.dart';
 import '../widgets/stock_widgets.dart';
+import '../../../core/errors/app_error.dart';
 
 class MedicinesScreen extends ConsumerStatefulWidget {
   const MedicinesScreen({super.key});
@@ -252,7 +253,7 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
       AppSnackbar.success(context, 'Medicine saved.');
       ref.invalidate(medicinesProvider((query: _query, categoryId: _categoryId)));
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, '$e');
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 
@@ -271,7 +272,7 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
       AppSnackbar.success(context, 'Medicine updated.');
       ref.invalidate(medicinesProvider((query: _query, categoryId: _categoryId)));
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, '$e');
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 
@@ -372,7 +373,7 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
       AppSnackbar.success(context, 'Imported $imported medicines.');
       ref.invalidate(medicinesProvider((query: _query, categoryId: _categoryId)));
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, 'Imported $imported before stopping: $e');
+      if (mounted) AppSnackbar.error(context, 'Imported $imported before stopping. ${AppErrorMapper.from(e).message}');
     }
   }
 }
@@ -451,7 +452,7 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
           .uploadMedicineImage(widget.initial!.id, bytes);
       setState(() => _imageUrl = url);
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, '$e');
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }

@@ -258,6 +258,6 @@ class AuthController extends StateNotifier<AuthState> {
     if (lower.contains('network') || lower.contains('failed to fetch')) {
       return 'No connection. Check your internet and try again.';
     }
-    return message;
+    return S.somethingWrong;
   }
 }

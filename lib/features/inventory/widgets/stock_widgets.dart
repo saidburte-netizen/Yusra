@@ -164,7 +164,7 @@ Future<void> showAddStockDialog(BuildContext context, WidgetRef ref) async {
                     );
                 if (context.mounted) Navigator.pop(context, true);
               } catch (e) {
-                if (context.mounted) AppSnackbar.error(context, '$e');
+                if (context.mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
               } finally {
                 if (context.mounted) setState(() => busy = false);
               }
@@ -271,7 +271,7 @@ Future<void> showAdjustStockDialog(
                     );
                 if (context.mounted) Navigator.pop(context, true);
               } catch (e) {
-                if (context.mounted) AppSnackbar.error(context, '$e');
+                if (context.mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
               } finally {
                 if (context.mounted) setState(() => busy = false);
               }

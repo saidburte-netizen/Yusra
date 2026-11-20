@@ -7,6 +7,7 @@ import '../../../core/widgets.dart';
 import '../data/inventory_models.dart';
 import '../data/inventory_providers.dart';
 import '../widgets/stock_widgets.dart';
+import '../../../core/errors/app_error.dart';
 
 class CategoriesScreen extends ConsumerWidget {
   const CategoriesScreen({super.key});
@@ -138,7 +139,7 @@ class CategoriesScreen extends ConsumerWidget {
       AppSnackbar.success(context, 'Category saved.');
       ref.invalidate(categoriesProvider);
     } catch (e) {
-      if (context.mounted) AppSnackbar.error(context, '$e');
+      if (context.mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 
@@ -156,7 +157,7 @@ class CategoriesScreen extends ConsumerWidget {
       if (!context.mounted) return;
       ref.invalidate(categoriesProvider);
     } catch (e) {
-      if (context.mounted) AppSnackbar.error(context, '$e');
+      if (context.mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 }

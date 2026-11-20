@@ -68,5 +68,14 @@ void main() {
       const error = AppError('custom', kind: AppErrorKind.notFound);
       expect(AppErrorMapper.from(error), same(error));
     });
+
+    test('unknown auth errors never expose the raw Supabase message', () {
+      final mapped = AppErrorMapper.from(
+        const AuthException('Database error saving new user (PGRST/42501)'),
+      );
+      expect(mapped.message, S.somethingWrong);
+      expect(mapped.message, isNot(contains('PGRST')));
+      expect(mapped.message, isNot(contains('Database error')));
+    });
   });
 }

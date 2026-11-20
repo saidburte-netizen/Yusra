@@ -10,6 +10,7 @@ import '../data/inventory_models.dart';
 import '../data/inventory_providers.dart';
 import '../logic/stock_rules.dart';
 import '../widgets/stock_widgets.dart';
+import '../../../core/errors/app_error.dart';
 
 class AlertsScreen extends ConsumerStatefulWidget {
   const AlertsScreen({super.key});
@@ -233,7 +234,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen>
       // ignore: use_build_context_synchronously
       Navigator.of(context).pushNamed('/purchasing/orders/$id');
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, '$e');
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 }
