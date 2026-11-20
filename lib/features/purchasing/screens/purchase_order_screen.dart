@@ -13,6 +13,7 @@ import '../../suppliers/data/suppliers.dart';
 import '../data/purchase_documents.dart';
 import '../data/purchasing.dart';
 import '../../../core/errors/app_error.dart';
+import '../../../core/strings.dart';
 
 /// B11/B12 — create/edit a draft, approve, print, and receive goods.
 class PurchaseOrderScreen extends ConsumerStatefulWidget {
@@ -114,7 +115,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
     }
     final branch = ref.read(branchScopeProvider);
     if (branch == null) {
-      AppSnackbar.error(context, 'Choose a branch first.');
+      AppSnackbar.error(context, S.chooseBranchFirst);
       return;
     }
     setState(() => _saving = true);

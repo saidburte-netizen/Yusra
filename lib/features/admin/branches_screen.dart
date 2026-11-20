@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/auth_controller.dart';
+import '../../core/nav/app_shell.dart';
 import '../../core/dates.dart';
 import '../../core/errors/app_error.dart';
 import '../../core/permissions.dart';
@@ -69,7 +70,15 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
     try {
       final client = SupabaseService.client;
       if (branch == null) {
-        await client.from('branches').insert(result);
+        final inserted = await client.from('branches').insert(result).select().single();
+        // Make the first branch immediately usable for create flows.
+        if (ref.read(selectedBranchProvider) == null) {
+          final id = inserted['id'] as String?;
+          if (id != null) {
+            ref.read(selectedBranchProvider.notifier).state = id;
+            ref.read(branchSelectionSetProvider.notifier).state = true;
+          }
+        }
       } else {
         await client.from('branches').update(result).eq('id', branch['id']);
       }

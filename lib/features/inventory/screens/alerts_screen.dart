@@ -11,6 +11,7 @@ import '../data/inventory_providers.dart';
 import '../logic/stock_rules.dart';
 import '../widgets/stock_widgets.dart';
 import '../../../core/errors/app_error.dart';
+import '../../../core/strings.dart';
 
 class AlertsScreen extends ConsumerStatefulWidget {
   const AlertsScreen({super.key});
@@ -203,7 +204,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen>
     if (!mounted) return;
     final branch = ref.read(branchScopeProvider);
     if (branch == null) {
-      AppSnackbar.error(context, 'Choose a branch first.');
+      AppSnackbar.error(context, S.chooseBranchFirst);
       return;
     }
     try {

@@ -29,7 +29,7 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
   Future<void> _add() async {
     final branchId = ref.read(branchScopeProvider);
     if (branchId == null) {
-      AppSnackbar.error(context, 'Select a branch first.');
+      AppSnackbar.error(context, S.chooseBranchFirst);
       return;
     }
     final patient = TextEditingController();

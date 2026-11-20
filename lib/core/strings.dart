@@ -183,6 +183,10 @@ abstract final class S {
   static const period = 'Period';
   static const chart = 'Chart';
   static const allBranches = 'All branches';
+  static const addBranch = 'Add branch';
+  static const manageBranches = 'Manage branches';
+  static const allBranchesViewOnly = 'All branches (view only)';
+  static const chooseBranchFirst = 'Choose a branch in the top bar first.';
   static const activity = 'Activity log';
   static const recentActivity = 'Recent activity';
   static const timeRange = 'Time range';

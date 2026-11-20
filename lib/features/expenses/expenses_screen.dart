@@ -164,7 +164,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
           ? ref.read(branchScopeProvider)
           : expense['branch_id'] as String?;
       if (branchId == null) {
-        AppSnackbar.error(context, 'Select a branch first.');
+        AppSnackbar.error(context, S.chooseBranchFirst);
         return;
       }
 
