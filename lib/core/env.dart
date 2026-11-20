@@ -11,5 +11,9 @@ class Env {
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
 
   static const String defaultCurrency = 'ETB';
-  static const double defaultVatRate = 15;
+
+  /// VAT is stored as a fraction (0.15 = 15%) in `app_settings.vat_rate`,
+  /// matching the rest of the app. The Settings screen multiplies by 100 for
+  /// display only.
+  static const double defaultVatRate = 0.15;
 }
