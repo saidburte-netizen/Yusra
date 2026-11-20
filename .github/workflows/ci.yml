@@ -11,6 +11,11 @@ on:
   # Manual end-to-end checks against the real Supabase project.
   workflow_dispatch:
     inputs:
+      run_smoke:
+        description: 'Also run the Supabase smoke test (needs SMOKE_* secrets)'
+        type: boolean
+        required: false
+        default: false
       confirm_prod:
         description: 'Confirm running against a URL containing "prod"'
         type: boolean
@@ -135,9 +140,9 @@ jobs:
     name: Manual Supabase smoke test
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Manual dispatch only; never runs on push or PR. The tool itself also
-    # refuses a URL containing "prod" unless the confirm input is set.
-    if: github.event_name == 'workflow_dispatch'
+    # Opt-in manual check only. It must never turn a successful APK build into
+    # a failed workflow just because demo credentials are not configured.
+    if: github.event_name == 'workflow_dispatch' && inputs.run_smoke
 
     steps:
       - name: Checkout
@@ -150,7 +155,27 @@ jobs:
           flutter-version: '3.24.5'
           cache: true
 
+      - name: Check smoke secrets
+        id: smoke_guard
+        env:
+          SMOKE_ADMIN_EMAIL: ${{ secrets.SMOKE_ADMIN_EMAIL }}
+          SMOKE_ADMIN_PASSWORD: ${{ secrets.SMOKE_ADMIN_PASSWORD }}
+          SMOKE_CASHIER_EMAIL: ${{ secrets.SMOKE_CASHIER_EMAIL }}
+          SMOKE_CASHIER_PASSWORD: ${{ secrets.SMOKE_CASHIER_PASSWORD }}
+          SMOKE_PHARMACIST_EMAIL: ${{ secrets.SMOKE_PHARMACIST_EMAIL }}
+          SMOKE_PHARMACIST_PASSWORD: ${{ secrets.SMOKE_PHARMACIST_PASSWORD }}
+        run: |
+          if [ -z "$SMOKE_ADMIN_EMAIL" ] || [ -z "$SMOKE_ADMIN_PASSWORD" ] ||
+             [ -z "$SMOKE_CASHIER_EMAIL" ] || [ -z "$SMOKE_CASHIER_PASSWORD" ] ||
+             [ -z "$SMOKE_PHARMACIST_EMAIL" ] || [ -z "$SMOKE_PHARMACIST_PASSWORD" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::SMOKE_* secrets are not configured; skipping the optional smoke test."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run smoke test
+        if: steps.smoke_guard.outputs.configured == 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
