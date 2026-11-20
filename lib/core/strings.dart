@@ -175,4 +175,6 @@ abstract final class S {
   static const shiftVariance = 'Shift cash variance';
   static const controlledRegister = 'Controlled / prescription-only register';
   static const period = 'Period';
+  static const chart = 'Chart';
+  static const allBranches = 'All branches';
 }

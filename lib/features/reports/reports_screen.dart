@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdf/pdf.dart';
@@ -20,12 +23,18 @@ class _ReportDef {
     required this.title,
     required this.view,
     required this.columns,
+    required this.chartLabel,
+    required this.chartValue,
     this.dateKey,
   });
 
   final String title;
   final String view;
   final List<String> columns;
+  /// Column used for the chart's x-axis labels.
+  final String chartLabel;
+  /// Numeric column used for the chart's bars.
+  final String chartValue;
   final String? dateKey;
 }
 
@@ -36,43 +45,91 @@ const List<_ReportDef> _reports = [
     title: S.salesByDay,
     view: 'v_report_sales_by_day',
     columns: ['date', 'invoices', 'gross', 'discounts', 'vat', 'net'],
+    chartLabel: 'date',
+    chartValue: 'net',
     dateKey: 'date',
   ),
-  _ReportDef(title: S.salesByCashier, view: 'v_report_sales_by_cashier',
-      columns: ['cashier', 'invoices', 'total']),
-  _ReportDef(title: S.salesByPaymentMethod, view: 'v_report_sales_payment',
-      columns: ['payment_method', 'invoices', 'total']),
-  _ReportDef(title: S.salesByMedicine, view: 'v_report_sales_by_medicine',
-      columns: ['medicine', 'qty', 'revenue', 'cost', 'profit']),
+  _ReportDef(
+    title: S.salesByCashier,
+    view: 'v_report_sales_by_cashier',
+    columns: ['cashier', 'invoices', 'total'],
+    chartLabel: 'cashier',
+    chartValue: 'total',
+  ),
+  _ReportDef(
+    title: S.salesByPaymentMethod,
+    view: 'v_report_sales_payment',
+    columns: ['payment_method', 'invoices', 'total'],
+    chartLabel: 'payment_method',
+    chartValue: 'total',
+  ),
+  _ReportDef(
+    title: S.salesByMedicine,
+    view: 'v_report_sales_by_medicine',
+    columns: ['medicine', 'qty', 'revenue', 'cost', 'profit'],
+    chartLabel: 'medicine',
+    chartValue: 'revenue',
+  ),
   _ReportDef(
     title: S.profitReport,
     view: 'v_report_profit',
     columns: ['date', 'revenue', 'cost', 'profit', 'margin'],
+    chartLabel: 'date',
+    chartValue: 'profit',
     dateKey: 'date',
   ),
-  _ReportDef(title: S.stockValuation, view: 'v_report_stock_valuation',
-      columns: ['medicine', 'qty', 'unit_cost', 'value']),
+  _ReportDef(
+    title: S.stockValuation,
+    view: 'v_report_stock_valuation',
+    columns: ['medicine', 'qty', 'unit_cost', 'value'],
+    chartLabel: 'medicine',
+    chartValue: 'value',
+  ),
   _ReportDef(
     title: S.expiryLosses,
     view: 'v_report_expiry_losses',
     columns: ['expiry', 'medicine', 'batch', 'qty', 'value'],
+    chartLabel: 'medicine',
+    chartValue: 'value',
     dateKey: 'expiry',
   ),
-  _ReportDef(title: S.purchasesBySupplier, view: 'v_report_purchases_supplier',
-      columns: ['supplier', 'orders', 'total']),
+  _ReportDef(
+    title: S.purchasesBySupplier,
+    view: 'v_report_purchases_supplier',
+    columns: ['supplier', 'orders', 'total'],
+    chartLabel: 'supplier',
+    chartValue: 'total',
+  ),
   _ReportDef(
     title: S.expensesReport,
     view: 'v_report_expenses',
     columns: ['date', 'category', 'amount'],
+    chartLabel: 'category',
+    chartValue: 'amount',
     dateKey: 'date',
   ),
-  _ReportDef(title: S.netProfit, view: 'v_report_net_profit',
-      columns: ['period', 'revenue', 'expenses', 'net']),
-  _ReportDef(title: S.shiftVariance, view: 'v_report_shift_variance',
-      columns: ['cashier', 'shift', 'expected', 'actual', 'variance']),
-  _ReportDef(title: S.controlledRegister, view: 'v_report_controlled_register',
-      columns: ['date', 'medicine', 'qty', 'prescriber', 'patient'],
-      dateKey: 'date'),
+  _ReportDef(
+    title: S.netProfit,
+    view: 'v_report_net_profit',
+    columns: ['period', 'revenue', 'expenses', 'net'],
+    chartLabel: 'period',
+    chartValue: 'net',
+  ),
+  _ReportDef(
+    title: S.shiftVariance,
+    view: 'v_report_shift_variance',
+    columns: ['cashier', 'shift', 'expected', 'actual', 'variance'],
+    chartLabel: 'cashier',
+    chartValue: 'variance',
+  ),
+  _ReportDef(
+    title: S.controlledRegister,
+    view: 'v_report_controlled_register',
+    columns: ['date', 'medicine', 'qty', 'prescriber', 'patient'],
+    chartLabel: 'medicine',
+    chartValue: 'qty',
+    dateKey: 'date',
+  ),
 ];
 
 const Set<String> _moneyKeys = {
@@ -86,6 +143,49 @@ const String _viewsHint =
     'If the report views are missing, apply '
     'supabase/migrations/0014_report_views.sql in the Supabase SQL Editor and '
     'try again.';
+
+/// An older copy of 0014 does not expose branch_id; re-running the file fixes
+/// the super-admin branch filter without touching any live table.
+const String _branchHint =
+    'If the branch filter reports a missing column, re-run '
+    '0014_report_views.sql to add branch_id to the report views.';
+
+class _Brand {
+  const _Brand({
+    required this.name,
+    required this.tagline,
+    required this.address,
+    required this.phone,
+    required this.tin,
+    required this.licenseNo,
+    required this.footer,
+  });
+
+  factory _Brand.fallback() => const _Brand(
+        name: S.appName,
+        tagline: S.tagline,
+        address: '',
+        phone: '',
+        tin: '',
+        licenseNo: '',
+        footer: 'Thank you for choosing Yusra Pharmacy.',
+      );
+
+  final String name;
+  final String tagline;
+  final String address;
+  final String phone;
+  final String tin;
+  final String licenseNo;
+  final String footer;
+}
+
+class _ChartPoint {
+  const _ChartPoint(this.label, this.value);
+
+  final String label;
+  final double value;
+}
 
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
@@ -101,13 +201,40 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   String? _error;
   DateTime? _from;
   DateTime? _to;
+  String? _branchId;
+  List<Map<String, String>> _branches = const [];
 
   _ReportDef get _report => _reports[_selected];
 
   @override
   void initState() {
     super.initState();
+    _loadBranches();
     _load();
+  }
+
+  Future<void> _loadBranches() async {
+    final role = ref.read(authProvider).profile?.role;
+    if (role != AppRole.superAdmin || !SupabaseService.isReady) return;
+    try {
+      final rows = await SupabaseService.client
+          .from('branches')
+          .select('id, name')
+          .eq('is_active', true)
+          .order('name') as List;
+      if (!mounted) return;
+      setState(() {
+        _branches = [
+          for (final row in rows)
+            {
+              'id': (row as Map)['id'].toString(),
+              'name': (row['name'] as String?) ?? S.branch,
+            },
+        ];
+      });
+    } catch (_) {
+      // The report still works across all branches; only the picker is lost.
+    }
   }
 
   Future<void> _load() async {
@@ -119,6 +246,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       if (!SupabaseService.isReady) throw const SupabaseNotConfigured();
       final report = _report;
       var query = SupabaseService.client.from(report.view).select();
+      if (_branchId != null) {
+        query = query.eq('branch_id', _branchId!);
+      }
       if (report.dateKey != null) {
         if (_from != null) {
           query = query.gte(
@@ -139,8 +269,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       });
     } catch (e) {
       if (!mounted) return;
+      final hint = e.toString().contains('branch_id') ? _branchHint : _viewsHint;
       setState(() {
-        _error = '${AppErrorMapper.from(e).message}\n\n$_viewsHint';
+        _error = '${AppErrorMapper.from(e).message}\n\n$hint';
         _loading = false;
       });
     }
@@ -192,21 +323,104 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     return words[0].toUpperCase() + words.substring(1);
   }
 
+  /// The chart is drawn from the rows the view already returned: no extra
+  /// query and no duplicate aggregation on the device.
+  List<_ChartPoint> _chartPoints() {
+    final points = <_ChartPoint>[];
+    for (final row in _rows) {
+      final raw = row[_report.chartValue];
+      final value = raw is num
+          ? raw.toDouble()
+          : double.tryParse(raw?.toString() ?? '');
+      if (value == null) continue;
+      points.add(_ChartPoint(
+        row[_report.chartLabel]?.toString() ?? '—',
+        value,
+      ));
+    }
+    points.sort((a, b) => b.value.abs().compareTo(a.value.abs()));
+    return points.take(8).toList().reversed.toList();
+  }
+
+  Future<_Brand> _loadBrand() async {
+    if (!SupabaseService.isReady) return _Brand.fallback();
+    const keys = [
+      'pharmacy_name', 'tagline', 'address', 'phone', 'tin', 'license_no',
+      'receipt_footer',
+    ];
+    try {
+      final rows = await SupabaseService.client
+          .from('app_settings')
+          .select('key, value')
+          .or(keys.map((key) => 'key.eq.$key').join(',')) as List;
+      final values = <String, dynamic>{};
+      for (final row in rows) {
+        final map = row as Map;
+        values[map['key'] as String] = map['value'];
+      }
+      String text(String key, [String fallback = '']) {
+        final raw = values[key];
+        if (raw is String) return raw;
+        if (raw is Map) return (raw['_'] ?? raw['value'] ?? '').toString();
+        return fallback;
+      }
+
+      return _Brand(
+        name: text('pharmacy_name', S.appName),
+        tagline: text('tagline', S.tagline),
+        address: text('address'),
+        phone: text('phone'),
+        tin: text('tin'),
+        licenseNo: text('license_no'),
+        footer: text('receipt_footer', 'Thank you for choosing Yusra Pharmacy.'),
+      );
+    } catch (_) {
+      return _Brand.fallback();
+    }
+  }
+
   Future<void> _exportPdf() async {
     try {
+      final brand = await _loadBrand();
       final document = pw.Document();
       final tableRows = _csvRows();
       document.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
           build: (context) => [
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(brand.name,
+                    style: pw.TextStyle(
+                        fontSize: 20, color: PdfColor.fromHex('#A0457A'))),
+                pw.Text(brand.tagline,
+                    style: const pw.TextStyle(fontSize: 9)),
+                pw.Divider(color: PdfColor.fromHex('#A8841F')),
+                if (brand.address.isNotEmpty)
+                  pw.Text('${S.address}: ${brand.address}',
+                      style: const pw.TextStyle(fontSize: 8)),
+                if (brand.phone.isNotEmpty)
+                  pw.Text('${S.phone}: ${brand.phone}',
+                      style: const pw.TextStyle(fontSize: 8)),
+                if (brand.tin.isNotEmpty)
+                  pw.Text('${S.tin}: ${brand.tin}',
+                      style: const pw.TextStyle(fontSize: 8)),
+                if (brand.licenseNo.isNotEmpty)
+                  pw.Text('${S.licenseNo}: ${brand.licenseNo}',
+                      style: const pw.TextStyle(fontSize: 8)),
+              ],
+            ),
+            pw.SizedBox(height: 12),
             pw.Header(
               level: 0,
-              child: pw.Text('${S.appName} — ${_report.title}'),
+              child: pw.Text(_report.title),
             ),
             pw.Text(
               '${S.period}: ${_from == null ? S.all : formatDate(_from!)} — '
-              '${_to == null ? S.all : formatDate(_to!)}',
+              '${_to == null ? S.all : formatDate(_to!)}'
+              '${_branchId == null ? '' : '   •   ${S.branch}: ${_branches.where((b) => b['id'] == _branchId).map((b) => b['name']).join()}'}',
+              style: const pw.TextStyle(fontSize: 9),
             ),
             pw.SizedBox(height: 12),
             pw.TableHelper.fromTextArray(
@@ -219,6 +433,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               headerStyle: const pw.TextStyle(fontSize: 9),
               cellStyle: const pw.TextStyle(fontSize: 8),
             ),
+            pw.SizedBox(height: 16),
+            pw.Text(brand.footer,
+                style: const pw.TextStyle(
+                    fontSize: 8, color: PdfColors.grey600)),
           ],
         ),
       );
@@ -296,11 +514,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   Expanded(
                     child: Column(
                       children: [
-                        if (_report.dateKey != null)
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 8,
-                            children: [
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            if (_report.dateKey != null) ...[
                               SizedBox(
                                 width: 170,
                                 child: DatePickerField(
@@ -323,26 +542,80 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                   },
                                 ),
                               ),
-                              TextButton.icon(
-                                onPressed: () {
-                                  setState(() {
-                                    _from = null;
-                                    _to = null;
-                                  });
-                                  _load();
-                                },
-                                icon: const Icon(Icons.filter_alt_off_outlined),
-                                label: const Text(S.reset),
-                              ),
                             ],
-                          ),
-                        const SizedBox(height: 16),
+                            if (role == AppRole.superAdmin && _branches.isNotEmpty)
+                              SizedBox(
+                                width: 190,
+                                child: AppDropdown<String?>(
+                                  label: S.branch,
+                                  hint: S.allBranches,
+                                  value: _branchId,
+                                  items: [
+                                    const DropdownMenuItem<String?>(
+                                      value: null,
+                                      child: Text(S.allBranches),
+                                    ),
+                                    for (final branch in _branches)
+                                      DropdownMenuItem<String?>(
+                                        value: branch['id'],
+                                        child: Text(branch['name'] ?? S.branch),
+                                      ),
+                                  ],
+                                  onChanged: (value) {
+                                    setState(() => _branchId = value);
+                                    _load();
+                                  },
+                                ),
+                              ),
+                            TextButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  _from = null;
+                                  _to = null;
+                                  _branchId = null;
+                                });
+                                _load();
+                              },
+                              icon: const Icon(Icons.filter_alt_off_outlined),
+                              label: const Text(S.reset),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
                         if (_loading)
                           const Expanded(
                               child: Center(child: CircularProgressIndicator()))
                         else if (_error != null)
-                          Expanded(child: ErrorState(message: _error!, onRetry: _retry))
-                        else
+                          Expanded(
+                              child: ErrorState(message: _error!, onRetry: _retry))
+                        else ...[
+                          if (_rows.isNotEmpty)
+                            SizedBox(
+                              height: 220,
+                              child: Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(S.chart,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleSmall),
+                                      Expanded(
+                                        child: _ReportChart(
+                                          points: _chartPoints(),
+                                          money: _moneyKeys
+                                              .contains(_report.chartValue),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          const SizedBox(height: 12),
                           Expanded(
                             child: DataTablePlus(
                               columns: [
@@ -360,6 +633,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                               ],
                             ),
                           ),
+                        ],
                       ],
                     ),
                   ),
@@ -370,5 +644,108 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         ),
       ),
     );
+  }
+}
+
+class _ReportChart extends StatelessWidget {
+  const _ReportChart({required this.points, required this.money});
+
+  final List<_ChartPoint> points;
+  final bool money;
+
+  @override
+  Widget build(BuildContext context) {
+    if (points.isEmpty) {
+      return const Center(child: Text(S.noData));
+    }
+    var maxValue = 0.0;
+    var minValue = 0.0;
+    for (final point in points) {
+      if (point.value > maxValue) maxValue = point.value;
+      if (point.value < minValue) minValue = point.value;
+    }
+    final span = math.max(maxValue, -minValue);
+
+    return BarChart(
+      BarChartData(
+        minY: minValue < 0 ? minValue * 1.15 : 0,
+        maxY: span <= 0 ? 1 : maxValue * 1.15,
+        alignment: BarChartAlignment.spaceAround,
+        barTouchData: BarTouchData(
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipItem: (group, groupIndex, rod, rodIndex) =>
+                BarTooltipItem(
+              '${points[groupIndex].label}\n'
+              '${money ? formatMoney(rod.toY) : rod.toY.toStringAsFixed(0)}',
+              const TextStyle(color: Colors.white, fontSize: 11),
+            ),
+          ),
+        ),
+        titlesData: FlTitlesData(
+          topTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 54,
+              getTitlesWidget: (value, meta) => Text(
+                _compact(value),
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 42,
+              interval: 1,
+              getTitlesWidget: (value, meta) {
+                final index = value.toInt();
+                if (index < 0 || index >= points.length) {
+                  return const SizedBox.shrink();
+                }
+                final label = points[index].label;
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    label.length > 12 ? '${label.substring(0, 12)}…' : label,
+                    style: Theme.of(context).textTheme.labelSmall,
+                    textAlign: TextAlign.center,
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        gridData: const FlGridData(show: true, drawVerticalLine: false),
+        borderData: FlBorderData(show: false),
+        barGroups: [
+          for (var i = 0; i < points.length; i++)
+            BarChartGroupData(
+              x: i,
+              barRods: [
+                BarChartRodData(
+                  toY: points[i].value,
+                  color: points[i].value < 0
+                      ? AppColors.danger
+                      : AppColors.pink600,
+                  width: 16,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _compact(double value) {
+    final abs = value.abs();
+    final sign = value < 0 ? '-' : '';
+    if (abs >= 1000000) return '$sign${(abs / 1000000).toStringAsFixed(1)}M';
+    if (abs >= 1000) return '$sign${(abs / 1000).toStringAsFixed(0)}k';
+    return '$sign${abs.toInt()}';
   }
 }

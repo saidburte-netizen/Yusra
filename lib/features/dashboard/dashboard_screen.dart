@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../core/dates.dart';
@@ -244,11 +245,60 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   DashboardSnapshot? _data;
   String? _error;
   bool _loading = true;
+  RealtimeChannel? _channel;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _subscribeToChanges();
+  }
+
+  @override
+  void dispose() {
+    final channel = _channel;
+    if (channel != null && SupabaseService.isReady) {
+      SupabaseService.client.removeChannel(channel);
+    }
+    super.dispose();
+  }
+
+  /// Counters must stay live while the screen is open: a sale or a stock
+  /// movement written by another device has to move the numbers without the
+  /// user pressing refresh.
+  void _subscribeToChanges() {
+    if (!SupabaseService.isReady) return;
+    _channel = SupabaseService.client
+        .channel('dashboard-counters')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'stock_batches',
+          callback: (_) => _refreshQuiet(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'sales',
+          callback: (_) => _refreshQuiet(),
+        )
+      ..subscribe();
+  }
+
+  /// Realtime events can arrive in bursts. Reload without flipping into the
+  /// loading state so the dashboard never flickers or loses its last snapshot.
+  Future<void> _refreshQuiet() async {
+    final auth = ref.read(authProvider);
+    try {
+      final data = await DashboardSnapshot.load(
+        role: auth.profile?.role ?? AppRole.cashier,
+        userId: auth.profile?.id,
+      );
+      if (!mounted) return;
+      setState(() => _data = data);
+    } catch (_) {
+      // Keep the last good snapshot; the manual refresh still surfaces errors.
+    }
   }
 
   Future<void> _load() async {
