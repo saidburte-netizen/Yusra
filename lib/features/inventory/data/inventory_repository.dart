@@ -1,0 +1,179 @@
+import 'dart:typed_data';
+
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../core/supabase_client.dart';
+import 'inventory_models.dart';
+
+/// All reads and writes for Agent B. Stock mutations always go through the
+/// database RPCs; nothing here updates stock_batches directly.
+class InventoryRepository {
+  SupabaseClient get _db => SupabaseService.client;
+
+  Future<List<Category>> categories({bool includeInactive = true}) async {
+    var query = _db.from('categories').select();
+    if (!includeInactive) query = query.eq('is_active', true);
+    final rows = await query.order('name') as List;
+    return rows
+        .map((row) => Category.fromJson(Map<String, dynamic>.from(row as Map)))
+        .toList();
+  }
+
+  Future<void> saveCategory(Map<String, dynamic> data, {String? id}) async {
+    if (id == null) {
+      await _db.from('categories').insert(data);
+    } else {
+      await _db.from('categories').update(data).eq('id', id);
+    }
+  }
+
+  Future<void> setCategoryActive(String id, bool active) =>
+      _db.from('categories').update({'is_active': active}).eq('id', id);
+
+  Future<List<Medicine>> medicines({String query = '', String? categoryId}) async {
+    var request = _db.from('medicines').select();
+    if (query.trim().isNotEmpty) {
+      final q = query.trim().replaceAll(RegExp(r'[,()]'), ' ');
+      request = request.or('name.ilike.%$q%,generic_name.ilike.%$q%,barcode.ilike.%$q%,sku.ilike.%$q%');
+    }
+    if (categoryId != null) request = request.eq('category_id', categoryId);
+    final rows = await request.order('name').limit(200) as List;
+    return rows
+        .map((row) => Medicine.fromJson(Map<String, dynamic>.from(row as Map)))
+        .toList();
+  }
+
+  Future<Medicine> medicine(String id) {
+    return _db
+        .from('medicines')
+        .select()
+        .eq('id', id)
+        .single()
+        .then((row) => Medicine.fromJson(Map<String, dynamic>.from(row)));
+  }
+
+  Future<void> saveMedicine(Map<String, dynamic> data, {String? id}) async {
+    if (id == null) {
+      await _db.from('medicines').insert(data);
+    } else {
+      await _db.from('medicines').update(data).eq('id', id);
+    }
+  }
+
+  Future<void> setMedicineActive(String id, bool active) =>
+      _db.from('medicines').update({'is_active': active}).eq('id', id);
+
+  Future<String> uploadMedicineImage(String medicineId, Uint8List bytes) async {
+    final path = '$medicineId/${DateTime.now().millisecondsSinceEpoch}.png';
+    await _db.storage.from('medicine-images').uploadBinary(
+          path,
+          bytes,
+          fileOptions: const FileOptions(upsert: true, contentType: 'image/png'),
+        );
+    return _db.storage.from('medicine-images').getPublicUrl(path);
+  }
+
+  Future<List<StockSummary>> stockSummary(String? branchId) async {
+    var query = _db.from('v_stock_summary').select();
+    if (branchId != null) query = query.eq('branch_id', branchId);
+    final rows = await query.order('name') as List;
+    return rows
+        .map((row) => StockSummary.fromJson(Map<String, dynamic>.from(row as Map)))
+        .toList();
+  }
+
+  Future<List<StockSummary>> lowStock(String? branchId) async {
+    var query = _db.from('v_low_stock').select();
+    if (branchId != null) query = query.eq('branch_id', branchId);
+    final rows = await query.order('available_qty') as List;
+    return rows
+        .map((row) => StockSummary.fromJson(Map<String, dynamic>.from(row as Map)))
+        .toList();
+  }
+
+  Future<List<StockBatch>> expiringBatches(String? branchId) async {
+    var query = _db.from('v_expiring_batches').select();
+    if (branchId != null) query = query.eq('branch_id', branchId);
+    final rows = await query.order('expiry_date') as List;
+    return rows
+        .map((row) => StockBatch.fromJson(Map<String, dynamic>.from(row as Map)))
+        .toList();
+  }
+
+  Future<List<StockBatch>> batches({
+    required String? branchId,
+    String? medicineId,
+    bool includeInactive = false,
+  }) async {
+    var query = _db.from('stock_batches').select('*, medicines(name)');
+    if (branchId != null) query = query.eq('branch_id', branchId);
+    if (medicineId != null) query = query.eq('medicine_id', medicineId);
+    if (!includeInactive) query = query.eq('is_active', true);
+    final rows = await query.order('expiry_date') as List;
+    return rows.map((row) {
+      final map = Map<String, dynamic>.from(row as Map);
+      final joined = map['medicines'];
+      if (joined is Map) map['name'] = joined['name'];
+      return StockBatch.fromJson(map);
+    }).toList();
+  }
+
+  Future<List<StockMovement>> movements({
+    required String? branchId,
+    String? medicineId,
+    String? type,
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    var query = _db.from('stock_movements').select('*, medicines(name)');
+    if (branchId != null) query = query.eq('branch_id', branchId);
+    if (medicineId != null) query = query.eq('medicine_id', medicineId);
+    if (type != null) query = query.eq('movement_type', type);
+    if (from != null) query = query.gte('created_at', from.toIso8601String());
+    if (to != null) query = query.lte('created_at', to.toIso8601String());
+    final rows = await query.order('created_at', ascending: false).limit(500) as List;
+    return rows.map((row) {
+      final map = Map<String, dynamic>.from(row as Map);
+      final joined = map['medicines'];
+      if (joined is Map) map['name'] = joined['name'];
+      return StockMovement.fromJson(map);
+    }).toList();
+  }
+
+  Future<String> addStock({
+    required String branchId,
+    required String medicineId,
+    required String batchNo,
+    required DateTime expiry,
+    required int quantity,
+    required double cost,
+    String? supplierId,
+  }) async {
+    final result = await _db.rpc('add_stock_batch', params: {
+      'p_branch': branchId,
+      'p_medicine': medicineId,
+      'p_batch_no': batchNo,
+      'p_expiry': _date(expiry),
+      'p_quantity': quantity,
+      'p_cost': cost,
+      'p_supplier': supplierId,
+    });
+    return result as String;
+  }
+
+  Future<void> adjustStock({
+    required String batchId,
+    required int change,
+    required String type,
+    required String reason,
+  }) =>
+      _db.rpc('adjust_stock', params: {
+        'p_batch': batchId,
+        'p_change': change,
+        'p_type': type,
+        'p_reason': reason,
+      });
+
+  static String _date(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+}

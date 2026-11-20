@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 512" width="1120" height="512" role="img" aria-label="Yusra Pharmacy">
+  <title>Yusra Pharmacy</title>
+  <circle cx="256" cy="256" r="196" fill="#FFFFFF" stroke="#D4AF37" stroke-width="8"/>
+  <g fill="#D63384">
+    <rect x="218" y="146" width="76" height="220" rx="26"/>
+    <rect x="146" y="218" width="220" height="76" rx="26"/>
+  </g>
+  <path d="M322 158 C 350 112, 392 106, 404 118 C 400 158, 366 184, 326 176 Z" fill="#D4AF37"/>
+  <path d="M330 168 C 352 146, 378 132, 398 122" fill="none" stroke="#A8841F" stroke-width="5" stroke-linecap="round"/>
+  <text x="500" y="278" font-family="Playfair Display, Georgia, serif" font-size="150" font-weight="600" fill="#3B1F2B">Yusra</text>
+  <text x="506" y="350" font-family="Inter, Arial, sans-serif" font-size="52" letter-spacing="16" fill="#D4AF37">PHARMACY</text>
+</svg>
