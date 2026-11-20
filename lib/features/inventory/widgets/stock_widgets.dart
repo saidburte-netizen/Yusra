@@ -7,6 +7,7 @@ import '../../suppliers/data/suppliers.dart';
 import '../data/inventory_models.dart';
 import '../data/inventory_providers.dart';
 import '../logic/stock_rules.dart';
+import '../../../core/errors/app_error.dart';
 
 Widget statusChip(StockStatus status) => StatusBadge(
       StockRules.label(status),
@@ -39,7 +40,7 @@ Widget stockState<T>(
 }) =>
     state.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => ErrorState(message: error.toString(), onRetry: onRetry),
+      error: (error, _) => ErrorState(message: AppErrorMapper.from(error).message, onRetry: onRetry),
       data: builder,
     );
 

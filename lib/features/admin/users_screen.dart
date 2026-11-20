@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -77,7 +78,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
   }
 
   Future<void> _createUser() async {
-    final result = await showDialog<Map<String, String>>(
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) => const _UserFormDialog(),
     );
@@ -88,7 +89,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
         'admin-create-user',
         body: result,
       );
-      final data = response.data;
+      final rawData = response.data;
+      final data = rawData is String ? jsonDecode(rawData) : rawData;
       final tempPassword = data is Map
           ? (data['temporary_password'] ?? data['temporaryPassword'])?.toString()
           : null;

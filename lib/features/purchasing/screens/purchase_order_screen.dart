@@ -12,6 +12,7 @@ import '../../inventory/data/inventory_providers.dart';
 import '../../suppliers/data/suppliers.dart';
 import '../data/purchase_documents.dart';
 import '../data/purchasing.dart';
+import '../../../core/errors/app_error.dart';
 
 /// B11/B12 — create/edit a draft, approve, print, and receive goods.
 class PurchaseOrderScreen extends ConsumerStatefulWidget {
@@ -711,7 +712,7 @@ class _LinePickerDialogState extends ConsumerState<_LinePickerDialog> {
             Expanded(
               child: medicines.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => ErrorState(message: error.toString()),
+                error: (error, _) => ErrorState(message: AppErrorMapper.from(error).message),
                 data: (items) => ListView.builder(
                   itemCount: items.length,
                   itemBuilder: (context, index) {

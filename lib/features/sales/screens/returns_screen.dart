@@ -8,6 +8,7 @@ import '../../../core/widgets.dart';
 import '../../../core/strings.dart';
 import '../data/sales.dart';
 import '../logic/receipts.dart';
+import '../../../core/errors/app_error.dart';
 
 class ReturnsScreen extends ConsumerWidget {
   const ReturnsScreen({super.key});
@@ -25,7 +26,7 @@ class ReturnsScreen extends ConsumerWidget {
         settings: settings,
       );
     } catch (error) {
-      if (context.mounted) AppSnackbar.error(context, error.toString());
+      if (context.mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
     }
   }
 
@@ -115,7 +116,7 @@ class ReturnsScreen extends ConsumerWidget {
                 },
                 loading: () => const LoadingSkeleton(lines: 4),
                 error: (error, _) => ErrorState(
-                  message: error.toString(),
+                  message: AppErrorMapper.from(error).message,
                   onRetry: () => ref.invalidate(saleReturnsProvider),
                 ),
               ),
