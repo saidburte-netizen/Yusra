@@ -28,7 +28,7 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
   Future<void> _openShift() async {
     final branchId = ref.read(branchScopeProvider);
     if (branchId == null) {
-      AppSnackbar.error(context, 'Select a branch first.');
+      AppSnackbar.error(context, S.chooseBranchFirst);
       return;
     }
     final controller = TextEditingController(text: '0');

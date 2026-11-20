@@ -13,6 +13,30 @@ import 'menu_items.dart';
 /// Branch selected in the top bar by a super_admin (null = all branches).
 final selectedBranchProvider = StateProvider<String?>((ref) => null);
 
+
+/// Branch a super admin should work on before making an explicit choice.
+/// Returns null when the user has already chosen, so we never overwrite them.
+String? initialBranchId(
+  List<Map<String, dynamic>> branches, {
+  required String? ownBranchId,
+  required bool touched,
+  required String? selected,
+}) {
+  if (touched || selected != null || branches.isEmpty) return null;
+  if (ownBranchId != null &&
+      branches.any((branch) => branch['id'] == ownBranchId)) {
+    return ownBranchId;
+  }
+  return branches.first['id'] as String?;
+}
+
+const _manageBranchesValue = '__manage_branches__';
+
+/// True once the user has deliberately chosen a branch (including
+/// "All branches"). Used to avoid overwriting an explicit choice when the
+/// switcher rebuilds or the app is restarted.
+final branchSelectionSetProvider = StateProvider<bool>((ref) => false);
+
 class AppShell extends ConsumerWidget {
   const AppShell({super.key, required this.child});
 
@@ -192,7 +216,22 @@ class _BranchSwitcherState extends ConsumerState<_BranchSwitcher> {
         .select()
         .eq('is_active', true)
         .order('name');
-    return List<Map<String, dynamic>>.from(rows as List);
+    final branches = List<Map<String, dynamic>>.from(rows as List);
+
+    // A super admin (especially one created directly in Supabase) has no
+    // branch_id. Default them to their own branch, or to the first active
+    // branch, so stock, sales and every other create flow work immediately.
+    final fallback = initialBranchId(
+      branches,
+      ownBranchId: ref.read(authProvider).profile?.branchId,
+      touched: ref.read(branchSelectionSetProvider),
+      selected: _selected,
+    );
+    if (fallback != null) {
+      _selected = fallback;
+      ref.read(selectedBranchProvider.notifier).state = fallback;
+    }
+    return branches;
   }
 
   @override
@@ -201,24 +240,42 @@ class _BranchSwitcherState extends ConsumerState<_BranchSwitcher> {
       future: _branches,
       builder: (context, snapshot) {
         final branches = snapshot.data ?? const <Map<String, dynamic>>[];
-        if (branches.isEmpty) return const SizedBox.shrink();
+        if (branches.isEmpty) {
+          return TextButton.icon(
+            icon: const Icon(Icons.add_business_outlined, size: 18),
+            label: const Text(S.addBranch),
+            onPressed: () => context.go('/admin/branches'),
+          );
+        }
         return SizedBox(
           width: 180,
           child: DropdownButton<String?>(
             value: _selected,
             isExpanded: true,
-            hint: const Text('All branches'),
+            hint: const Text(S.allBranchesViewOnly),
             items: [
-              const DropdownMenuItem<String?>(value: null, child: Text('All branches')),
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text(S.allBranchesViewOnly),
+              ),
               for (final branch in branches)
                 DropdownMenuItem<String?>(
                   value: branch['id'] as String?,
                   child: Text((branch['name'] as String?) ?? '—'),
                 ),
+              const DropdownMenuItem<String?>(
+                value: _manageBranchesValue,
+                child: Text(S.manageBranches),
+              ),
             ],
             onChanged: (value) {
+              if (value == _manageBranchesValue) {
+                context.go('/admin/branches');
+                return;
+              }
               setState(() => _selected = value);
               ref.read(selectedBranchProvider.notifier).state = value;
+              ref.read(branchSelectionSetProvider.notifier).state = true;
             },
           ),
         );

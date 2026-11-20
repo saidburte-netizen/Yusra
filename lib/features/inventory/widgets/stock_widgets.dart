@@ -8,6 +8,7 @@ import '../data/inventory_models.dart';
 import '../data/inventory_providers.dart';
 import '../logic/stock_rules.dart';
 import '../../../core/errors/app_error.dart';
+import '../../../core/strings.dart';
 
 Widget statusChip(StockStatus status) => StatusBadge(
       StockRules.label(status),
@@ -47,7 +48,7 @@ Widget stockState<T>(
 Future<void> showAddStockDialog(BuildContext context, WidgetRef ref) async {
   final branch = ref.read(branchScopeProvider);
   if (branch == null) {
-    AppSnackbar.error(context, 'Choose a branch first.');
+    AppSnackbar.error(context, S.chooseBranchFirst);
     return;
   }
   final formKey = GlobalKey<FormState>();
