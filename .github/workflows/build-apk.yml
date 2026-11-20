@@ -37,11 +37,20 @@ jobs:
           cache: true
 
       - name: Set up Android SDK (platform 34, build-tools 34.0.0)
-        uses: android-actions/setup-android@v3
-        with:
-          accept-android-sdk-licenses: true
-          log-accepted-android-sdk-licenses: false
-          packages: 'platform-tools;35.0.2 platforms;android-34 build-tools;34.0.0'
+        # GitHub-hosted runners already ship the SDK. Installing it through
+        # setup-android downloads a fresh command-line tools bundle on every
+        # run, which has recently failed while unpacking platform-tools.
+        run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          if [ ! -d "$SDK/platforms/android-34" ] || [ ! -d "$SDK/build-tools/34.0.0" ]; then
+            yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" \
+              "platforms;android-34" "build-tools;34.0.0"
+          fi
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --list_installed | \
+            grep -E 'platforms;android-34|build-tools;34.0.0'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
