@@ -2026,3 +2026,31 @@ select kind, object, status,
 from results
 order by kind, object;
 
+
+-- =========================================================================
+-- FILE: supabase/migrations/0016_profile_rpc.sql
+-- =========================================================================
+
+create or replace function public.get_my_profile()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'id', p.id,
+    'email', p.email,
+    'full_name', p.full_name,
+    'phone', p.phone,
+    'role', p.role::text,
+    'branch_id', p.branch_id,
+    'is_active', p.is_active,
+    'avatar_url', p.avatar_url
+  )
+  from public.profiles p
+  where p.id = auth.uid()
+$$;
+
+revoke all on function public.get_my_profile() from public, anon;
+grant execute on function public.get_my_profile() to authenticated;
