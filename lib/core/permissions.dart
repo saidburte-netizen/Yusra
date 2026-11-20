@@ -119,7 +119,7 @@ const Map<String, Map<AppRole, Perm>> permissionMatrix = {
     AppRole.cashier: _e, AppRole.storeKeeper: _n, AppRole.accountant: _n,
   },
   Modules.sales: {
-    AppRole.superAdmin: _v, AppRole.admin: _v, AppRole.pharmacist: _v,
+    AppRole.superAdmin: _e, AppRole.admin: _v, AppRole.pharmacist: _v,
     AppRole.cashier: _o, AppRole.storeKeeper: _n, AppRole.accountant: _v,
   },
   Modules.saleReturns: {
@@ -127,7 +127,7 @@ const Map<String, Map<AppRole, Perm>> permissionMatrix = {
     AppRole.cashier: _n, AppRole.storeKeeper: _n, AppRole.accountant: _n,
   },
   Modules.shifts: {
-    AppRole.superAdmin: _v, AppRole.admin: _v, AppRole.pharmacist: _v,
+    AppRole.superAdmin: _e, AppRole.admin: _v, AppRole.pharmacist: _v,
     AppRole.cashier: _o, AppRole.storeKeeper: _n, AppRole.accountant: _v,
   },
   Modules.customers: {
@@ -143,7 +143,7 @@ const Map<String, Map<AppRole, Perm>> permissionMatrix = {
     AppRole.cashier: _n, AppRole.storeKeeper: _n, AppRole.accountant: _e,
   },
   Modules.reports: {
-    AppRole.superAdmin: _v, AppRole.admin: _v, AppRole.pharmacist: _n,
+    AppRole.superAdmin: _e, AppRole.admin: _v, AppRole.pharmacist: _n,
     AppRole.cashier: _n, AppRole.storeKeeper: _n, AppRole.accountant: _v,
   },
 };

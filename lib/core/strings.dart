@@ -151,7 +151,6 @@ abstract final class S {
   static const last14Days = 'Last 14 days';
   static const topMedicines = 'Top medicines';
   static const alerts = 'Alerts';
-  static const recentActivity = 'Recent activity';
   static const pendingPrescriptions = 'Pending prescriptions';
   static const shortcuts = 'Shortcuts';
   static const currentShift = 'Current shift';
@@ -184,4 +183,15 @@ abstract final class S {
   static const period = 'Period';
   static const chart = 'Chart';
   static const allBranches = 'All branches';
+  static const activity = 'Activity log';
+  static const recentActivity = 'Recent activity';
+  static const timeRange = 'Time range';
+  static const noActivity = 'No activity recorded for this period.';
+  static const requestCorrection = 'Request correction';
+  static const approveCorrection = 'Approve correction';
+  static const pendingApproval = 'Pending approval';
+  static const approved = 'Approved';
+  static const dateTimeLabel = 'Date & time';
+  static const auditNote = 'Actions are recorded with your email and time and cannot be edited or deleted without super admin approval.';
+
 }

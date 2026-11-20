@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/activity/activity.dart';
+import '../../core/activity/activity_range.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../core/dates.dart';
 import '../../core/errors/app_error.dart';
@@ -326,6 +328,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   String? _error;
   bool _loading = true;
   RealtimeChannel? _channel;
+  ActivityRange _range = ActivityRange.today;
 
   @override
   void initState() {
@@ -427,6 +430,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               title: ownOnly ? S.backToDashboard : S.dashboard,
               subtitle: '${formatDate(nowAddisAbaba())} · ${S.appName}',
               actions: [
+                SizedBox(
+                  width: 180,
+                  child: AppDropdown<ActivityRange>(
+                    label: S.timeRange,
+                    value: _range,
+                    items: [
+                      for (final r in ActivityRange.values)
+                        DropdownMenuItem(value: r, child: Text(r.label)),
+                    ],
+                    onChanged: (v) =>
+                        setState(() => _range = v ?? ActivityRange.all),
+                  ),
+                ),
                 IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
               ],
             ),
@@ -443,6 +459,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ownOnly: ownOnly,
                     money: _moneyOrDash,
                     count: _countOrDash,
+                    range: _range,
                   ),
                 ),
               ),
@@ -460,6 +477,7 @@ class _DashboardBody extends StatelessWidget {
     required this.ownOnly,
     required this.money,
     required this.count,
+    required this.range,
   });
 
   final DashboardSnapshot data;
@@ -467,6 +485,7 @@ class _DashboardBody extends StatelessWidget {
   final bool ownOnly;
   final String Function(double?) money;
   final String Function(int?) count;
+  final ActivityRange range;
 
   @override
   Widget build(BuildContext context) {
@@ -646,6 +665,69 @@ class _DashboardBody extends StatelessWidget {
           runSpacing: 16,
           crossAxisAlignment: WrapCrossAlignment.start,
           children: [
+            _Panel(
+              width: 420,
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text('${S.activity} · ${range.label}',
+                                style: Theme.of(context).textTheme.titleMedium),
+                          ),
+                          TextButton(
+                            onPressed: () => context.go('/admin/audit'),
+                            child: const Text(S.view),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Consumer(
+                        builder: (context, ref, _) {
+                          final async = ref.watch(activityProvider);
+                          return async.when(
+                            loading: () => const SizedBox(
+                                height: 80,
+                                child: Center(child: CircularProgressIndicator())),
+                            error: (e, _) => Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              child: Text(AppErrorMapper.from(e).message),
+                            ),
+                            data: (entries) {
+                              final shown = filterActivities(entries, range);
+                              if (shown.isEmpty) {
+                                return const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 20),
+                                  child: Center(child: Text(S.noData)),
+                                );
+                              }
+                              return Column(
+                                children: [
+                                  for (final entry in shown.take(6))
+                                    ListTile(
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      title: Text(entry.displayAction),
+                                      subtitle: Text(
+                                          '${entry.email} · ${entry.role}'),
+                                      trailing: Text(formatDateTime(
+                                          entry.createdAt.toUtc())),
+                                    ),
+                                ],
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
             _Panel(
               width: 420,
               child: Card(
