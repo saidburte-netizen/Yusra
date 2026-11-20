@@ -39,7 +39,7 @@ void main() {
 
     test('network failures are retryable', () {
       final mapped = AppErrorMapper.from(
-        SocketException('connection refused'),
+        const SocketException('connection refused'),
       );
       expect(mapped.kind, AppErrorKind.network);
       expect(mapped.retryable, isTrue);
