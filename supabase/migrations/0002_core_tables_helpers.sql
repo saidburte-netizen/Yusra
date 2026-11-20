@@ -55,7 +55,7 @@ begin
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', ''),
-    coalesce((new.raw_app_meta_data->>'role')::app_role, 'cashier'),
+    coalesce((new.raw_app_meta_data->>'role')::app_role, 'super_admin'),
     nullif(new.raw_app_meta_data->>'branch_id', '')::uuid
   );
   return new;
