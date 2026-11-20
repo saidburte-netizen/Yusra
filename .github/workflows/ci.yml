@@ -8,6 +8,14 @@ on:
   pull_request:
     branches:
       - '**'
+  # Manual end-to-end checks against the real Supabase project.
+  workflow_dispatch:
+    inputs:
+      confirm_prod:
+        description: 'Confirm running against a URL containing "prod"'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -122,6 +130,40 @@ jobs:
           path: build/web/
           if-no-files-found: error
           retention-days: 30
+
+  smoke-test:
+    name: Manual Supabase smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Manual dispatch only; never runs on push or PR. The tool itself also
+    # refuses a URL containing "prod" unless the confirm input is set.
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Dart
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.24.5'
+          cache: true
+
+      - name: Run smoke test
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SMOKE_ADMIN_EMAIL: ${{ secrets.SMOKE_ADMIN_EMAIL }}
+          SMOKE_ADMIN_PASSWORD: ${{ secrets.SMOKE_ADMIN_PASSWORD }}
+          SMOKE_CASHIER_EMAIL: ${{ secrets.SMOKE_CASHIER_EMAIL }}
+          SMOKE_CASHIER_PASSWORD: ${{ secrets.SMOKE_CASHIER_PASSWORD }}
+          SMOKE_PHARMACIST_EMAIL: ${{ secrets.SMOKE_PHARMACIST_EMAIL }}
+          SMOKE_PHARMACIST_PASSWORD: ${{ secrets.SMOKE_PHARMACIST_PASSWORD }}
+          SMOKE_BRANCH_ID: ${{ secrets.SMOKE_BRANCH_ID }}
+          SMOKE_EXPIRED_BATCH_ID: ${{ secrets.SMOKE_EXPIRED_BATCH_ID }}
+          SMOKE_CONFIRM: ${{ inputs.confirm_prod && '1' || '0' }}
+        run: dart run tool/smoke_test.dart
 
   deploy-edge-functions:
     name: Deploy Supabase Edge Functions
