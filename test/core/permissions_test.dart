@@ -117,4 +117,16 @@ void main() {
       expect(titleForLocation('/admin/unknown'), S.admin);
     });
   });
+
+  group('super admin authority', () {
+    test('super admin can view and edit every module', () {
+      for (final module in permissionMatrix.keys) {
+        expect(can(AppRole.superAdmin, module, PermAction.view), isTrue,
+            reason: 'view $module');
+        if (module == Modules.dashboard || module == Modules.audit) continue;
+        expect(can(AppRole.superAdmin, module, PermAction.edit), isTrue,
+            reason: 'edit $module');
+      }
+    });
+  });
 }
