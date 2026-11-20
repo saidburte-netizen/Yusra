@@ -61,6 +61,7 @@ abstract final class S {
   static const audit = 'Audit log';
   static const more = 'More';
   static const forbidden = 'Access denied';
+  static const signedInAs = 'Signed in as';
   static const accountProblem = 'We could not load your account details.';
   static const forbiddenBody = 
       'You do not have permission to open this page. Contact an administrator if you think this is a mistake.';

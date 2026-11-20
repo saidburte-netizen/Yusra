@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/auth/auth_controller.dart';
+import '../../core/permissions.dart';
 import '../../core/strings.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets.dart';
@@ -31,6 +32,18 @@ class ForbiddenScreen extends ConsumerWidget {
                     S.forbiddenBody,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '${S.signedInAs}: ${auth.profile?.email ?? '—'}',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  Text(
+                    '${S.role}: ${auth.profile?.role.label ?? '—'}',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   if (auth.error != null) ...[
                     const SizedBox(height: 16),
