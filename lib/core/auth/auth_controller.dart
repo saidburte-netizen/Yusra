@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 
+import '../errors/app_error.dart';
 import '../permissions.dart';
 import '../strings.dart';
 import '../supabase_client.dart';
@@ -90,13 +91,17 @@ class AuthController extends StateNotifier<AuthState> {
       if (change.session?.user == null) {
         state = AuthState.unauthenticated;
         _bump();
-      } else if (state.profile == null) {
+      } else {
+        // Roles can change in the database while a session is live (for example
+        // when an admin promotes a teammate). Re-read the profile on every auth
+        // event so the router guard never keeps a stale role.
         unawaited(_loadProfile());
       }
     });
   }
 
   StreamSubscription<Object>? _subscription;
+  bool _loadingProfile = false;
 
   void _bump() => authRevision.value++;
 
@@ -122,6 +127,16 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> _loadProfile() async {
+    if (_loadingProfile) return;
+    _loadingProfile = true;
+    try {
+      await _loadProfileUnchecked();
+    } finally {
+      _loadingProfile = false;
+    }
+  }
+
+  Future<void> _loadProfileUnchecked() async {
     final client = SupabaseService.client;
     final user = client.auth.currentUser;
     if (user == null) {
@@ -139,9 +154,10 @@ class AuthController extends StateNotifier<AuthState> {
         status: AuthStatus.authenticated,
         profile: UserProfile.fromJson(row, email: user.email ?? ''),
       );
-    } catch (_) {
-      // A missing profile row is treated as an inactive account rather than
-      // leaking an unauthenticated app state.
+    } catch (e) {
+      // Keep the user signed in, but surface the real reason the profile could
+      // not be read. Silently turning this into "inactive" made genuine RLS,
+      // project-configuration and missing-row problems look like access denied.
       state = AuthState(
         status: AuthStatus.authenticated,
         profile: UserProfile(
@@ -151,6 +167,7 @@ class AuthController extends StateNotifier<AuthState> {
           role: AppRole.cashier,
           isActive: false,
         ),
+        error: AppErrorMapper.from(e).message,
       );
     }
     _bump();

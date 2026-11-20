@@ -31,7 +31,7 @@ All money columns are `numeric(14,2)`. Prices exclude VAT; ETB, whole units only
 - `v_low_stock` — at/below reorder level
 - `v_expiring_batches` — batches near expiry
 - `v_daily_sales` — per-day totals in `Africa/Addis_Ababa`
-- Twelve `v_report_*` views — **proposed in 0014**: sales by day/cashier/payment method/medicine, profit, stock valuation, expiry losses, purchases by supplier, expenses, net profit, shift variance and the controlled-drug register. They are the only source of report aggregates; the app never recomputes financial figures in Dart.
+- Twelve `v_report_*` views — **proposed in 0014**: sales by day/cashier/payment method/medicine, profit, stock valuation, expiry losses, purchases by supplier, expenses, net profit, shift variance and the controlled-drug register. All twelve expose `branch_id` so a super admin can filter a report by branch; everyone else is scoped by RLS. They are the only source of report aggregates; the app never recomputes financial figures in Dart.
 
 ## RPCs — the only writers for stock and money
 

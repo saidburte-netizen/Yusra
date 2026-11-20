@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../core/dates.dart';
@@ -21,6 +22,32 @@ class DayPoint {
   final double total;
 }
 
+/// One employee's current standing, shown to admins on the dashboard.
+class TeamMemberStatus {
+  const TeamMemberStatus({
+    required this.id,
+    required this.name,
+    required this.role,
+    required this.todaySales,
+    required this.todayInvoices,
+    required this.hasOpenShift,
+    this.lastActive,
+  });
+
+  final String id;
+  final String name;
+  final AppRole role;
+  final double todaySales;
+  final int todayInvoices;
+  final bool hasOpenShift;
+  final DateTime? lastActive;
+}
+
+class _UserSales {
+  double total = 0;
+  int count = 0;
+}
+
 /// Everything on this screen comes from Supabase. Each metric is loaded
 /// independently so a missing optional view never blanks the whole dashboard.
 class DashboardSnapshot {
@@ -38,6 +65,7 @@ class DashboardSnapshot {
     this.daily = const [],
     this.topMedicines = const [],
     this.recentActivity = const [],
+    this.teamStatus = const [],
   });
 
   final double? todaySales;
@@ -53,6 +81,7 @@ class DashboardSnapshot {
   final List<DayPoint> daily;
   final List<Map<String, dynamic>> topMedicines;
   final List<Map<String, dynamic>> recentActivity;
+  final List<TeamMemberStatus> teamStatus;
 
   static num _num(dynamic value) {
     if (value is num) return value;
@@ -215,6 +244,57 @@ class DashboardSnapshot {
         .order('created_at', ascending: false)
         .limit(5));
 
+    // Admins see each employee's live standing. Everything is derived from
+    // data already fetched for the other counters, plus one profiles read.
+    final team = <TeamMemberStatus>[];
+    if (role == AppRole.superAdmin || role == AppRole.admin) {
+      final people = await _rows(() => client
+          .from('profiles')
+          .select('id, email, full_name, role, is_active')
+          .eq('is_active', true));
+      final salesByUser = <String, _UserSales>{};
+      for (final row in todayRows ?? const []) {
+        final id = row['cashier_id']?.toString();
+        if (id == null) continue;
+        final entry = salesByUser.putIfAbsent(id, _UserSales.new);
+        entry.total += _num(row['total']).toDouble();
+        entry.count += 1;
+      }
+      final openShiftUsers = <String>{};
+      for (final row in shifts ?? const []) {
+        final id = row['cashier_id']?.toString();
+        if (id != null) openShiftUsers.add(id);
+      }
+      final lastActive = <String, DateTime>{};
+      for (final row in activity ?? const []) {
+        final id = row['user_id']?.toString();
+        final parsed = DateTime.tryParse(row['created_at']?.toString() ?? '');
+        if (id == null || parsed == null) continue;
+        final previous = lastActive[id];
+        if (previous == null || parsed.isAfter(previous)) {
+          lastActive[id] = parsed;
+        }
+      }
+      for (final person in people ?? const []) {
+        final id = person['id']?.toString();
+        if (id == null) continue;
+        final name = (person['full_name'] as String?)?.trim() ?? '';
+        final sales = salesByUser[id];
+        team.add(TeamMemberStatus(
+          id: id,
+          name: name.isEmpty ? (person['email'] as String? ?? '—') : name,
+          role: AppRoleX.fromDb(person['role'] as String?) ?? AppRole.cashier,
+          todaySales: sales?.total ?? 0,
+          todayInvoices: sales?.count ?? 0,
+          hasOpenShift: openShiftUsers.contains(id),
+          lastActive: lastActive[id] == null
+              ? null
+              : toAddisAbaba(lastActive[id]!),
+        ));
+      }
+      team.sort((a, b) => b.todaySales.compareTo(a.todaySales));
+    }
+
     return DashboardSnapshot(
       todaySales: _sum(todayRows, 'total'),
       monthSales: _sum(monthRows, 'total'),
@@ -229,6 +309,7 @@ class DashboardSnapshot {
       daily: daily,
       topMedicines: _topMedicines(fortnightItems),
       recentActivity: activity ?? const [],
+      teamStatus: team,
     );
   }
 }
@@ -244,11 +325,60 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   DashboardSnapshot? _data;
   String? _error;
   bool _loading = true;
+  RealtimeChannel? _channel;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _subscribeToChanges();
+  }
+
+  @override
+  void dispose() {
+    final channel = _channel;
+    if (channel != null && SupabaseService.isReady) {
+      SupabaseService.client.removeChannel(channel);
+    }
+    super.dispose();
+  }
+
+  /// Counters must stay live while the screen is open: a sale or a stock
+  /// movement written by another device has to move the numbers without the
+  /// user pressing refresh.
+  void _subscribeToChanges() {
+    if (!SupabaseService.isReady) return;
+    _channel = SupabaseService.client
+        .channel('dashboard-counters')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'stock_batches',
+          callback: (_) => _refreshQuiet(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'sales',
+          callback: (_) => _refreshQuiet(),
+        )
+      ..subscribe();
+  }
+
+  /// Realtime events can arrive in bursts. Reload without flipping into the
+  /// loading state so the dashboard never flickers or loses its last snapshot.
+  Future<void> _refreshQuiet() async {
+    final auth = ref.read(authProvider);
+    try {
+      final data = await DashboardSnapshot.load(
+        role: auth.profile?.role ?? AppRole.cashier,
+        userId: auth.profile?.id,
+      );
+      if (!mounted) return;
+      setState(() => _data = data);
+    } catch (_) {
+      // Keep the last good snapshot; the manual refresh still surfaces errors.
+    }
   }
 
   Future<void> _load() async {
@@ -578,6 +708,71 @@ class _DashboardBody extends StatelessWidget {
                 ),
               ),
             ),
+            if (role == AppRole.superAdmin || role == AppRole.admin)
+              _Panel(
+                width: 520,
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.groups_outlined,
+                                size: 20, color: AppColors.pink700),
+                            const SizedBox(width: 8),
+                            Text(S.teamActivity,
+                                style:
+                                    Theme.of(context).textTheme.titleMedium),
+                            const Spacer(),
+                            TextButton.icon(
+                              onPressed: () => context.go('/admin/users'),
+                              icon: const Icon(Icons.manage_accounts_outlined,
+                                  size: 18),
+                              label: const Text(S.users),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (data.teamStatus.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 20),
+                            child: Center(child: Text(S.noTeamMembers)),
+                          )
+                        else
+                          ...data.teamStatus.map(
+                            (member) => ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: CircleAvatar(
+                                backgroundColor: Theme.of(context)
+                                    .colorScheme
+                                    .primaryContainer,
+                                child: Text(member.name.isEmpty
+                                    ? '?'
+                                    : member.name.substring(0, 1).toUpperCase()),
+                              ),
+                              title: Text(member.name),
+                              subtitle: Text(
+                                [
+                                  member.role.label,
+                                  money(member.todaySales),
+                                  '${member.todayInvoices} ${S.invoiceCount.toLowerCase()}',
+                                  member.hasOpenShift
+                                      ? S.shiftOpen
+                                      : S.noShift,
+                                  if (member.lastActive != null)
+                                    '${S.lastActive}: ${formatDateTime(member.lastActive!)}',
+                                ].join(' · '),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ],

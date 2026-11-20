@@ -27,7 +27,7 @@ The eleven steps supplied by the owner did **not** contain any `create policy`, 
 - `0010_rls_storage.sql` is intentionally empty of executable SQL so the repository stays honest about what was applied.
 - `0012_rls_hardening.sql` proposes idempotent RLS policies, RPC grants and the five Storage buckets (`prescriptions`, `receipts`, `branding`, `avatars`, `medicine-images`).
 - `0013_rpc_gaps.sql` proposes the void/return RPCs.
-- `0014_report_views.sql` proposes the twelve `v_report_*` views with the exact columns the app queries.
+- `0014_report_views.sql` proposes the twelve `v_report_*` views with the exact columns the app queries plus `branch_id` for the super-admin branch filter. If an earlier version was already applied, re-run this file — it is idempotent and simply adds the column to every view.
 - `0015_team_management.sql` proposes `set_user_access`, `share_admin_access` and `publish_app_settings` for super-admin team sharing.
 
 **The owner must review and run 0012, 0013, 0014 and 0015 in the SQL Editor before the smoke test can pass and before Reports / Team access work against the live database.** Until then, direct table reads with the anon key are unrestricted by RLS and the role rules are only enforced in the client.
@@ -60,5 +60,5 @@ Never change the live database from application code. When any agent needs a cha
 | 0010 | Applied by owner | Placeholder — no RLS/Storage SQL was supplied |
 | 0012 | **Proposed — not applied** | RLS policies, RPC grants, private prescriptions bucket |
 | 0013 | **Proposed — not applied** | `void_sale` and `process_sale_return` RPCs |
-| 0014 | **Proposed — not applied** | Twelve `v_report_*` reporting views |
+| 0014 | **Proposed — not applied** | Twelve `v_report_*` reporting views, each exposing `branch_id` for the super-admin branch filter |
 | 0015 | **Proposed — not applied** | Team access RPCs: set role/branch, share access, publish settings |

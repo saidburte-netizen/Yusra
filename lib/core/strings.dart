@@ -61,7 +61,8 @@ abstract final class S {
   static const audit = 'Audit log';
   static const more = 'More';
   static const forbidden = 'Access denied';
-  static const forbiddenBody =
+  static const accountProblem = 'We could not load your account details.';
+  static const forbiddenBody = 
       'You do not have permission to open this page. Contact an administrator if you think this is a mistake.';
   static const backToDashboard = 'Back to dashboard';
   static const comingSoon = 'Coming soon';
@@ -111,6 +112,10 @@ abstract final class S {
   static const branch = 'Branch';
   static const status = 'Status';
   static const fullName = 'Full name';
+  static const teamActivity = 'Team activity';
+  static const shiftOpen = 'Shift open';
+  static const noShift = 'No open shift';
+  static const lastActive = 'Last active';
   static const phone = 'Phone';
   static const pharmacyName = 'Pharmacy name';
   static const taglineLabel = 'Tagline';
@@ -175,4 +180,6 @@ abstract final class S {
   static const shiftVariance = 'Shift cash variance';
   static const controlledRegister = 'Controlled / prescription-only register';
   static const period = 'Period';
+  static const chart = 'Chart';
+  static const allBranches = 'All branches';
 }
