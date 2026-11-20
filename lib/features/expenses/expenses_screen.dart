@@ -4,15 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../core/dates.dart';
+import '../../core/errors/app_error.dart';
 import '../../core/money.dart';
 import '../../core/permissions.dart';
 import '../../core/strings.dart';
 import '../../core/supabase_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets.dart';
+import '../inventory/data/inventory_providers.dart';
 
 const List<String> expenseCategories = [
   'Rent',
@@ -23,7 +26,36 @@ const List<String> expenseCategories = [
   'Other',
 ];
 
-const List<String> paymentMethods = ['Cash', 'Bank transfer', 'Telebirr', 'Cheque'];
+/// The database stores the `payment_method` enum, so the enum value is sent to
+/// Supabase while the label is only shown in the UI.
+class _PaymentMethod {
+  const _PaymentMethod(this.value, this.label);
+
+  final String value;
+  final String label;
+}
+
+const List<_PaymentMethod> _paymentMethods = [
+  _PaymentMethod('cash', 'Cash'),
+  _PaymentMethod('bank_transfer', 'Bank transfer'),
+  _PaymentMethod('mobile_money', 'Mobile money (Telebirr)'),
+  _PaymentMethod('card', 'Card'),
+];
+
+String _paymentMethodLabel(String? value) {
+  if (value == null) return '—';
+  for (final method in _paymentMethods) {
+    if (method.value == value) return method.label;
+  }
+  return value;
+}
+
+class _ExpenseFormResult {
+  const _ExpenseFormResult(this.values, this.receiptBytes);
+
+  final Map<String, dynamic> values;
+  final Uint8List? receiptBytes;
+}
 
 class ExpensesScreen extends ConsumerStatefulWidget {
   const ExpensesScreen({super.key});
@@ -79,7 +111,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = AppErrorMapper.from(e).message;
         _loading = false;
       });
     }
@@ -118,23 +150,60 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   }
 
   Future<void> _edit(Map<String, dynamic>? expense) async {
-    final result = await showDialog<Map<String, dynamic>>(
+    final result = await showDialog<_ExpenseFormResult>(
       context: context,
       builder: (_) => _ExpenseFormDialog(initial: expense),
     );
-    if (result == null) return;
+    if (result == null || !mounted) return;
     try {
       final client = SupabaseService.client;
-      if (expense == null) {
-        await client.from('expenses').insert(result);
-      } else {
-        await client.from('expenses').update(result).eq('id', expense['id']);
+      final isNew = expense == null;
+      // The expense always belongs to a concrete branch; an unscoped admin has
+      // to pick one before creating a record.
+      final branchId = isNew
+          ? ref.read(branchScopeProvider)
+          : expense['branch_id'] as String?;
+      if (branchId == null) {
+        AppSnackbar.error(context, 'Select a branch first.');
+        return;
       }
+
+      late final String expenseId;
+      if (isNew) {
+        final inserted = await client
+            .from('expenses')
+            .insert({...result.values, 'branch_id': branchId})
+            .select('id')
+            .single();
+        expenseId = inserted['id'] as String;
+      } else {
+        expenseId = expense['id'] as String;
+        await client.from('expenses').update(result.values).eq('id', expenseId);
+      }
+
+      // The receipts bucket is private, so the storage path (not a public URL)
+      // is stored on the row. The expense id is only known after the insert.
+      if (result.receiptBytes != null) {
+        final path = 'receipts/$branchId/$expenseId/receipt.jpg';
+        await client.storage.from('receipts').uploadBinary(
+              path,
+              result.receiptBytes!,
+              fileOptions: const FileOptions(
+                upsert: true,
+                contentType: 'image/jpeg',
+              ),
+            );
+        await client
+            .from('expenses')
+            .update({'receipt_path': path})
+            .eq('id', expenseId);
+      }
+
       if (!mounted) return;
       AppSnackbar.success(context, S.saved);
       await _load();
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, e.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 
@@ -154,7 +223,23 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       AppSnackbar.success(context, S.saved);
       await _load();
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, e.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
+    }
+  }
+
+  /// Receipts live in a private bucket, so a short-lived signed URL is needed
+  /// each time one is opened.
+  Future<void> _openReceipt(String path) async {
+    try {
+      final url = await SupabaseService.client.storage
+          .from('receipts')
+          .createSignedUrl(path, 3600);
+      final uri = Uri.tryParse(url);
+      if (uri != null && await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 
@@ -273,7 +358,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                           S.category,
                           'Amount',
                           S.paymentMethod,
-                          'Note',
+                          'Description',
                           S.actionLabel,
                         ],
                         filterChips: expenseCategories,
@@ -291,11 +376,21 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                         DateTime.parse(expense['expense_date'] as String)),
                                 (expense['category'] as String?) ?? '—',
                                 formatMoney(_amount(expense)),
-                                (expense['payment_method'] as String?) ?? '—',
-                                (expense['note'] as String?) ?? '—',
+                                _paymentMethodLabel(
+                                    expense['payment_method'] as String?),
+                                (expense['description'] as String?) ?? '—',
                                 '',
                               ],
                               actions: [
+                                if (expense['receipt_path'] != null)
+                                  IconButton(
+                                    tooltip: S.receiptPhoto,
+                                    icon: const Icon(
+                                        Icons.receipt_long_outlined,
+                                        size: 18),
+                                    onPressed: () => _openReceipt(
+                                        expense['receipt_path'] as String),
+                                  ),
                                 if (canEdit)
                                   IconButton(
                                     tooltip: S.edit,
@@ -335,12 +430,11 @@ class _ExpenseFormDialog extends StatefulWidget {
 class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
-  final _noteController = TextEditingController();
+  final _descriptionController = TextEditingController();
   String _category = expenseCategories.first;
-  String _paymentMethod = paymentMethods.first;
+  String _paymentMethod = _paymentMethods.first.value;
   DateTime _date = nowAddisAbaba();
   Uint8List? _receiptBytes;
-  bool _uploading = false;
 
   @override
   void initState() {
@@ -348,7 +442,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     final initial = widget.initial;
     if (initial != null) {
       _amountController.text = initial['amount']?.toString() ?? '';
-      _noteController.text = (initial['note'] as String?) ?? '';
+      _descriptionController.text = (initial['description'] as String?) ?? '';
       _category = (initial['category'] as String?) ?? _category;
       _paymentMethod = (initial['payment_method'] as String?) ?? _paymentMethod;
       if (initial['expense_date'] != null) {
@@ -360,7 +454,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
   @override
   void dispose() {
     _amountController.dispose();
-    _noteController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -376,36 +470,16 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
     setState(() => _receiptBytes = bytes);
   }
 
-  Future<String?> _uploadReceipt() async {
-    if (_receiptBytes == null) return null;
-    final path = 'receipts/${DateTime.now().millisecondsSinceEpoch}.jpg';
-    await SupabaseService.client.storage
-        .from('receipts')
-        .uploadBinary(path, _receiptBytes!,
-            fileOptions: const FileOptions(upsert: true, contentType: 'image/jpeg'));
-    return SupabaseService.client.storage.from('receipts').getPublicUrl(path);
-  }
-
-  Future<void> _submit() async {
+  void _submit() {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _uploading = true);
-    try {
-      final body = <String, dynamic>{
-        'amount': parseMoney(_amountController.text),
-        'category': _category,
-        'payment_method': _paymentMethod,
-        'expense_date': toAddisAbaba(_date).toUtc().toIso8601String(),
-        'note': _noteController.text.trim(),
-      };
-      final receiptUrl = await _uploadReceipt();
-      if (receiptUrl != null) body['receipt_url'] = receiptUrl;
-      if (!mounted) return;
-      Navigator.pop(context, body);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _uploading = false);
-      AppSnackbar.error(context, e.toString());
-    }
+    final values = <String, dynamic>{
+      'amount': parseMoney(_amountController.text),
+      'category': _category,
+      'payment_method': _paymentMethod,
+      'expense_date': toAddisAbaba(_date).toUtc().toIso8601String(),
+      'description': _descriptionController.text.trim(),
+    };
+    Navigator.pop(context, _ExpenseFormResult(values, _receiptBytes));
   }
 
   @override
@@ -441,8 +515,9 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
                   label: S.paymentMethod,
                   value: _paymentMethod,
                   items: [
-                    for (final method in paymentMethods)
-                      DropdownMenuItem(value: method, child: Text(method)),
+                    for (final method in _paymentMethods)
+                      DropdownMenuItem(
+                          value: method.value, child: Text(method.label)),
                   ],
                   onChanged: (value) => setState(() => _paymentMethod = value!),
                 ),
@@ -454,8 +529,8 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
                 ),
                 const SizedBox(height: 12),
                 AppTextField(
-                  label: 'Note',
-                  controller: _noteController,
+                  label: 'Description',
+                  controller: _descriptionController,
                   maxLines: 2,
                 ),
                 const SizedBox(height: 12),
@@ -476,16 +551,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text(S.cancel)),
-        ElevatedButton(
-          onPressed: _uploading ? null : _submit,
-          child: _uploading
-              ? const SizedBox(
-                  height: 18,
-                  width: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text(S.save),
-        ),
+        ElevatedButton(onPressed: _submit, child: const Text(S.save)),
       ],
     );
   }

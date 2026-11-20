@@ -45,6 +45,17 @@ abstract final class S {
   static const reports = 'Reports';
   static const admin = 'Administration';
   static const users = 'Users and roles';
+  static const teamAccess = 'Team access';
+  static const teamAccessBody =
+      'Share your role, branch and published settings with your teammates.';
+  static const shareAccess = 'Share my access';
+  static const publishSettings = 'Publish settings to team';
+  static const editAccess = 'Edit role / branch';
+  static const selectTeammates = 'Select teammates';
+  static const noTeamMembers = 'No team members found.';
+  static const teamShareDone = 'Access shared with the selected teammates.';
+  static const settingsPublished = 'Settings published to the whole team.';
+  static const accessUpdated = 'Team member access updated.';
   static const branches = 'Branches';
   static const settings = 'Settings';
   static const audit = 'Audit log';

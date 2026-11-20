@@ -76,13 +76,12 @@ Deno.serve(async (req: Request) => {
       .eq('id', userId)
       .single();
     if (targetError || !target) throw new Error('User not found');
+    if (!target.is_active) throw new Error('This account is inactive');
     if (target.role === 'super_admin' && actor.role !== 'super_admin') {
       throw new Error('Only a super admin can reset a super admin');
     }
     if (
       actor.role !== 'super_admin' &&
-      target.branch_id &&
-      actor.branch_id &&
       target.branch_id !== actor.branch_id
     ) {
       throw new Error('You can only manage users in your own branch');
@@ -105,11 +104,15 @@ Deno.serve(async (req: Request) => {
     }
 
     try {
-      await admin.from('audit_log').insert({
-        actor_id: identity.user.id,
+      await admin.from('audit_logs').insert({
+        user_id: identity.user.id,
         action: 'reset_password',
         table_name: 'profiles',
         record_id: userId,
+        branch_id: target.branch_id,
+        old_data: null,
+        new_data: { action: 'reset_password' },
+        created_at: new Date().toISOString(),
       });
     } catch {
       // Audit is best effort.

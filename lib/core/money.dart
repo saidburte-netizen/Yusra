@@ -22,7 +22,8 @@ double? parseMoney(String input) {
   return double.tryParse(cleaned);
 }
 
-/// Amount excluding VAT from a VAT-inclusive total (prices exclude VAT by default,
-/// so this is only used when an external document quotes a gross amount).
-double moneyExcludingVat(double gross, double vatRate) =>
-    gross / (1 + vatRate / 100);
+/// Amount excluding VAT from a VAT-inclusive total (prices exclude VAT by
+/// default, so this is only used when an external document quotes a gross
+/// amount). [vatRate] is a fraction, matching the app's `vat_rate` setting:
+/// pass 0.15 for 15%, not 15.
+double moneyExcludingVat(double gross, double vatRate) => gross / (1 + vatRate);

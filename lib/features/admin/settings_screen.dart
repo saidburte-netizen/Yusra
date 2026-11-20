@@ -7,13 +7,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../core/env.dart';
+import '../../core/errors/app_error.dart';
 import '../../core/permissions.dart';
 import '../../core/strings.dart';
+import '../../core/state/app_cache.dart';
 import '../../core/supabase_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets.dart';
+import '../inventory/data/inventory_providers.dart';
+import '../sales/data/sales.dart';
 
-/// Tenant settings stored as key/value rows in `settings`. The service-role
+/// Tenant settings stored as key/value rows in `app_settings`. The service-role
 /// key is never needed here: RLS restricts writes to admins.
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -26,8 +30,10 @@ const List<String> _textKeys = [
   'pharmacy_name',
   'tagline',
   'address',
+  'phone',
   'tin',
   'license_no',
+  // Kept for display/editing, but the money formatter is hard-coded to ETB.
   'currency',
   'receipt_footer',
 ];
@@ -36,7 +42,7 @@ const List<String> _numberKeys = [
   'vat_rate',
   'low_stock_default',
   'expiry_alert_days',
-  'max_discount',
+  'max_cashier_discount_pct',
 ];
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
@@ -73,7 +79,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     });
     try {
       if (!SupabaseService.isReady) throw const SupabaseNotConfigured();
-      final rows = await SupabaseService.client.from('settings').select();
+      final rows = await SupabaseService.client.from('app_settings').select();
       if (!mounted) return;
       _rows.clear();
       for (final row in rows as List) {
@@ -84,22 +90,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       for (final key in [..._textKeys, ..._numberKeys]) {
         _controllers[key]!.text = _read(_rows[key]);
       }
+      // Stored as a fraction (0.15); the field works in percent (15).
+      final vatPercent = num.tryParse(_controllers['vat_rate']!.text);
+      if (vatPercent != null) {
+        _controllers['vat_rate']!.text = _plainNumber(vatPercent * 100);
+      }
       _logoUrl = _read(_rows['logo_url']);
       setState(() => _loading = false);
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = AppErrorMapper.from(e).message;
         _loading = false;
       });
     }
   }
 
+  String _plainNumber(num value) => value % 1 == 0
+      ? value.toInt().toString()
+      : value.toString();
+
   String _read(Map<String, dynamic>? row) {
     if (row == null) return '';
     final value = row['value'];
     if (value == null) return '';
-    if (value is Map) return (value['value'] ?? '').toString();
+    if (value is Map) return (value['value'] ?? value['_'] ?? '').toString();
     return value.toString();
   }
 
@@ -108,60 +123,68 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() => _saving = true);
     try {
       final client = SupabaseService.client;
-      final updates = <String, String>{
-        for (final key in [..._textKeys, ..._numberKeys])
-          key: _controllers[key]!.text.trim(),
+      final values = <String, dynamic>{
+        for (final key in _textKeys) key: _controllers[key]!.text.trim(),
+        for (final key in _numberKeys)
+          key: num.tryParse(_controllers[key]!.text.trim()) ?? 0,
       };
-      if (_logoBytes != null) {
-        updates['logo_url'] = await _uploadLogo();
-      } else if (_logoUrl.isNotEmpty) {
-        updates['logo_url'] = _logoUrl;
+      // The field is in percent; app_settings stores the fraction (15 -> 0.15).
+      if (values['vat_rate'] is num) {
+        values['vat_rate'] = (values['vat_rate'] as num) / 100;
       }
-      updates.putIfAbsent('currency', () => Env.defaultCurrency);
-      updates.putIfAbsent(
-          'vat_rate', () => Env.defaultVatRate.toStringAsFixed(0));
+      if (_logoBytes != null) {
+        values['logo_url'] = await _uploadLogo();
+      } else if (_logoUrl.isNotEmpty) {
+        values['logo_url'] = _logoUrl;
+      }
+      values.putIfAbsent('currency', () => Env.defaultCurrency);
+      values.putIfAbsent('vat_rate', () => Env.defaultVatRate);
 
-      for (final entry in updates.entries) {
-        final existing = _rows[entry.key];
-        if (existing != null && existing['id'] != null) {
-          await client
-              .from('settings')
-              .update({'value': entry.value}).eq('id', existing['id']);
-        } else {
-          await client
-              .from('settings')
-              .insert({'key': entry.key, 'value': entry.value});
-        }
+      for (final entry in values.entries) {
+        await client.from('app_settings').upsert({
+          'key': entry.key,
+          'value': entry.value,
+        });
       }
       if (!mounted) return;
+      // Settings are cached in these providers; drop both the provider state
+      // and the underlying TTL cache so receipts/alerts pick up the changes.
+      ref.invalidate(receiptSettingsProvider);
+      ref.invalidate(expiryAlertDaysProvider);
+      ref.invalidateCache(CacheTag.settings);
       AppSnackbar.success(context, S.saved);
       await _load();
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, e.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
   Future<String> _uploadLogo() async {
-    final path = 'branding/logo-${DateTime.now().millisecondsSinceEpoch}.png';
+    const bucket = 'branding';
+    final path = 'logo-${DateTime.now().millisecondsSinceEpoch}.png';
     await SupabaseService.client.storage
-        .from('assets')
+        .from(bucket)
         .uploadBinary(path, _logoBytes!,
             fileOptions: const FileOptions(upsert: true, contentType: 'image/png'));
-    return SupabaseService.client.storage.from('assets').getPublicUrl(path);
+    return SupabaseService.client.storage.from(bucket).getPublicUrl(path);
   }
 
   Future<void> _pickLogo() async {
-    final file = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 90,
-      maxWidth: 1024,
-    );
-    if (file == null) return;
-    final bytes = await file.readAsBytes();
-    if (!mounted) return;
-    setState(() => _logoBytes = bytes);
+    try {
+      final file = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 90,
+        maxWidth: 1024,
+      );
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      setState(() => _logoBytes = bytes);
+    } catch (e) {
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
+    }
   }
 
   @override
@@ -248,6 +271,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     const SizedBox(height: 14),
                                     _field(S.address, 'address', canEdit),
                                     const SizedBox(height: 14),
+                                    _field(S.phone, 'phone', canEdit,
+                                        keyboard: TextInputType.phone),
+                                    const SizedBox(height: 14),
                                     _field(S.tin, 'tin', canEdit,
                                         keyboard: TextInputType.number),
                                     const SizedBox(height: 14),
@@ -272,7 +298,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       children: [
                                         SizedBox(
                                             width: 200,
-                                            child: _field(S.currency, 'currency', canEdit)),
+                                            child: _field(S.currency, 'currency', false,
+                                                hint: 'Display only; amounts use ETB')),
                                         SizedBox(
                                             width: 200,
                                             child: _field(S.vatRate, 'vat_rate', canEdit,
@@ -294,8 +321,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                                 number: true)),
                                         SizedBox(
                                             width: 200,
-                                            child: _field(S.maxDiscount, 'max_discount',
-                                                canEdit,
+                                            child: _field(S.maxDiscount,
+                                                'max_cashier_discount_pct', canEdit,
                                                 keyboard:
                                                     const TextInputType.numberWithOptions(
                                                         decimal: true),
@@ -329,6 +356,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     TextInputType? keyboard,
     bool number = false,
     int maxLines = 1,
+    String? hint,
   }) {
     return AppTextField(
       label: label,
@@ -336,6 +364,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       enabled: enabled,
       keyboardType: keyboard,
       maxLines: maxLines,
+      hint: hint,
       validator: !number
           ? null
           : (value) {

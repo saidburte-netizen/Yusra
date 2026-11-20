@@ -6,8 +6,10 @@ import 'package:printing/printing.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../core/dates.dart';
+import '../../core/errors/app_error.dart';
 import '../../core/money.dart';
 import '../../core/permissions.dart';
+import '../../core/state/app_cache.dart';
 import '../../core/strings.dart';
 import '../../core/supabase_client.dart';
 import '../../core/theme/app_colors.dart';
@@ -79,6 +81,12 @@ const Set<String> _moneyKeys = {
   'variance',
 };
 
+/// The reports are backed by views that are not part of the base schema.
+const String _viewsHint =
+    'If the report views are missing, apply '
+    'supabase/migrations/0014_report_views.sql in the Supabase SQL Editor and '
+    'try again.';
+
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
 
@@ -132,10 +140,17 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = '${AppErrorMapper.from(e).message}\n\n$_viewsHint';
         _loading = false;
       });
     }
+  }
+
+  /// Clears any cached report data before re-running the query so a retry
+  /// after applying the migration actually reflects the new views.
+  Future<void> _retry() async {
+    ref.invalidateCache(CacheTag.reports);
+    await _load();
   }
 
   void _select(int index) {
@@ -212,7 +227,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         filename: 'yusra-${_report.view}.pdf',
       );
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, e.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 
@@ -241,7 +256,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     label: const Text(S.exportPdf),
                   ),
                 ),
-                IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
+                IconButton(onPressed: _retry, icon: const Icon(Icons.refresh)),
               ],
             ),
             Expanded(
@@ -326,7 +341,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                           const Expanded(
                               child: Center(child: CircularProgressIndicator()))
                         else if (_error != null)
-                          Expanded(child: ErrorState(message: _error!, onRetry: _load))
+                          Expanded(child: ErrorState(message: _error!, onRetry: _retry))
                         else
                           Expanded(
                             child: DataTablePlus(

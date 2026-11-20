@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/auth_controller.dart';
+import '../../core/errors/app_error.dart';
 import '../../core/permissions.dart';
+import '../../core/state/app_cache.dart';
 import '../../core/strings.dart';
 import '../../core/supabase_client.dart';
 import '../../core/widgets.dart';
@@ -46,7 +48,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       });
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = AppErrorMapper.from(e).message;
         _loading = false;
       });
     }
@@ -65,6 +67,14 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       .where((b) => b['id'] == id)
       .map((b) => (b['name'] as String?) ?? '—')
       .firstWhere((_) => true, orElse: () => '—');
+
+  /// Keeps the signed-in user's own permissions fresh and drops cached users.
+  void _afterUserMutation(Object? userId) {
+    if (userId != null && userId == ref.read(authProvider).profile?.id) {
+      ref.invalidate(authProvider);
+    }
+    ref.invalidateCache(CacheTag.users);
+  }
 
   Future<void> _createUser() async {
     final result = await showDialog<Map<String, String>>(
@@ -121,7 +131,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      AppSnackbar.error(context, e.toString());
+      AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 
@@ -152,14 +162,21 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
           })
           .eq('id', user['id']);
       if (!mounted) return;
+      _afterUserMutation(user['id']);
       AppSnackbar.success(context, S.saved);
       await _load();
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, e.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 
   Future<void> _setActive(Map<String, dynamic> user, bool active) async {
+    final actor = ref.read(authProvider).profile?.role ?? AppRole.cashier;
+    final target = AppRoleX.fromDb(user['role'] as String?) ?? AppRole.cashier;
+    if (!canManageUser(actor, target)) {
+      AppSnackbar.error(context, S.forbidden);
+      return;
+    }
     final confirm = await showConfirmDialog(
       context,
       title: active ? S.reactivate : S.deactivate,
@@ -172,10 +189,11 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
           .update({'is_active': active})
           .eq('id', user['id']);
       if (!mounted) return;
+      _afterUserMutation(user['id']);
       AppSnackbar.success(context, S.saved);
       await _load();
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, e.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 
@@ -210,7 +228,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
         AppSnackbar.success(context, S.saved);
       }
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, e.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 

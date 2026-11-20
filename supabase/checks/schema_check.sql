@@ -1,8 +1,11 @@
 -- Yusra Pharmacy — schema verification.
 -- Run once in the Supabase SQL Editor after applying the migrations.
--- Every row has a kind, an object name and a status of PASS or MISSING.
--- The owner sends the full result to Agent C. No MISSING rows are expected
--- after 0001..0013 have been applied (0012 and 0013 are still proposed).
+-- Every row has a kind, an object name, a status of PASS or MISSING and a FIX
+-- hint (blank for PASS rows). The owner sends the full result to Agent C.
+-- No MISSING rows are expected after 0001..0013 have been applied plus the
+-- proposed 0012_rls_hardening.sql, 0013_rpc_gaps.sql, 0014_report_views.sql and
+-- 0015_team_management.sql. v_expired_batches is intentionally not required:
+-- the screen that used it was corrected to derive the same figures directly.
 
 with expected_tables(name) as (
   values ('branches'), ('profiles'), ('app_settings'), ('doc_counters'), ('audit_logs'),
@@ -12,7 +15,13 @@ with expected_tables(name) as (
          ('sale_payments'), ('sale_returns'), ('sale_return_items'), ('expenses')
 ),
 expected_views(name) as (
-  values ('v_stock_summary'), ('v_low_stock'), ('v_expiring_batches'), ('v_daily_sales')
+  values ('v_stock_summary'), ('v_low_stock'), ('v_expiring_batches'), ('v_daily_sales'),
+         ('v_report_sales_by_day'), ('v_report_sales_by_cashier'),
+         ('v_report_sales_payment'), ('v_report_sales_by_medicine'),
+         ('v_report_profit'), ('v_report_stock_valuation'),
+         ('v_report_expiry_losses'), ('v_report_purchases_supplier'),
+         ('v_report_expenses'), ('v_report_net_profit'),
+         ('v_report_shift_variance'), ('v_report_controlled_register')
 ),
 expected_functions(name, nargs) as (
   values ('set_updated_at', 0), ('my_role', 0), ('my_branch', 0),
@@ -20,6 +29,8 @@ expected_functions(name, nargs) as (
          ('next_doc_no', 2), ('add_stock_batch', 7), ('adjust_stock', 4),
          ('receive_purchase_order', 2), ('open_shift', 2), ('close_shift', 3),
          ('create_sale', 8), ('void_sale', 2), ('process_sale_return', 4),
+         ('set_user_access', 4), ('share_admin_access', 1),
+         ('publish_app_settings', 0),
          ('trg_po_defaults', 0), ('trg_rx_defaults', 0), ('trg_po_total', 0),
          ('recalc_po_subtotal', 0), ('guard_po_status', 0),
          ('protect_profile_fields', 0), ('audit_row', 0)
@@ -47,6 +58,10 @@ expected_policies(name) as (
          ('rls_poi_write'), ('rls_rx_write'), ('rls_expenses_write'),
          ('rls_rx_storage_read'), ('rls_rx_storage_write'), ('rls_rx_storage_delete')
 ),
+expected_storage_buckets(name, is_public) as (
+  values ('prescriptions', false), ('receipts', false), ('branding', true),
+         ('avatars', true), ('medicine-images', true)
+),
 actual_columns as (
   select table_name, array_agg(column_name order by column_name) as cols
   from information_schema.columns
@@ -55,59 +70,89 @@ actual_columns as (
 ),
 results as (
   select 'table'::text as kind, name as object,
-         case when to_regclass('public.' || name) is not null then 'PASS' else 'MISSING' end as status
+         case when to_regclass('public.' || name) is not null then 'PASS' else 'MISSING' end as status,
+         'Apply the migration that creates this table (0002..0006).' as fix
   from expected_tables
   union all
   select 'view', name,
          case when exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
-                           where n.nspname = 'public' and c.relname = name and c.relkind in ('v','m'))
-              then 'PASS' else 'MISSING' end
+                            where n.nspname = 'public' and c.relname = name and c.relkind in ('v','m'))
+               then 'PASS' else 'MISSING' end,
+         case when left(name, 9) = 'v_report_'
+              then 'Apply the proposed supabase/migrations/0014_report_views.sql.'
+              else 'Re-run 0008_views.sql.' end
   from expected_views
   union all
   select 'function', name,
          case when exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-                           where n.nspname = 'public' and p.proname = name and p.pronargs = nargs)
-              then 'PASS' else 'MISSING' end
+                            where n.nspname = 'public' and p.proname = name and p.pronargs = nargs)
+               then 'PASS' else 'MISSING' end,
+         case when name in ('void_sale', 'process_sale_return')
+              then 'Apply 0013_rpc_gaps.sql (void/return RPCs).'
+              when name in ('set_user_access', 'share_admin_access',
+                            'publish_app_settings')
+              then 'Apply 0015_team_management.sql (team access RPCs).'
+              else 'Re-run the migration defining this function (0002 / 0004..0009).' end
   from expected_functions
   union all
   select 'trigger', name,
          case when exists (select 1 from pg_trigger where tgname = name and not tgisinternal)
-              then 'PASS' else 'MISSING' end
+               then 'PASS' else 'MISSING' end,
+         case when name = 'on_auth_user_created'
+              then 'Re-run 0002_core_tables_helpers.sql.'
+              else 'Re-run 0009_triggers.sql.' end
   from expected_triggers
   union all
   select 'policy', name,
          case when exists (select 1 from pg_policy where polname = name)
-              then 'PASS' else 'MISSING' end
+               then 'PASS' else 'MISSING' end,
+         'Re-run 0010_rls_storage.sql / 0012_rls_hardening.sql.'
   from expected_policies
   union all
-  select 'storage_bucket', 'prescriptions',
-         case when exists (select 1 from storage.buckets where id = 'prescriptions' and not public)
-              then 'PASS' else 'MISSING' end
+  select 'storage_bucket', b.name,
+         case when exists (select 1 from storage.buckets s
+                            where s.id = b.name and s.public = b.is_public)
+               then 'PASS' else 'MISSING' end,
+         'Re-run 0012_rls_hardening.sql to create the ' || b.name || ' bucket '
+         || '(public = ' || b.is_public::text || ').'
+  from expected_storage_buckets b
+  union all
+  select 'setting', 'app_settings.max_cashier_discount_pct',
+         case when exists (select 1 from app_settings where key = 'max_cashier_discount_pct')
+               then 'PASS' else 'MISSING' end,
+         'Re-run 0011_seed.sql to insert the max_cashier_discount_pct app setting.'
   union all
   select 'column_group', 'sales.money',
          case when (select cols from actual_columns where table_name = 'sales')
-              @> array['subtotal','discount','tax','total','paid','change_due']::text[]
-              then 'PASS' else 'MISSING' end
+               @> array['subtotal','discount','tax','total','paid','change_due']::text[]
+               then 'PASS' else 'MISSING' end,
+         'Re-run 0006_sales_finance.sql.'
   union all
   select 'column_group', 'stock_batches.core',
          case when (select cols from actual_columns where table_name = 'stock_batches')
-              @> array['branch_id','medicine_id','batch_no','expiry_date','quantity','cost_price']::text[]
-              then 'PASS' else 'MISSING' end
+               @> array['branch_id','medicine_id','batch_no','expiry_date','quantity','cost_price']::text[]
+               then 'PASS' else 'MISSING' end,
+         'Re-run 0005_stock.sql.'
   union all
   select 'column_group', 'sale_items.core',
          case when (select cols from actual_columns where table_name = 'sale_items')
-              @> array['sale_id','medicine_id','batch_id','quantity','unit_price','line_total','returned_qty']::text[]
-              then 'PASS' else 'MISSING' end
+               @> array['sale_id','medicine_id','batch_id','quantity','unit_price','line_total','returned_qty']::text[]
+               then 'PASS' else 'MISSING' end,
+         'Re-run 0006_sales_finance.sql.'
   union all
   select 'column_group', 'shifts.cash',
          case when (select cols from actual_columns where table_name = 'shifts')
-              @> array['branch_id','cashier_id','opening_cash','expected_cash','closing_cash','difference','status']::text[]
-              then 'PASS' else 'MISSING' end
+               @> array['branch_id','cashier_id','opening_cash','expected_cash','closing_cash','difference','status']::text[]
+               then 'PASS' else 'MISSING' end,
+         'Re-run 0006_sales_finance.sql.'
+  union all
+  select 'rls', t.name,
+         case when c.relrowsecurity then 'PASS' else 'MISSING' end,
+         'Re-run 0012_rls_hardening.sql to enable RLS on ' || t.name || '.'
+  from expected_tables t
+  left join pg_class c on c.oid = to_regclass('public.' || t.name)
 )
-select kind, object, status from results
-union all
-select 'rls', t.name,
-       case when c.relrowsecurity then 'PASS' else 'MISSING' end
-from expected_tables t
-left join pg_class c on c.oid = to_regclass('public.' || t.name)
+select kind, object, status,
+       case when status = 'MISSING' then fix else '' end as fix
+from results
 order by kind, object;

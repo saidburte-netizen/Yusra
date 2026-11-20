@@ -88,6 +88,9 @@ Deno.serve(async (req: Request) => {
     if (role === 'super_admin' && actor.role !== 'super_admin') {
       throw new Error('Only a super admin can create another super admin');
     }
+    if (actor.role !== 'super_admin' && branchId !== actor.branch_id) {
+      throw new Error('You can only create users in your own branch');
+    }
 
     const password = temporaryPassword();
     const response = await fetch(`${url}/auth/v1/admin/users`, {
@@ -101,7 +104,8 @@ Deno.serve(async (req: Request) => {
         email,
         password,
         email_confirm: true,
-        app_metadata: { role },
+        // handle_new_user reads role and branch_id from raw_app_meta_data.
+        app_metadata: { role, branch_id: branchId },
         user_metadata: { full_name: fullName },
       }),
     });
@@ -122,12 +126,15 @@ Deno.serve(async (req: Request) => {
     if (profileError) throw profileError;
 
     try {
-      await admin.from('audit_log').insert({
-        actor_id: identity.user.id,
+      await admin.from('audit_logs').insert({
+        user_id: identity.user.id,
         action: 'create_user',
         table_name: 'profiles',
         record_id: created.id,
-        new_values: { email, role, branch_id: branchId },
+        branch_id: branchId,
+        old_data: null,
+        new_data: { email, role, branch_id: branchId },
+        created_at: new Date().toISOString(),
       });
     } catch {
       // Audit is best effort: never fail user creation because of logging.

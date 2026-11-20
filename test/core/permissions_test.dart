@@ -15,6 +15,16 @@ void main() {
   });
 
   group('permission matrix', () {
+    test('team access sharing is super-admin editable and admin view-only', () {
+      expect(
+        can(AppRole.superAdmin, Modules.teamAccess, PermAction.edit),
+        isTrue,
+      );
+      expect(can(AppRole.admin, Modules.teamAccess, PermAction.view), isTrue);
+      expect(can(AppRole.admin, Modules.teamAccess, PermAction.edit), isFalse);
+      expect(can(AppRole.cashier, Modules.teamAccess, PermAction.view), isFalse);
+    });
+
     test('cashiers can use POS but not expenses or reports', () {
       expect(can(AppRole.cashier, Modules.pos, PermAction.edit), isTrue);
       expect(can(AppRole.cashier, Modules.medicines, PermAction.view), isTrue);

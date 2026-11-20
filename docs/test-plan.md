@@ -5,8 +5,9 @@ Run this against the real Supabase project with one demo user per role. Use
 tester, the app build (APK or web) and the result of every step.
 
 > **Prerequisite:** all **RUN IN SUPABASE SQL EDITOR** scripts in
-> `supabase/README.md` must have been applied, including `0012` and `0013`,
-> and `supabase/checks/schema_check.sql` must return no `MISSING` rows.
+> `supabase/README.md` must have been applied, including `0012`, `0013`,
+> `0014` and `0015`, and `supabase/checks/schema_check.sql` must return no
+> `MISSING` rows.
 
 ## Test data
 
@@ -55,6 +56,17 @@ Demo password is whatever was passed as `SEED_DEMO_PASSWORD` when seeding.
     method, expected cash, counted cash and the difference.
 11. **Accountant.** Sign in and confirm the dashboard and reports show the
     day's sales and expenses, and that no forbidden edit actions are visible.
+12. **Reports.** As the super admin, open all twelve reports. Confirm each
+    returns rows or a clean empty state (never an error about a missing view),
+    that money columns show ETB, and that filtering by branch works.
+13. **Team access.** As the super admin, open `/admin/team`, select two
+    teammates and use **Share my access**. Confirm both now show the super
+    admin role/branch, an audit row was written, and each can sign in with the
+    new permissions. Use **Edit role / branch** to give one of them the
+    pharmacist role again and confirm the change survives a sign-out/in.
+14. **Publish settings.** In **Settings**, change the receipt footer and save;
+    in **Team access**, use **Publish settings to team**. Sign in as a cashier
+    and confirm the new footer prints immediately (cache invalidation works).
 
 ## Rules and edge cases
 
@@ -78,6 +90,9 @@ Demo password is whatever was passed as `SEED_DEMO_PASSWORD` when seeding.
 | 16 | Branch scope | A super admin can switch branches; every other role is confined to their branch. |
 | 17 | Offline/empty states | With no data, each list shows an empty state rather than a blank page. |
 | 18 | Web build | Log in on the web build, complete a small sale and print/save the receipt to PDF. |
+| 19 | Error handling | With the network disabled, a data screen shows a friendly retryable message — never a raw SDK error or a red Flutter error screen. |
+| 20 | Cache isolation | Sign out as super admin and sign in as a cashier; receipts, settings and catalogue data refresh for the new user instead of reusing cached values. |
+| 21 | Team access guard | An admin can open Team access but cannot share or edit; a cashier has no menu entry and a direct URL is redirected to `forbidden`. |
 
 ## Automated equivalents
 

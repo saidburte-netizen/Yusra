@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/dates.dart';
+import '../../../core/errors/app_error.dart';
 import '../../../core/money.dart';
 import '../../../core/permissions.dart';
 import '../../../core/theme/app_colors.dart';
@@ -160,7 +161,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         AppSnackbar.success(context, 'Sale complete  •  ${sale.invoiceNo}');
       }
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, error.toString());
+      if (mounted) {
+        AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -193,15 +196,19 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     if (confirmed != true) return;
     final store = _heldStore;
     if (store == null) return;
-    await store.save(HeldCart(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      label: label.text.trim().isEmpty ? 'Held cart' : label.text.trim(),
-      savedAt: DateTime.now(),
-      cart: _cart,
-    ));
-    _updateCart(const Cart());
-    await store.clearDraft();
-    if (mounted) AppSnackbar.success(context, 'Cart held.');
+    try {
+      await store.save(HeldCart(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        label: label.text.trim().isEmpty ? 'Held cart' : label.text.trim(),
+        savedAt: DateTime.now(),
+        cart: _cart,
+      ));
+      _updateCart(const Cart());
+      await store.clearDraft();
+      if (mounted) AppSnackbar.success(context, 'Cart held.');
+    } catch (error) {
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
+    }
   }
 
   Future<void> _resumeCart() async {
@@ -230,8 +237,17 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                 trailing: IconButton(
                   icon: const Icon(Icons.delete_outline),
                   onPressed: () async {
-                    await store.delete(item.id);
-                    if (context.mounted) Navigator.pop(context);
+                    try {
+                      await store.delete(item.id);
+                      if (context.mounted) Navigator.pop(context);
+                    } catch (error) {
+                      if (context.mounted) {
+                        AppSnackbar.error(
+                          context,
+                          AppErrorMapper.from(error).message,
+                        );
+                      }
+                    }
                   },
                 ),
                 onTap: () => Navigator.pop(context, item),
@@ -242,9 +258,13 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       ),
     );
     if (chosen == null) return;
-    await store.delete(chosen.id);
-    _updateCart(chosen.cart);
-    if (mounted) AppSnackbar.success(context, 'Cart resumed.');
+    try {
+      await store.delete(chosen.id);
+      _updateCart(chosen.cart);
+      if (mounted) AppSnackbar.success(context, 'Cart resumed.');
+    } catch (error) {
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
+    }
   }
 
   Future<void> _selectCustomer() async {
@@ -284,7 +304,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                           ],
                         ),
                         loading: () => const Center(child: CircularProgressIndicator()),
-                        error: (error, _) => Center(child: Text(error.toString())),
+                        error: (error, _) => Center(
+                              child: Text(AppErrorMapper.from(error).message),
+                            ),
                       ),
                 ),
               ],
@@ -765,7 +787,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                 Expanded(
                   flex: 2,
                   child: PrimaryButton(
-                    label: _busy ? 'Saving…' : 'Pay ${formatMoneyWhole(total)}',
+                    label: _busy ? 'Saving…' : 'Pay ${formatMoney(total)}',
                     icon: Icons.payment,
                     loading: _busy,
                     onPressed: shift == null || _cart.isEmpty || !canSell || _busy

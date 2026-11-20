@@ -33,7 +33,7 @@ void main() {
     });
   });
 
-  test('VAT is removed from a gross amount', () {
-    expect(moneyExcludingVat(1150, 15), closeTo(1000, 0.001));
+  test('VAT is removed from a gross amount using a fractional rate', () {
+    expect(moneyExcludingVat(1150, 0.15), closeTo(1000, 0.001));
   });
 }

@@ -48,6 +48,8 @@ enum PermAction { view, edit }
 abstract final class Modules {
   static const dashboard = 'dashboard';
   static const users = 'users';
+  /// Extension to the contract matrix: super-admin-only team access sharing.
+  static const teamAccess = 'teamAccess';
   static const branches = 'branches';
   static const settings = 'settings';
   static const audit = 'audit';
@@ -78,6 +80,10 @@ const Map<String, Map<AppRole, Perm>> permissionMatrix = {
   },
   Modules.users: {
     AppRole.superAdmin: _e, AppRole.admin: _e, AppRole.pharmacist: _n,
+    AppRole.cashier: _n, AppRole.storeKeeper: _n, AppRole.accountant: _n,
+  },
+  Modules.teamAccess: {
+    AppRole.superAdmin: _e, AppRole.admin: _v, AppRole.pharmacist: _n,
     AppRole.cashier: _n, AppRole.storeKeeper: _n, AppRole.accountant: _n,
   },
   Modules.branches: {

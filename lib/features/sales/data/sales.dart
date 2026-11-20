@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/permissions.dart';
+import '../../../core/state/app_cache.dart';
 import '../../../core/supabase_client.dart';
 import '../../inventory/data/inventory_providers.dart';
 
@@ -582,20 +583,26 @@ class ReceiptSettings {
 final salesRepositoryProvider = Provider<SalesRepository>((ref) => SalesRepository());
 
 final receiptSettingsProvider = FutureProvider<ReceiptSettings>((ref) async {
-  if (!SupabaseService.isReady) {
-    return const ReceiptSettings(
-      pharmacyName: 'Yusra Pharmacy',
-      tagline: 'Care made easy',
-      address: '',
-      phone: '',
-      tin: '',
-      licenseNo: '',
-      footer: 'Thank you for choosing Yusra Pharmacy.',
-      vatRate: 0.15,
-      maxCashierDiscountPct: 5,
-    );
-  }
-  return ref.read(salesRepositoryProvider).receiptSettings();
+  const fallback = ReceiptSettings(
+    pharmacyName: 'Yusra Pharmacy',
+    tagline: 'Care made easy',
+    address: '',
+    phone: '',
+    tin: '',
+    licenseNo: '',
+    footer: 'Thank you for choosing Yusra Pharmacy.',
+    vatRate: 0.15,
+    maxCashierDiscountPct: 5,
+  );
+  if (!SupabaseService.isReady) return fallback;
+
+  final scope = ref.watch(authProvider).profile?.branchId ?? 'global';
+  final key = AppCache.scopedKey(CacheTag.settings, scope, 'receipt');
+  return ref.read(appCacheProvider).read(
+        key,
+        const Duration(minutes: 10),
+        () => ref.read(salesRepositoryProvider).receiptSettings(),
+      );
 });
 
 /// The shift the current cashier can sell on. Super admins use the selected

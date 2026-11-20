@@ -31,6 +31,7 @@ All money columns are `numeric(14,2)`. Prices exclude VAT; ETB, whole units only
 - `v_low_stock` — at/below reorder level
 - `v_expiring_batches` — batches near expiry
 - `v_daily_sales` — per-day totals in `Africa/Addis_Ababa`
+- Twelve `v_report_*` views — **proposed in 0014**: sales by day/cashier/payment method/medicine, profit, stock valuation, expiry losses, purchases by supplier, expenses, net profit, shift variance and the controlled-drug register. They are the only source of report aggregates; the app never recomputes financial figures in Dart.
 
 ## RPCs — the only writers for stock and money
 
@@ -44,6 +45,9 @@ All money columns are `numeric(14,2)`. Prices exclude VAT; ETB, whole units only
 | `create_sale(branch, shift, customer, prescription, items, payments, discount, note)` | FEFO allocation, expired batch exclusion, Rx check, discount limit, payments, document numbers |
 | `void_sale(sale, reason)` | **Proposed in 0013** — voids and restores stock |
 | `process_sale_return(sale, items, reason, refund_method)` | **Proposed in 0013** — returns and optionally restocks |
+| `set_user_access(user, role, branch, active)` | **Proposed in 0015** — changes one teammate's role/branch/status and the matching JWT metadata; super admin only for super-admin roles |
+| `share_admin_access(targets uuid[])` | **Proposed in 0015** — copies the caller's role and branch to selected teammates |
+| `publish_app_settings()` | **Proposed in 0015** — publishes the global settings to the whole team and writes an audit entry |
 
 `next_doc_no(prefix, branch)` generates `INV`, `PO`, `RX` and `RET` numbers; it is revoked from `anon` and `authenticated` and is called only by triggers and RPCs.
 
@@ -64,6 +68,7 @@ All money columns are `numeric(14,2)`. Prices exclude VAT; ETB, whole units only
 | --- | - | - | - | - | - | - |
 | dashboard | V | V | V | V | V | V |
 | users and roles | E | E | – | – | – | – |
+| team access (extension) | E | V | – | – | – | – |
 | branches | E | V | – | – | – | – |
 | settings | E | E | – | – | – | – |
 | audit log | V | V | – | – | – | – |

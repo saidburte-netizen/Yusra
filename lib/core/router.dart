@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../features/admin/audit_screen.dart';
 import '../features/admin/branches_screen.dart';
 import '../features/admin/settings_screen.dart';
+import '../features/admin/team_access_screen.dart';
 import '../features/admin/users_screen.dart';
 import '../features/auth/forbidden_screen.dart';
 import '../features/auth/forgot_password_screen.dart';
@@ -105,6 +106,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/admin/users',
             builder: (context, state) => const UsersScreen(),
+          ),
+          GoRoute(
+            path: '/admin/team',
+            builder: (context, state) => const TeamAccessScreen(),
           ),
           GoRoute(
             path: '/admin/branches',

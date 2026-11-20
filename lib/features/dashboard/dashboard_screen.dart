@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../core/dates.dart';
+import '../../core/errors/app_error.dart';
 import '../../core/money.dart';
 import '../../core/nav/menu_items.dart';
 import '../../core/permissions.dart';
@@ -81,17 +82,62 @@ class DashboardSnapshot {
     return total;
   }
 
-  static Future<List<Map<String, dynamic>>> _firstAvailable(
-      List<String> tables) async {
-    for (final table in tables) {
-      final rows = await _rows(() => SupabaseService.client
-          .from(table)
-          .select()
-          .order('created_at', ascending: false)
-          .limit(5));
-      if (rows != null) return rows;
+  /// Sale lines in [from]..[to] joined to medicines and their parent sale.
+  /// PostgREST cannot group by, so aggregation is done in Dart.
+  static Future<List<Map<String, dynamic>>?> _saleItemsBetween(
+          String from, String to) =>
+      _rows(() => SupabaseService.client
+          .from('sale_items')
+          .select('medicine_id, medicine_name, quantity, cost_price, '
+              'line_total, medicines(name), sales!inner(created_at)')
+          .gte('sales.created_at', from)
+          .lt('sales.created_at', to));
+
+  static bool _isExpired(Map<String, dynamic> row) {
+    final value = row['is_expired'];
+    return value == true || value == 'true';
+  }
+
+  static String _medicineName(Map<String, dynamic> row) {
+    final embedded = row['medicines'];
+    if (embedded is List && embedded.isNotEmpty) {
+      final first = embedded.first;
+      if (first is Map && first['name'] != null) {
+        return first['name'].toString();
+      }
+    } else if (embedded is Map && embedded['name'] != null) {
+      return embedded['name'].toString();
     }
-    return const [];
+    return (row['medicine_name'] as String?) ?? '—';
+  }
+
+  static List<Map<String, dynamic>> _topMedicines(
+      List<Map<String, dynamic>>? items) {
+    if (items == null) return const [];
+    final totals = <String, int>{};
+    final names = <String, String>{};
+    for (final row in items) {
+      final id = row['medicine_id']?.toString();
+      if (id == null || id.isEmpty) continue;
+      totals[id] = (totals[id] ?? 0) + _num(row['quantity']).toInt();
+      names.putIfAbsent(id, () => _medicineName(row));
+    }
+    final ranked = totals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return [
+      for (final entry in ranked.take(5))
+        {'name': names[entry.key] ?? '—', 'qty': entry.value},
+    ];
+  }
+
+  static double? _grossProfit(List<Map<String, dynamic>>? items) {
+    if (items == null) return null;
+    var total = 0.0;
+    for (final row in items) {
+      total += _num(row['line_total']).toDouble() -
+          _num(row['cost_price']).toDouble() * _num(row['quantity']).toDouble();
+    }
+    return total;
   }
 
   static Future<DashboardSnapshot> load({
@@ -106,7 +152,10 @@ class DashboardSnapshot {
     final monthStart = DateTime.utc(now.year, now.month)
         .subtract(addisAbabaOffset)
         .toIso8601String();
-    final fortnightStart = dayStart;
+    // Fourteen days including today (not just today repeated).
+    final fortnightStart = startOfAddisDayUtc(
+            now.subtract(const Duration(days: 13)))
+        .toIso8601String();
 
     final ownOnly = isOwnOnly(role, Modules.sales);
 
@@ -118,7 +167,7 @@ class DashboardSnapshot {
               .gte('created_at', from)
               .lt('created_at', to);
           if (ownOnly && userId != null) {
-            query = query.eq('created_by', userId);
+            query = query.eq('cashier_id', userId);
           }
           return query;
         });
@@ -140,39 +189,46 @@ class DashboardSnapshot {
       ..sort((a, b) => a.date.compareTo(b.date));
 
     final lowStock = await _rows(() => client.from('v_low_stock').select());
+    // v_expiring_batches includes both expired and not-yet-expired batches;
+    // split it with its real `is_expired` flag.
     final expiring = await _rows(() => client.from('v_expiring_batches').select());
-    final expired = await _rows(() => client.from('v_expired_batches').select());
     final shifts = await _rows(() =>
         client.from('shifts').select().eq('status', 'open'));
     final prescriptions = await _rows(() => client
         .from('prescriptions')
         .select()
         .eq('status', 'pending'));
+    // po_status has no 'pending'/'approved' values: ordered and partially
+    // received are the states that still need receiving.
     final orders = await _rows(() => client
         .from('purchase_orders')
         .select()
-        .inFilter('status', const ['pending', 'approved', 'ordered']));
-    final top = await _rows(() => client
-        .from('v_top_medicines')
-        .select()
-        .order('qty', ascending: false)
+        .inFilter('status', const ['ordered', 'partially_received']));
+
+    // Profit and top medicines come from sale_items joined to medicines;
+    // sales has no `profit` column and v_top_medicines does not exist.
+    final todayItems = await _saleItemsBetween(dayStart, dayEnd);
+    final fortnightItems = await _saleItemsBetween(fortnightStart, dayEnd);
+    final activity = await _rows(() => client
+        .from('audit_logs')
+        .select('id, user_id, action, table_name, old_data, new_data, created_at')
+        .order('created_at', ascending: false)
         .limit(5));
-    final activity = await _firstAvailable(const ['audit_log', 'audit_logs']);
 
     return DashboardSnapshot(
       todaySales: _sum(todayRows, 'total'),
       monthSales: _sum(monthRows, 'total'),
-      grossProfitToday: _sum(todayRows, 'profit'),
+      grossProfitToday: _grossProfit(todayItems),
       invoiceCount: todayRows?.length,
       openShifts: shifts?.length,
       lowStock: lowStock?.length,
-      expiringSoon: expiring?.length,
-      expired: expired?.length,
+      expiringSoon: expiring?.where((row) => !_isExpired(row)).length,
+      expired: expiring?.where(_isExpired).length,
       pendingPrescriptions: prescriptions?.length,
       pendingOrders: orders?.length,
       daily: daily,
-      topMedicines: top ?? const [],
-      recentActivity: activity,
+      topMedicines: _topMedicines(fortnightItems),
+      recentActivity: activity ?? const [],
     );
   }
 }
@@ -214,7 +270,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = AppErrorMapper.from(e).message;
         _loading = false;
       });
     }

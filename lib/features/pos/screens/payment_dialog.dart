@@ -47,7 +47,7 @@ Future<List<CartPayment>?> showPaymentDialog(
                     children: [
                       for (final amount in quick)
                         ActionChip(
-                          label: Text(formatMoneyWhole(amount)),
+                          label: Text(formatMoney(amount)),
                           onPressed: () => setState(() {
                             rows.removeWhere((row) => row.method == 'cash');
                             rows.insert(

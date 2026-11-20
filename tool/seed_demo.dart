@@ -71,20 +71,21 @@ const _users = [
 ];
 
 Future<void> main() async {
-  SupabaseRest.assertSafeTarget();
   final url = Platform.environment['SUPABASE_URL'];
   final serviceKey = Platform.environment['SUPABASE_SERVICE_ROLE_KEY'];
   if (url == null || url.isEmpty || serviceKey == null || serviceKey.isEmpty) {
     stdout.writeln('Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY first.');
     exit(2);
   }
-  if (url.toLowerCase().contains('prod') &&
-      Platform.environment['SEED_CONFIRM'] != '1') {
-    stdout.writeln('Refusing to seed a production-looking URL. Set SEED_CONFIRM=1.');
+  try {
+    SupabaseRest.assertSafeTarget(confirmVar: 'SEED_CONFIRM');
+  } on StateError catch (error) {
+    // Keep the refusal as a clean message with a non-zero exit code.
+    stdout.writeln(error.message);
     exit(2);
   }
-  if (url.toLowerCase().contains('prod') && Platform.environment['SEED_CONFIRM'] == '1') {
-    // assertSafeTarget uses SMOKE_CONFIRM; the explicit check above covers seed.
+  if (url.toLowerCase().contains('prod') &&
+      Platform.environment['SEED_CONFIRM'] == '1') {
     stdout.writeln('WARNING: seeding a production-looking URL with SEED_CONFIRM=1.');
   }
 

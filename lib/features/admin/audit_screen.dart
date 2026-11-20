@@ -1,14 +1,15 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/dates.dart';
+import '../../core/errors/app_error.dart';
 import '../../core/strings.dart';
 import '../../core/supabase_client.dart';
 import '../../core/widgets.dart';
 
-/// Read-only audit trail. The table name is resolved from a short candidate list
-/// so the screen keeps working whether the shared schema calls it `audit_log`
-/// or `audit_logs`.
+/// Read-only audit trail over the `audit_logs` table.
 class AuditScreen extends ConsumerStatefulWidget {
   const AuditScreen({super.key});
 
@@ -38,32 +39,21 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
     try {
       if (!SupabaseService.isReady) throw const SupabaseNotConfigured();
       final client = SupabaseService.client;
-      List<dynamic> rows = const [];
-      Object? lastError;
-      for (final table in const ['audit_log', 'audit_logs']) {
-        try {
-          var query = client.from(table).select();
-          if (_tableFilter != null) {
-            query = query.eq('table_name', _tableFilter!);
-          }
-          if (_from != null) {
-            query = query.gte('created_at', _from!.toUtc().toIso8601String());
-          }
-          if (_to != null) {
-            query = query.lte(
-                'created_at',
-                DateTime(_to!.year, _to!.month, _to!.day, 23, 59, 59)
-                    .toUtc()
-                    .toIso8601String());
-          }
-          rows = await query.order('created_at', ascending: false).limit(500);
-          lastError = null;
-          break;
-        } catch (e) {
-          lastError = e;
-        }
+      var query = client.from('audit_logs').select();
+      if (_tableFilter != null) {
+        query = query.eq('table_name', _tableFilter!);
       }
-      if (lastError != null) throw lastError;
+      if (_from != null) {
+        query = query.gte('created_at', _from!.toUtc().toIso8601String());
+      }
+      if (_to != null) {
+        query = query.lte(
+            'created_at',
+            DateTime(_to!.year, _to!.month, _to!.day, 23, 59, 59)
+                .toUtc()
+                .toIso8601String());
+      }
+      final rows = await query.order('created_at', ascending: false).limit(500);
       if (!mounted) return;
       setState(() {
         _rows = List<Map<String, dynamic>>.from(rows);
@@ -72,7 +62,7 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = AppErrorMapper.from(e).message;
         _loading = false;
       });
     }
@@ -97,9 +87,13 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
     return value.length <= max ? value : '${value.substring(0, max)}…';
   }
 
-  String _format(dynamic value) {
+  String _format(dynamic value, {bool pretty = false}) {
     if (value == null) return '—';
-    if (value is Map || value is List) return value.toString();
+    if (value is Map || value is List) {
+      return pretty
+          ? const JsonEncoder.withIndent('  ').convert(value)
+          : jsonEncode(value);
+    }
     return value.toString();
   }
 
@@ -120,8 +114,10 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
                 _detailLine(S.actionLabel, _format(row['action'])),
                 _detailLine(S.tableName, _format(row['table_name'])),
                 _detailLine('Record', _format(row['record_id'])),
-                _detailLine(S.oldValue, _format(row['old_values'] ?? row['old_value'])),
-                _detailLine(S.newValue, _format(row['new_values'] ?? row['new_value'])),
+                _detailLine('User', _format(row['user_id'])),
+                _detailLine('Branch', _format(row['branch_id'])),
+                _detailLine(S.oldValue, _format(row['old_data'], pretty: true)),
+                _detailLine(S.newValue, _format(row['new_data'], pretty: true)),
               ],
             ),
           ),
@@ -245,11 +241,11 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
                                 row['created_at'] == null
                                     ? '—'
                                     : formatDateTime(DateTime.parse(row['created_at'] as String)),
-                                _short((row['actor_email'] ?? row['actor_id'])?.toString()),
+                                _short(row['user_id']?.toString()),
                                 _short(row['action'] as String?),
                                 _short(row['table_name'] as String?),
-                                _short(_format(row['old_values'] ?? row['old_value'])),
-                                _short(_format(row['new_values'] ?? row['new_value'])),
+                                _short(_format(row['old_data'])),
+                                _short(_format(row['new_data'])),
                                 '',
                               ],
                               actions: [

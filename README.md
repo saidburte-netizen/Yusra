@@ -22,7 +22,7 @@ lib/
   features/
     auth/                sign in, forgot password, profile
     dashboard/           role-aware dashboard
-    admin/               users, branches, settings, audit log
+    admin/               users, team access sharing, branches, settings, audit log
     inventory/           medicines, categories, batches, adjustments, alerts, stocktake
     suppliers/           supplier directory
     purchasing/          purchase orders, approval, receipt, PDFs
@@ -35,7 +35,8 @@ lib/
     reports/             sales, stock, finance reports
 supabase/
   migrations/            numbered SQL record of the owner's applied steps, plus
-                         proposed 0012/0013 hardening and RPC gaps
+                         proposed 0012–0015 hardening, RPC, report views
+                         and team access changes
   checks/                schema_check.sql
   functions/             Edge Functions for admin user management
 tool/                    seed_demo.dart, smoke_test.dart
@@ -51,6 +52,15 @@ changes go through database RPCs** (`create_sale`, `void_sale`,
 
 Roles and the permission matrix are documented in `docs/database.md`.
 
+Cross-cutting infrastructure lives under `lib/core/errors/` and
+`lib/core/state/`: every boundary maps exceptions through `AppErrorMapper`
+into one user-facing `AppError` (no raw SDK strings in the UI), a global
+`AppErrorReporter` replaces Flutter's red error screen, `AppCache` provides
+TTL-based, user-scoped caching with tag invalidation for reference data, and
+`AsyncStateView` gives every screen the same loading/error/retry treatment.
+The super admin's **Team access** page shares role, branch and published
+settings with teammates exclusively through the proposed 0015 RPCs.
+
 ## 1. Create the Supabase project
 
 1. Create a Supabase project and copy its **URL** and **anon key** from
@@ -62,8 +72,9 @@ Roles and the permission matrix are documented in `docs/database.md`.
 4. Replace `PUT-THE-EMAIL-HERE` in `0011_seed.sql` (or run the equivalent
    `UPDATE profiles SET role = 'admin' WHERE email = ...` after the first
    user signs up).
-5. Review and run `0012_rls_hardening.sql` and `0013_rpc_gaps.sql`, then run
-   the smoke test below.
+5. Review and run `0012_rls_hardening.sql`, `0013_rpc_gaps.sql`,
+   `0014_report_views.sql` and `0015_team_management.sql`, then run the smoke
+   test below.
 
 ## 2. Create the first super admin
 

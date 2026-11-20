@@ -32,6 +32,7 @@ const List<MenuItem> allMenuItems = [
   MenuItem(label: S.expenses, icon: Icons.account_balance_wallet_outlined, path: '/expenses', module: Modules.expenses),
   MenuItem(label: S.reports, icon: Icons.analytics_outlined, path: '/reports', module: Modules.reports),
   MenuItem(label: S.users, icon: Icons.manage_accounts_outlined, path: '/admin/users', module: Modules.users),
+  MenuItem(label: S.teamAccess, icon: Icons.group_add_outlined, path: '/admin/team', module: Modules.teamAccess),
   MenuItem(label: S.branches, icon: Icons.account_balance_outlined, path: '/admin/branches', module: Modules.branches),
   MenuItem(label: S.settings, icon: Icons.settings_outlined, path: '/admin/settings', module: Modules.settings),
   MenuItem(label: S.audit, icon: Icons.history_outlined, path: '/admin/audit', module: Modules.audit),

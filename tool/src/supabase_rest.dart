@@ -91,14 +91,16 @@ class SupabaseRest {
   }
 
   /// Safety gate shared by both tools. A production-looking URL is refused
-  /// unless the operator explicitly confirms.
-  static void assertSafeTarget() {
+  /// unless the operator explicitly confirms. [confirmVar] defaults to
+  /// SMOKE_CONFIRM so existing callers stay backward compatible; the seeder
+  /// passes SEED_CONFIRM instead.
+  static void assertSafeTarget({String confirmVar = 'SMOKE_CONFIRM'}) {
     final url = Platform.environment['SUPABASE_URL'] ?? '';
     if (url.toLowerCase().contains('prod') &&
-        Platform.environment['SMOKE_CONFIRM'] != '1') {
+        Platform.environment[confirmVar] != '1') {
       throw StateError(
-        'Refusing to run: SUPABASE_URL contains "prod" and SMOKE_CONFIRM '
-        'is not set to 1. Set SMOKE_CONFIRM=1 after double-checking the target.',
+        'Refusing to run: SUPABASE_URL contains "prod" and $confirmVar '
+        'is not set to 1. Set $confirmVar=1 after double-checking the target.',
       );
     }
   }

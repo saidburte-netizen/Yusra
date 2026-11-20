@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../core/dates.dart';
+import '../../core/errors/app_error.dart';
 import '../../core/permissions.dart';
 import '../../core/strings.dart';
 import '../../core/supabase_client.dart';
@@ -48,7 +49,7 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = AppErrorMapper.from(e).message;
         _loading = false;
       });
     }
@@ -76,7 +77,7 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
       AppSnackbar.success(context, S.saved);
       await _load();
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, e.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 
@@ -96,7 +97,7 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
       AppSnackbar.success(context, S.saved);
       await _load();
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, e.toString());
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
   }
 
@@ -137,6 +138,7 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
                 child: DataTablePlus(
                   columns: const [
                     S.pharmacyName,
+                    'Code',
                     S.address,
                     S.phone,
                     S.status,
@@ -151,6 +153,7 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
                       DataTablePlusRow(
                         cells: [
                           (branch['name'] as String?) ?? '—',
+                          (branch['code'] as String?) ?? '—',
                           (branch['address'] as String?) ?? '—',
                           (branch['phone'] as String?) ?? '—',
                           branch['is_active'] == true ? S.active : S.inactive,
@@ -203,6 +206,7 @@ class _BranchFormDialog extends StatefulWidget {
 class _BranchFormDialogState extends State<_BranchFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
+  late final TextEditingController _code;
   late final TextEditingController _address;
   late final TextEditingController _phone;
   late bool _active;
@@ -212,6 +216,7 @@ class _BranchFormDialogState extends State<_BranchFormDialog> {
     super.initState();
     final initial = widget.initial;
     _name = TextEditingController(text: (initial?['name'] as String?) ?? '');
+    _code = TextEditingController(text: (initial?['code'] as String?) ?? '');
     _address = TextEditingController(text: (initial?['address'] as String?) ?? '');
     _phone = TextEditingController(text: (initial?['phone'] as String?) ?? '');
     _active = initial?['is_active'] as bool? ?? true;
@@ -220,6 +225,7 @@ class _BranchFormDialogState extends State<_BranchFormDialog> {
   @override
   void dispose() {
     _name.dispose();
+    _code.dispose();
     _address.dispose();
     _phone.dispose();
     super.dispose();
@@ -239,6 +245,12 @@ class _BranchFormDialogState extends State<_BranchFormDialog> {
               AppTextField(
                 label: S.pharmacyName,
                 controller: _name,
+                validator: (v) => v == null || v.trim().isEmpty ? S.required : null,
+              ),
+              const SizedBox(height: 12),
+              AppTextField(
+                label: 'Code',
+                controller: _code,
                 validator: (v) => v == null || v.trim().isEmpty ? S.required : null,
               ),
               const SizedBox(height: 12),
@@ -271,6 +283,7 @@ class _BranchFormDialogState extends State<_BranchFormDialog> {
             if (!_formKey.currentState!.validate()) return;
             Navigator.pop(context, <String, dynamic>{
               'name': _name.text.trim(),
+              'code': _code.text.trim(),
               'address': _address.text.trim(),
               'phone': _phone.text.trim(),
               'is_active': _active,
