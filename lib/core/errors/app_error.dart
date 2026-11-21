@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'dart:io' if (dart.library.io) 'dart:io';
 
@@ -71,6 +72,15 @@ class AppErrorMapper {
         _postgrestMessage(error),
         kind: _postgrestKind(error),
         retryable: _postgrestRetryable(error),
+        cause: error,
+      );
+    }
+
+    if (error is FunctionException) {
+      return AppError(
+        _functionMessage(error),
+        kind: _functionKind(error.status),
+        retryable: _functionRetryable(error.status),
         cause: error,
       );
     }
@@ -179,4 +189,99 @@ class AppErrorMapper {
     }
     return 'The server could not complete the request. Please try again.';
   }
+
+  /// Edge Functions return `{error: {code, message}}`. Surface that message so
+  /// the owner can see the real reason (missing service-role key, duplicate
+  /// email, wrong branch, ...) instead of a generic SDK error.
+  static String _functionMessage(FunctionException error) {
+    Object? details = error.details;
+    if (details is String) {
+      try {
+        details = jsonDecode(details);
+      } catch (_) {
+        // Keep the raw text below; it may still be a useful plain message.
+      }
+    }
+
+    String? code;
+    String? message;
+    if (details is Map) {
+      final body = details['error'];
+      if (body is Map) {
+        code = body['code']?.toString();
+        message = body['message']?.toString();
+      }
+      message ??= details['message']?.toString();
+    } else if (details != null) {
+      message = details.toString();
+    }
+
+    switch (code) {
+      case 'unauthenticated':
+        return 'Please sign in again.';
+      case 'forbidden':
+        return 'You do not have permission to do that.';
+      case 'not_found':
+        return 'The requested record was not found.';
+      case 'validation_error':
+        return message?.trim().isNotEmpty == true
+            ? message!.trim()
+            : 'One of the values entered is not valid.';
+      case 'conflict':
+        return message?.trim().isNotEmpty == true
+            ? message!.trim()
+            : 'That value is already used by another record.';
+      case 'bad_request':
+        return message?.trim().isNotEmpty == true
+            ? message!.trim()
+            : 'The request could not be read.';
+      case 'method_not_allowed':
+        return 'This action is not available.';
+      case 'internal_error':
+        return message?.trim().isNotEmpty == true
+            ? message!.trim()
+            : 'The server could not complete the request. Please try again.';
+    }
+
+    if (message != null && message.trim().isNotEmpty) {
+      final clean = message.trim();
+      // Never leak a stack trace or raw function name to the UI.
+      if (!clean.contains('FunctionException') &&
+          !clean.contains('Stack Trace') &&
+          !clean.contains('supabase/')) {
+        return clean;
+      }
+    }
+
+    switch (error.status) {
+      case 401:
+        return 'Please sign in again.';
+      case 403:
+        return 'You do not have permission to do that.';
+      case 404:
+        return 'The requested record was not found.';
+      case 409:
+        return 'That value is already used by another record.';
+      case 422:
+        return 'One of the values entered is not valid.';
+      case 500:
+      case 502:
+      case 503:
+      case 504:
+        return 'The server could not complete the request. Please try again.';
+      default:
+        return S.somethingWrong;
+    }
+  }
+
+  static AppErrorKind _functionKind(int status) {
+    if (status == 401) return AppErrorKind.authentication;
+    if (status == 403) return AppErrorKind.permission;
+    if (status == 404) return AppErrorKind.notFound;
+    if (status == 409 || status == 422) return AppErrorKind.validation;
+    if (status >= 500) return AppErrorKind.server;
+    return AppErrorKind.unknown;
+  }
+
+  static bool _functionRetryable(int status) => status == 408 || status >= 500;
 }

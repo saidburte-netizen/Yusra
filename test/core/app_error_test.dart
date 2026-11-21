@@ -77,5 +77,45 @@ void main() {
       expect(mapped.message, isNot(contains('PGRST')));
       expect(mapped.message, isNot(contains('Database error')));
     });
+
+    test('edge function errors surface the server message', () {
+      const exception = FunctionException(
+        status: 500,
+        details: {
+          'error': {
+            'code': 'internal_error',
+            'message': 'User creation is not configured on the server.',
+          }
+        },
+      );
+      final mapped = AppErrorMapper.from(exception);
+      expect(mapped.kind, AppErrorKind.server);
+      expect(mapped.message, 'User creation is not configured on the server.');
+      expect(mapped.retryable, isTrue);
+    });
+
+    test('edge function validation errors are friendly, not raw SDK text', () {
+      const exception = FunctionException(
+        status: 422,
+        details: {
+          'error': {
+            'code': 'validation_error',
+            'message': 'Enter a valid email address.'
+          }
+        },
+      );
+      final mapped = AppErrorMapper.from(exception);
+      expect(mapped.kind, AppErrorKind.validation);
+      expect(mapped.message, 'Enter a valid email address.');
+      expect(mapped.message, isNot(contains('FunctionException')));
+    });
+
+    test('edge function errors without a body fall back to status text', () {
+      const exception = FunctionException(status: 403);
+      final mapped = AppErrorMapper.from(exception);
+      expect(mapped.kind, AppErrorKind.permission);
+      expect(mapped.message, 'You do not have permission to do that.');
+      expect(mapped.retryable, isFalse);
+    });
   });
 }
