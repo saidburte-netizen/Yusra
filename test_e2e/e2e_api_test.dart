@@ -63,6 +63,17 @@ void main() {
           role: 'super_admin', branchId: '', label: 'admin');
       useUser(adminId);
       final admin = SupabaseService.client;
+      final authUid =
+          await api('auth uid', () => admin.rpc<String>('e2e_auth_uid'));
+      final profile = await Process.run('bash', [
+        'tool/ci_psql.sh',
+        '-d',
+        'postgres',
+        '-Atc',
+        "select role || '|' || is_active from profiles where id = '$adminId';",
+      ]);
+      stdout.writeln('[e2e] auth uid=$authUid expected=$adminId');
+      stdout.writeln('[e2e] admin profile=${profile.stdout.toString().trim()}');
       final adminRole =
           await api('admin role', () => admin.rpc<String>('my_role'));
       stdout.writeln('[e2e] admin role=$adminRole');

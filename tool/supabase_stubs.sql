@@ -78,6 +78,15 @@ comment on function auth.uid() is 'CI stub: reads request.jwt.claim.sub';
 comment on function auth.role() is 'CI stub: reads request.jwt.claim.role';
 comment on function auth.jwt() is 'CI stub: reads request.jwt.claims';
 
+-- Test-only expose of auth.uid() so the e2e suite can assert that the signed
+-- JWT subject reaches database helpers through PostgREST. Not part of owner SQL.
+create or replace function public.e2e_auth_uid()
+returns text language sql stable as $$
+  select auth.uid()::text
+$$;
+revoke all on function public.e2e_auth_uid() from public;
+grant execute on function public.e2e_auth_uid() to authenticated;
+
 -- Storage scaffolding used by 0012_rls_hardening.sql and schema_check.sql.
 create table if not exists storage.buckets (
   id text primary key,
