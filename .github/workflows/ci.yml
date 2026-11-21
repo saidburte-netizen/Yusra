@@ -96,7 +96,9 @@ jobs:
         run: |
           psql --version || true
 
-      - name: Print and verify all tool versions
+      # STEP 0 — every tool the build or db-test jobs rely on is installed and
+      # printed here, before any dependency install, analysis, test or build.
+      - name: STEP 0 — install and print toolchain versions
         run: |
           echo "=== Flutter / Dart ==="
           flutter --version
@@ -231,7 +233,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up PostgreSQL 16 client
+      # STEP 0 for SQL: the postgres:16 service image provides both the server
+      # and the matching client; print both before applying anything.
+      - name: STEP 0 — print PostgreSQL 16 version
         # Use the client inside the postgres:16 service image. The runner's
         # preinstalled psql is not guaranteed to be major version 16 and the
         # matching apt package is not available on every image revision.
@@ -300,6 +304,15 @@ jobs:
           echo "=== tool/db_test.sql result table ==="
           bash tool/ci_psql.sh -d yusra_migrations -v ON_ERROR_STOP=1 -f tool/db_test.sql | tee /tmp/db-test.txt
           test -s /tmp/db-test.txt
+          # db_test.sql raises on failure, but explicitly inspect every row too
+          # so a future change that stops raising cannot turn red into green.
+          awk -F '|' '
+            NF >= 3 && $3 ~ /FAIL/ {
+              print "::error::db_test row failed: " $0
+              bad = 1
+            }
+            END { exit bad ? 1 : 0 }
+          ' /tmp/db-test.txt
 
   smoke-test:
     name: Manual Supabase smoke test

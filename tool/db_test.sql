@@ -25,6 +25,20 @@ declare
   v_state text;
   v_detail text;
   v_count int;
+  -- Sale-return / void regression fixture.
+  v_marker text := 'db-test-sale-return-v1';
+  v_shift_flow uuid;
+  v_sale_flow uuid;
+  v_sale_void uuid;
+  v_sale_guard uuid;
+  v_old_sale uuid;
+  v_sale_item uuid;
+  v_batch uuid;
+  v_return uuid;
+  v_refund numeric(14,2);
+  v_qty_before int;
+  v_qty_after int;
+  v_expected_cash numeric(14,2);
 begin
   -- -------------------------------------------------------------------------
   -- Fixture: one branch and four staff accounts created through the trigger.
@@ -69,6 +83,25 @@ begin
    where po_id = '50000000-0000-0000-0000-000000000001'::uuid;
   delete from public.purchase_orders
    where id = '50000000-0000-0000-0000-000000000001'::uuid;
+
+  -- Repeatable cleanup for the sale-return / void fixture below. Sales are
+  -- identified by a marker note because create_sale() generates its own id.
+  for v_old_sale in
+    select id from public.sales where note = v_marker
+  loop
+    delete from public.stock_movements
+     where reference_id = v_old_sale
+        or reference_id in (select id from public.sale_returns where sale_id = v_old_sale);
+    delete from public.sale_return_items
+     where return_id in (select id from public.sale_returns where sale_id = v_old_sale);
+    delete from public.sale_returns where sale_id = v_old_sale;
+    delete from public.sale_items where sale_id = v_old_sale;
+    delete from public.sale_payments where sale_id = v_old_sale;
+    delete from public.sales where id = v_old_sale;
+  end loop;
+  delete from public.shifts
+   where cashier_id = v_admin and opening_cash = 100
+     and id not in (select shift_id from public.sales where shift_id is not null);
 
   -- 1. handle_new_user defaults an invalid role to super_admin.
   insert into auth.users (id, email, raw_app_meta_data)
@@ -258,6 +291,155 @@ begin
     ('all_report_views_have_date',
      case when v_count = 12 then 'PASS' else 'FAIL' end,
      'views_with_date=' || v_count);
+
+  -- ---------------------------------------------------------------------------
+  -- 8. Sale returns and voids restore stock and update status correctly.
+  --    Admin opens the shift because create_sale() requires the shift owner.
+  -- ---------------------------------------------------------------------------
+  perform set_config('request.jwt.claim.sub', v_admin::text, true);
+  v_shift_flow := public.open_shift(v_branch, 100);
+
+  -- Sale 1: 4 units of the medicine received by the PO test above.
+  v_sale_flow := public.create_sale(
+    v_branch, v_shift_flow, null, null,
+    jsonb_build_array(jsonb_build_object('medicine_id', v_medicine::text, 'quantity', 4)),
+    jsonb_build_array(jsonb_build_object('method', 'cash', 'amount', 100)),
+    0, v_marker);
+
+  select id, batch_id into v_sale_item, v_batch
+    from public.sale_items where sale_id = v_sale_flow order by id limit 1;
+  select quantity into v_qty_before from public.stock_batches where id = v_batch;
+
+  -- Partial return of one unit: refund is 20.00 and the batch is restocked.
+  v_return := public.process_sale_return(
+    v_sale_flow,
+    jsonb_build_array(jsonb_build_object(
+      'sale_item_id', v_sale_item::text, 'quantity', 1, 'restock', true)),
+    'DB test partial return', 'cash');
+
+  select refund_amount into v_refund from public.sale_returns where id = v_return;
+  select status::text into v_state from public.sales where id = v_sale_flow;
+  select quantity into v_qty_after from public.stock_batches where id = v_batch;
+  insert into db_test_results values
+    ('sale_return_partial_status',
+     case when v_state = 'partially_returned' then 'PASS' else 'FAIL' end, v_state);
+  insert into db_test_results values
+    ('sale_return_partial_refund',
+     case when v_refund = 20 then 'PASS' else 'FAIL' end, v_refund::text);
+  insert into db_test_results values
+    ('sale_return_partial_restores_stock',
+     case when v_qty_after = v_qty_before + 1 then 'PASS' else 'FAIL' end,
+     v_qty_before::text || '->' || v_qty_after::text);
+
+  -- Returning the remaining three units completes the sale: refund 60.00.
+  v_return := public.process_sale_return(
+    v_sale_flow,
+    jsonb_build_array(jsonb_build_object(
+      'sale_item_id', v_sale_item::text, 'quantity', 3, 'restock', true)),
+    'DB test full return', 'cash');
+
+  select refund_amount into v_refund from public.sale_returns where id = v_return;
+  select status::text into v_state from public.sales where id = v_sale_flow;
+  select quantity into v_qty_after from public.stock_batches where id = v_batch;
+  insert into db_test_results values
+    ('sale_return_full_status',
+     case when v_state = 'returned' then 'PASS' else 'FAIL' end, v_state);
+  insert into db_test_results values
+    ('sale_return_full_refund',
+     case when v_refund = 60 then 'PASS' else 'FAIL' end, v_refund::text);
+  insert into db_test_results values
+    ('sale_return_full_restores_remaining_stock',
+     case when v_qty_after = v_qty_before + 4 then 'PASS' else 'FAIL' end,
+     v_qty_before::text || '->' || v_qty_after::text);
+
+  -- Void sale: stock returns and a second void is rejected.
+  v_sale_void := public.create_sale(
+    v_branch, v_shift_flow, null, null,
+    jsonb_build_array(jsonb_build_object('medicine_id', v_medicine::text, 'quantity', 2)),
+    jsonb_build_array(jsonb_build_object('method', 'cash', 'amount', 40)),
+    0, v_marker);
+
+  select batch_id into v_batch from public.sale_items where sale_id = v_sale_void limit 1;
+  select quantity into v_qty_before from public.stock_batches where id = v_batch;
+  perform public.void_sale(v_sale_void, 'DB test void');
+  select status::text into v_state from public.sales where id = v_sale_void;
+  select quantity into v_qty_after from public.stock_batches where id = v_batch;
+  insert into db_test_results values
+    ('void_sale_status',
+     case when v_state = 'voided' then 'PASS' else 'FAIL' end, v_state);
+  insert into db_test_results values
+    ('void_sale_restores_stock',
+     case when v_qty_after = v_qty_before + 2 then 'PASS' else 'FAIL' end,
+     v_qty_before::text || '->' || v_qty_after::text);
+
+  begin
+    perform public.void_sale(v_sale_void, 'DB test double void');
+    v_state := 'NO_ERROR';
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate;
+  end;
+  insert into db_test_results values
+    ('void_sale_double_rejected',
+     case when v_state <> 'NO_ERROR' then 'PASS' else 'FAIL' end, v_state);
+
+  -- A cashier can view sales but must not be able to return or void them.
+  v_sale_guard := public.create_sale(
+    v_branch, v_shift_flow, null, null,
+    jsonb_build_array(jsonb_build_object('medicine_id', v_medicine::text, 'quantity', 1)),
+    jsonb_build_array(jsonb_build_object('method', 'cash', 'amount', 20)),
+    0, v_marker);
+  select id into v_sale_item from public.sale_items where sale_id = v_sale_guard limit 1;
+
+  perform set_config('request.jwt.claim.sub', v_cashier::text, true);
+  begin
+    perform public.process_sale_return(
+      v_sale_guard,
+      jsonb_build_array(jsonb_build_object('sale_item_id', v_sale_item::text, 'quantity', 1)),
+      'DB test cashier return', 'cash');
+    v_state := 'NO_ERROR';
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate;
+  end;
+  insert into db_test_results values
+    ('cashier_cannot_process_sale_return',
+     case when v_state <> 'NO_ERROR' then 'PASS' else 'FAIL' end, v_state);
+
+  begin
+    perform public.void_sale(v_sale_guard, 'DB test cashier void');
+    v_state := 'NO_ERROR';
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate;
+  end;
+  insert into db_test_results values
+    ('cashier_cannot_void_sale',
+     case when v_state <> 'NO_ERROR' then 'PASS' else 'FAIL' end, v_state);
+  perform set_config('request.jwt.claim.sub', v_admin::text, true);
+
+  -- close_shift() expected cash = opening + cash sales - change - cash refunds.
+  select s.opening_cash
+       + coalesce((select sum(sp.amount)
+                     from public.sale_payments sp
+                    where sp.sale_id in (
+                      select id from public.sales
+                       where shift_id = s.id and status <> 'voided')
+                      and sp.method = 'cash'), 0)
+       - coalesce((select sum(change_due)
+                     from public.sales
+                    where shift_id = s.id and status <> 'voided'), 0)
+       - coalesce((select sum(r.refund_amount)
+                     from public.sale_returns r
+                     join public.sales rs on rs.id = r.sale_id
+                    where rs.shift_id = s.id and r.refund_method = 'cash'), 0)
+    into v_expected_cash
+    from public.shifts s
+   where s.id = v_shift_flow;
+
+  v_detail := public.close_shift(v_shift_flow, v_expected_cash, 'DB test close')::text;
+  insert into db_test_results values
+    ('close_shift_expected_cash_formula',
+     case when (v_detail::jsonb ->> 'expected_cash')::numeric = v_expected_cash
+          then 'PASS' else 'FAIL' end,
+     'expected=' || v_expected_cash::text || ',result=' || coalesce(v_detail, 'null'));
 end $$;
 
 select test, status, detail from db_test_results order by test;

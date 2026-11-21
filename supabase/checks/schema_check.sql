@@ -1,5 +1,5 @@
--- Yusra Pharmacy — schema verification (0001 through 0019).
--- Run with the Supabase SQL Editor after applying 0019_hardening_fixes.sql.
+-- Yusra Pharmacy — schema verification (0001 through 0020).
+-- Run with the Supabase SQL Editor after applying 0020_fix_sale_return.sql.
 -- Every row has a kind, object name, status of PASS or FAIL, and a FIX hint
 -- (blank for PASS). The db-test CI job fails on any non-PASS row.
 -- v_expired_batches is intentionally not required: the screen derives the same
@@ -99,8 +99,37 @@ results as (
          case when exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                             where n.nspname = 'public' and p.proname = name and p.pronargs = nargs)
               then 'PASS' else 'FAIL' end,
-         'Apply the migration defining this function (through 0019_hardening_fixes.sql).'
+         'Apply the migration defining this function (through 0020_fix_sale_return.sql).'
   from expected_functions
+  union all
+  -- The RPCs the Flutter app calls must exist AND be executable by the
+  -- authenticated role. A function that exists but is not granted is a bug.
+  select 'function_grant', f.name,
+         case when exists (
+           select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+           where n.nspname = 'public' and p.proname = f.name and p.pronargs = f.nargs
+             and has_function_privilege('authenticated', p.oid, 'EXECUTE')
+         ) then 'PASS' else 'FAIL' end,
+         'Re-run 0013/0015/0016/0019/0020 SQL and revoke from public, anon; grant execute to authenticated.'
+  from expected_functions f
+  where f.name in (
+    'void_sale', 'process_sale_return', 'share_admin_access',
+    'publish_app_settings', 'set_user_access', 'get_my_profile',
+    'update_my_profile', 'set_purchase_order_status',
+    'approve_purchase_order', 'cancel_purchase_order',
+    'set_expense_status', 'approve_expense', 'reject_expense'
+  )
+  union all
+  -- Regression guard for the 0013 bug: the CASE branches must be enum casts,
+  -- not plain text, otherwise every return fails at runtime.
+  select 'function_source', 'process_sale_return.returned_enum_cast',
+         case when exists (
+           select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+           where n.nspname = 'public' and p.proname = 'process_sale_return'
+             and p.pronargs = 4
+             and p.prosrc like '%''returned''::sale_status%'
+         ) then 'PASS' else 'FAIL' end,
+         'Apply 0020_fix_sale_return.sql (cast both CASE branches to sale_status).'
   union all
   select 'trigger', name,
          case when exists (select 1 from pg_trigger where tgname = name and not tgisinternal)
