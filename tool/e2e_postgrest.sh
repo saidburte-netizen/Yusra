@@ -25,12 +25,12 @@ EOF
 }
 
 wait_for_postgrest() {
-  echo "Waiting for PostgREST at $URL/root ..." >&2
+  echo "Waiting for PostgREST at $URL/ ..." >&2
   local deadline=$(( $(date +%s) + 90 ))
-  until curl -fsS "$URL/root" > /tmp/e2e-postgrest-root.json 2>/dev/null; do
+  until curl -fsS "$URL/" > /tmp/e2e-postgrest-root.json 2>/dev/null; do
     if (( $(date +%s) >= deadline )); then
-      echo "PostgREST never became ready at $URL/root" >&2
-      curl -sS -i "$URL/root" >&2 || true
+      echo "PostgREST never became ready at $URL/" >&2
+      curl -sS -i "$URL/" >&2 || true
       exit 1
     fi
     sleep 1

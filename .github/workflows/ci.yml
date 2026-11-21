@@ -549,7 +549,7 @@ jobs:
             -e PGRST_DB_MAX_ROWS=1000 \
             "$POSTGREST_IMAGE"
           bash tool/e2e_postgrest.sh wait
-          curl -fsS "$E2E_POSTGREST_URL/root"
+          curl -fsS "$E2E_POSTGREST_URL/"
 
       - name: Install dependencies
         run: flutter pub get
