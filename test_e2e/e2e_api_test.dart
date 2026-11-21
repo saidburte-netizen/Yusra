@@ -11,6 +11,7 @@ library;
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:yusra_pharmacy/core/dates.dart';
 import 'package:yusra_pharmacy/core/supabase_client.dart';
@@ -61,8 +62,9 @@ void main() {
       // --- Admin identity and branch -------------------------------------
       final adminId = await createUserViaSql(
           role: 'super_admin', branchId: '', label: 'admin');
+      late SupabaseClient admin;
       useUser(adminId);
-      final admin = SupabaseService.client;
+      admin = SupabaseService.client;
       final authUid =
           await api('auth uid', () => admin.rpc<String>('e2e_auth_uid'));
       final profile = await Process.run('bash', [
@@ -359,6 +361,7 @@ void main() {
 
       // Returns and voids are pharmacist/admin actions.
       useUser(adminId);
+      admin = SupabaseService.client;
       final normalSaleItem =
           saleItems.firstWhere((item) => item.medicineId == normal.id);
       final returnId = await api(
@@ -399,6 +402,7 @@ void main() {
                 discount: 0.0,
               ));
       useUser(adminId);
+      admin = SupabaseService.client;
       await api('void sale B', () => sales.voidSale(saleB, 'E2E void'));
       expect((await api('sale B', () => sales.sale(saleB))).status, 'voided');
 
@@ -412,6 +416,7 @@ void main() {
       // --- Expense and approval ------------------------------------------
       stdout.writeln('[e2e] expense and approval');
       useUser(adminId);
+      admin = SupabaseService.client;
       final expenseId = (await api(
           'create expense',
           () => admin
@@ -532,6 +537,7 @@ void main() {
           () => inventory.medicines(query: normalSku));
 
       useUser(adminId);
+      admin = SupabaseService.client;
       final activityAfter = await api(
           'activity after promotion', () => dashboard.activityLog(branchId));
       expect(
