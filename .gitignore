@@ -1,4 +1,8 @@
 # Miscellaneous
+# Camera photos dumped at the repository root by connected test devices.
+# Root-only: images under assets/ and android/ remain tracked.
+/*.jpg
+/*.jpeg
 *.class
 *.log
 *.pyc

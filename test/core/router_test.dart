@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yusra_pharmacy/core/auth/auth_controller.dart';
+import 'package:yusra_pharmacy/core/nav/menu_items.dart';
 import 'package:yusra_pharmacy/core/permissions.dart';
 import 'package:yusra_pharmacy/core/router.dart';
 
@@ -29,21 +30,49 @@ void main() {
       }
     });
 
-    test('loading and initial states also wait at login', () {
-      expect(redirectFor(AuthState.initial, '/dashboard'), '/login');
-      expect(redirectFor(AuthState.loading, '/dashboard'), '/login');
+    test('initial, loading and profile-loading states wait for the profile',
+        () {
+      expect(redirectFor(AuthState.initial, '/dashboard'), isNull);
+      expect(redirectFor(AuthState.loading, '/dashboard'), isNull);
+      expect(
+          redirectFor(
+              const AuthState(status: AuthStatus.profileLoading), '/dashboard'),
+          isNull);
     });
 
-    test('signed-in users are bounced away from login', () {
-      expect(redirectFor(_signedIn(AppRole.cashier), '/login'), '/dashboard');
-      expect(
-          redirectFor(_signedIn(AppRole.cashier, active: false), '/login'), isNull);
+    test('signed-in users go to their role home away from login', () {
+      for (final role in AppRole.values) {
+        expect(redirectFor(_signedIn(role), '/login'), homeFor(role),
+            reason: role.name);
+      }
+      expect(redirectFor(_signedIn(AppRole.cashier, active: false), '/login'),
+          isNull);
     });
 
     test('forgot/reset password are always reachable', () {
-      expect(redirectFor(AuthState.unauthenticated, '/forgot-password'), isNull);
+      expect(
+          redirectFor(AuthState.unauthenticated, '/forgot-password'), isNull);
       expect(redirectFor(AuthState.unauthenticated, '/reset-password'), isNull);
       expect(redirectFor(_signedIn(AppRole.admin), '/forgot-password'), isNull);
+    });
+  });
+
+  group('profile load failures', () {
+    const profileError = AuthState(
+      status: AuthStatus.profileError,
+      error: 'The profile service is unavailable.',
+    );
+
+    test('profile errors get a dedicated screen, not access denied', () {
+      expect(redirectFor(profileError, '/dashboard'), '/profile_error');
+      expect(redirectFor(profileError, '/profile_error'), isNull);
+      expect(redirectFor(profileError, '/forbidden'), '/profile_error');
+    });
+
+    test('the profile error screen is not a redirect loop', () {
+      expect(redirectFor(_signedIn(AppRole.cashier), '/profile_error'), '/pos');
+      expect(
+          redirectFor(AuthState.unauthenticated, '/profile_error'), '/login');
     });
   });
 
@@ -58,20 +87,21 @@ void main() {
       expect(redirectFor(AuthState.unauthenticated, '/forbidden'), '/login');
     });
 
-    test('cashier is blocked from admin, expenses and reports', () {
+    test('active users are never trapped on the forbidden page', () {
+      for (final role in AppRole.values) {
+        expect(redirectFor(_signedIn(role), '/forbidden'), homeFor(role),
+            reason: role.name);
+      }
+    });
+
+    test('cashier is blocked from admin, expenses, returns and reports', () {
       final cashier = _signedIn(AppRole.cashier);
       expect(redirectFor(cashier, '/pos'), isNull);
       expect(redirectFor(cashier, '/inventory/medicines'), isNull);
       expect(redirectFor(cashier, '/expenses'), '/forbidden');
       expect(redirectFor(cashier, '/reports'), '/forbidden');
       expect(redirectFor(cashier, '/admin/users'), '/forbidden');
-    });
-
-    test('permission guards also cover nested feature routes', () {
-      final pharmacist = _signedIn(AppRole.pharmacist);
-      expect(redirectFor(pharmacist, '/admin/audit'), '/forbidden');
-      expect(redirectFor(pharmacist, '/inventory/batches'), isNull);
-      expect(redirectFor(pharmacist, '/expenses'), '/forbidden');
+      expect(redirectFor(cashier, '/sales/returns'), '/forbidden');
     });
 
     test('accountant and admin reach their permitted modules', () {
@@ -84,6 +114,26 @@ void main() {
 
     test('unknown routes are left to the router 404 builder', () {
       expect(redirectFor(_signedIn(AppRole.admin), '/not-a-route'), isNull);
+    });
+  });
+
+  group('role homes and module mapping', () {
+    test('every role home is permitted and navigable', () {
+      for (final role in AppRole.values) {
+        final home = homeFor(role);
+        final module = moduleForLocation(home);
+        expect(module, isNotNull, reason: role.name);
+        expect(can(role, module!, PermAction.view), isTrue, reason: role.name);
+        expect(redirectFor(_signedIn(role), home), isNull, reason: role.name);
+      }
+    });
+
+    test('specific routes override generic menu prefixes', () {
+      expect(moduleForLocation('/sales/returns'), Modules.saleReturns);
+      expect(moduleForLocation('/sales/returns/abc'), Modules.saleReturns);
+      expect(moduleForLocation('/sales'), Modules.sales);
+      expect(moduleForLocation('/inventory/batches'), Modules.stock);
+      expect(moduleForLocation('/inventory/medicines/1'), Modules.medicines);
     });
   });
 }

@@ -1,64 +1,90 @@
 # Supabase — Yusra Pharmacy
 
-## Status of the live database
+## Owner run order
 
-The owner created the live Supabase project by running the SQL steps **by hand in the Supabase SQL Editor**, in the order below. The files in `migrations/` are the repository record of exactly those steps. They are **already applied** — do not re-run them against the live project.
+### Existing live project (most likely)
 
-| File | Contents |
+The owner's project was created by running the original SQL steps by hand. If
+`0001`–`0018` are already applied (including earlier proposals that may have
+been run since), **do not re-run them**. Apply only the new remediation:
+
+1. Open the Supabase SQL Editor.
+2. Run `migrations/0019_hardening_fixes.sql` as one query.
+3. Run `checks/schema_check.sql`; every row must be `PASS`.
+4. Re-run the optional `SMOKE_*` CI workflow against the live project.
+
+`0019` is idempotent. It fixes invalid `PGRST116` error codes to `P0002`,
+hardens every listed SECURITY DEFINER function, makes `handle_new_user`
+default to `super_admin` with a safe invalid-role fallback, creates missing
+profiles, adds `update_my_profile`, `customer_stats` and
+`shift_expected_cash`, authorizes audit corrections and expense approvals,
+blocks direct PO status/receipt writes, adds storage policies, and gives the
+twelve report views stable `date` columns.
+
+### Fresh or recovery project
+
+Run `migrations/0001`–`0019` in filename order, **or** run the generated
+`all_owner_sql.sql` once as a single query. The bundle carries `-- FILE:`
+markers for every source file, is safe to run twice, and is applied twice in
+`db-test` CI. `supabase/config.toml` pins PostgreSQL 16 and disables signup
+for local development only.
+
+## Files
+
+| File | Purpose |
 | --- | --- |
-| `0001_extensions_enums.sql` | Extensions, enum types, `set_updated_at()` |
-| `0002_core_tables_helpers.sql` | Branches, profiles, role/branch helpers, settings, document counters, audit log |
-| `0003_catalog.sql` | SKU sequence, categories, medicines, suppliers |
-| `0004_purchasing.sql` | Purchase orders and items |
-| `0005_stock.sql` | Stock batches and movement ledger |
-| `0006_sales_finance.sql` | Customers, prescriptions, shifts, sales, sale items/payments/returns, expenses |
-| `0007_functions.sql` | Stock, purchasing, shift and sale RPCs |
-| `0008_views.sql` | Stock, low-stock, expiry and daily-sales views |
-| `0009_triggers.sql` | Updated-at, numbering, totals, guards and audit triggers |
-| `0010_rls_storage.sql` | **Placeholder — see the important note below** |
-| `0011_seed.sql` | Main branch, app settings, categories, super-admin placeholder, verification query |
+| `migrations/0001`–`0011` | Original baseline schema, helpers, views, triggers and seed |
+| `migrations/0012` | RLS policies, grants, private Storage buckets |
+| `migrations/0013` | Void and return RPCs |
+| `migrations/0014` | Twelve `v_report_*` views |
+| `migrations/0015` | Team access RPCs |
+| `migrations/0016` | `get_my_profile()` strict profile read |
+| `migrations/0017` | Activity audit log and correction RPCs |
+| `migrations/0018` | Default `super_admin` on first user, idempotent trigger |
+| `migrations/0019` | **New:** hardening and wire fixes described above |
+| `all_owner_sql.sql` | Full generated bundle for fresh/recovery projects |
+| `checks/schema_check.sql` | PASS/FAIL contract through `0019` |
 
-`0012_rls_hardening.sql`, `0013_rpc_gaps.sql`, `0014_report_views.sql` and `0015_team_management.sql` are **proposed, not applied**. They follow the change protocol below and must be reviewed and run by the owner.
+## Verification
 
-## Important — gaps in the supplied steps
+CI applies the bundle twice, then applies numbered migrations in order on a
+clean PostgreSQL 16 service, runs `checks/schema_check.sql` (failing on any
+FAIL row) and `tool/db_test.sql` (15 functional PASS checks). Locally, with a
+PostgreSQL 16 database:
 
-The eleven steps supplied by the owner did **not** contain any `create policy`, `alter table ... enable row level security`, or `storage.buckets` statements; did not contain the `void_sale` or `process_sale_return` RPCs that the app calls; did not contain the twelve reporting views used by the Reports screen; and did not contain the team access RPCs. Consequently:
+```bash
+psql -v ON_ERROR_STOP=1 -f tool/supabase_stubs.sql
+psql -v ON_ERROR_STOP=1 -f supabase/all_owner_sql.sql
+psql -v ON_ERROR_STOP=1 -f supabase/all_owner_sql.sql
+psql -v ON_ERROR_STOP=1 -f supabase/checks/schema_check.sql
+psql -v ON_ERROR_STOP=1 -f tool/db_test.sql
+```
 
-- `0010_rls_storage.sql` is intentionally empty of executable SQL so the repository stays honest about what was applied.
-- `0012_rls_hardening.sql` proposes idempotent RLS policies, RPC grants and the five Storage buckets (`prescriptions`, `receipts`, `branding`, `avatars`, `medicine-images`).
-- `0013_rpc_gaps.sql` proposes the void/return RPCs.
-- `0014_report_views.sql` proposes the twelve `v_report_*` views with the exact columns the app queries plus `branch_id` for the super-admin branch filter. If an earlier version was already applied, re-run this file — it is idempotent and simply adds the column to every view.
-- `0015_team_management.sql` proposes `set_user_access`, `share_admin_access` and `publish_app_settings` for super-admin team sharing.
+## Owner manual actions
 
-**The owner must review and run 0012, 0013, 0014 and 0015 in the SQL Editor before the smoke test can pass and before Reports / Team access work against the live database.** Until then, direct table reads with the anon key are unrestricted by RLS and the role rules are only enforced in the client.
-
-## Applying to a fresh project
-
-1. Create a new Supabase project. The `extensions` schema must exist (it does by default).
-2. Open the SQL Editor. Run each file one at a time, in filename order, as a single query. Stop if any file errors.
-3. After `0011_seed.sql`, replace `PUT-THE-EMAIL-HERE` in the `update profiles` statement with the first admin's sign-up email (or run that `UPDATE` manually after the user signs up).
-4. Review and run `0012_rls_hardening.sql`, `0013_rpc_gaps.sql`, `0014_report_views.sql` and `0015_team_management.sql`, in that order.
-5. Run `checks/schema_check.sql` and confirm there are no `MISSING` rows.
-6. Deploy the Edge Functions and set the GitHub secrets described in the root `README.md`.
-
-Alternatively, install the Supabase CLI and run `supabase db push` — the files are plain, ordered SQL. The owner's live project was created manually, so the CLI is not required.
+1. Apply `0019` and confirm `schema_check.sql` is all PASS as described above.
+2. In Supabase Auth, disable public Signup and configure redirect URLs for
+   the deployed web origin; choose the email-confirmation policy.
+3. Verify buckets `prescriptions`, `receipts`, `branding`, `avatars` and
+   `medicine-images` and the `0019` policies. Receipts/Rx stay private;
+   branding and medicine images are public.
+4. Set Edge Function secrets `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+   `SUPABASE_ANON_KEY` and `APP_ORIGIN`, then deploy `admin-create-user` and
+   `admin-reset-password`.
+5. Set the GitHub secrets documented in the root `README.md`.
+6. Rotate any PAT that was previously pasted into chat.
 
 ## Database change protocol
 
-Never change the live database from application code. When any agent needs a change:
-
-1. Add the next numbered file (`0016_name.sql`, and so on). It must be idempotent: `create or replace`, `create ... if not exists`, `drop policy if exists` before `create policy`, `add column if not exists`.
-2. Add one line to the CHANGELOG below.
-3. Send the owner a message headed **RUN IN SUPABASE SQL EDITOR** with the exact SQL and one line explaining what it does.
-4. Only the owner runs it.
+Never change the live database from application code. Add the next numbered
+migration (must be idempotent), regenerate `all_owner_sql.sql` from
+`0001`–latest, extend `schema_check.sql`, and send the owner the exact SQL to
+run. Only the owner runs it against the live project.
 
 ## CHANGELOG
 
 | File | Status | Purpose |
 | --- | --- | --- |
-| 0001–0009, 0011 | Applied by owner | Original 11 SQL steps, copied verbatim |
-| 0010 | Applied by owner | Placeholder — no RLS/Storage SQL was supplied |
-| 0012 | **Proposed — not applied** | RLS policies, RPC grants, private prescriptions bucket |
-| 0013 | **Proposed — not applied** | `void_sale` and `process_sale_return` RPCs |
-| 0014 | **Proposed — not applied** | Twelve `v_report_*` reporting views, each exposing `branch_id` for the super-admin branch filter |
-| 0015 | **Proposed — not applied** | Team access RPCs: set role/branch, share access, publish settings |
+| 0001–0011 | Applied by owner / baseline | Original schema and seed |
+| 0012–0018 | Applied on projects that ran earlier proposals | RLS, RPCs, reports, team access, profile RPC, audit, first-user default |
+| **0019** | **New — owner must apply** | Hardening, authorization and wire fixes |

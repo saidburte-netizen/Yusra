@@ -94,35 +94,54 @@ Future<void> main() async {
   }
 
   stdout.writeln('RLS and role rules');
-  await _checkInsertDenied(cashier, 'medicines', {
-    'name': 'Smoke test medicine ${DateTime.now().microsecondsSinceEpoch}',
-    'cost_price': 1,
-    'selling_price': 2,
-  }, 'a cashier cannot insert into medicines', results);
-  await _checkInsertDenied(cashier, 'stock_batches', {
-    'branch_id': branchId,
-    'medicine_id': branchId, // intentionally invalid; RLS must reject first
-    'batch_no': 'SMOKE',
-    'expiry_date': '2099-01-01',
-    'quantity': 1,
-  }, 'a cashier cannot insert into stock_batches', results);
-  await _checkInsertDenied(cashier, 'sales', {
-    'invoice_no': 'SMOKE-${DateTime.now().microsecondsSinceEpoch}',
-    'branch_id': branchId,
-    'cashier_id': (await cashier.select('profiles', columns: 'id', filters: {
-      'role': 'eq.cashier',
-    })).first['id'],
-  }, 'a cashier cannot insert into sales', results);
+  await _checkInsertDenied(
+      cashier,
+      'medicines',
+      {
+        'name': 'Smoke test medicine ${DateTime.now().microsecondsSinceEpoch}',
+        'cost_price': 1,
+        'selling_price': 2,
+      },
+      'a cashier cannot insert into medicines',
+      results);
+  await _checkInsertDenied(
+      cashier,
+      'stock_batches',
+      {
+        'branch_id': branchId,
+        'medicine_id': branchId, // intentionally invalid; RLS must reject first
+        'batch_no': 'SMOKE',
+        'expiry_date': '2099-01-01',
+        'quantity': 1,
+      },
+      'a cashier cannot insert into stock_batches',
+      results);
+  await _checkInsertDenied(
+      cashier,
+      'sales',
+      {
+        'invoice_no': 'SMOKE-${DateTime.now().microsecondsSinceEpoch}',
+        'branch_id': branchId,
+        'cashier_id':
+            (await cashier.select('profiles', columns: 'id', filters: {
+          'role': 'eq.cashier',
+        }))
+                .first['id'],
+      },
+      'a cashier cannot insert into sales',
+      results);
 
   final audit = await cashier.select('audit_logs', columns: 'id');
   if (audit.isEmpty) {
     results.pass('a cashier cannot read audit_logs');
   } else {
-    results.fail('a cashier cannot read audit_logs', '${audit.length} rows returned');
+    results.fail(
+        'a cashier cannot read audit_logs', '${audit.length} rows returned');
   }
 
   final adminStatus = await admin.tryInsert('profiles', {
-    'id': '00000000-0000-0000-0000-${DateTime.now().microsecondsSinceEpoch.toString().padLeft(12, '0').substring(0, 12)}',
+    'id':
+        '00000000-0000-0000-0000-${DateTime.now().microsecondsSinceEpoch.toString().padLeft(12, '0').substring(0, 12)}',
     'full_name': 'Smoke super admin',
     'role': 'super_admin',
     'branch_id': branchId,
@@ -131,7 +150,8 @@ Future<void> main() async {
   if (adminStatus >= 400) {
     results.pass('an admin cannot create a super_admin');
   } else {
-    results.fail('an admin cannot create a super_admin', 'insert returned $adminStatus');
+    results.fail(
+        'an admin cannot create a super_admin', 'insert returned $adminStatus');
   }
 
   stdout.writeln('');
@@ -181,7 +201,8 @@ Future<void> main() async {
   if (noShift.statusCode >= 400) {
     results.pass('create_sale fails without an open shift');
   } else {
-    results.fail('create_sale fails without an open shift', 'RPC returned success');
+    results.fail(
+        'create_sale fails without an open shift', 'RPC returned success');
   }
 
   // Prescription-only rule.
@@ -333,8 +354,8 @@ Future<void> main() async {
   }
 
   // Return restores stock.
-  final saleItems = await admin.select('sale_items', columns: 'id, batch_id, quantity',
-      filters: {'sale_id': 'eq.$saleId'});
+  final saleItems = await admin.select('sale_items',
+      columns: 'id, batch_id, quantity', filters: {'sale_id': 'eq.$saleId'});
   if (saleItems.isEmpty) {
     results.fail('return restores stock', 'no sale items found');
   } else {
@@ -380,7 +401,8 @@ Future<void> main() async {
     'p_note': 'smoke void',
   });
   final secondItems = await admin.select('sale_items',
-      columns: 'id, batch_id, quantity', filters: {'sale_id': 'eq.$secondSale'});
+      columns: 'id, batch_id, quantity',
+      filters: {'sale_id': 'eq.$secondSale'});
   if (secondItems.isEmpty) {
     results.fail('void_sale restores stock', 'no sale items found');
   } else {
@@ -409,7 +431,9 @@ Future<void> main() async {
   });
   final expected = _numberOf(closed, 'expected_cash');
   final difference = _numberOf(closed, 'difference');
-  if (expected != null && difference != null && (expected - 100 - difference).abs() < 0.01) {
+  if (expected != null &&
+      difference != null &&
+      (expected - 100 - difference).abs() < 0.01) {
     results.pass('close_shift reports expected cash and difference');
   } else {
     results.fail('close_shift reports expected cash and difference',

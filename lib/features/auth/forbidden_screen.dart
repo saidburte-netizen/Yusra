@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/auth/auth_controller.dart';
+import '../../core/nav/menu_items.dart';
 import '../../core/permissions.dart';
 import '../../core/strings.dart';
 import '../../core/theme/app_colors.dart';
@@ -24,9 +25,11 @@ class ForbiddenScreen extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.lock_outline, size: 56, color: AppColors.warning),
+                  const Icon(Icons.lock_outline,
+                      size: 56, color: AppColors.warning),
                   const SizedBox(height: 16),
-                  Text(S.forbidden, style: Theme.of(context).textTheme.titleLarge),
+                  Text(S.forbidden,
+                      style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 10),
                   Text(
                     S.forbiddenBody,
@@ -42,42 +45,16 @@ class ForbiddenScreen extends ConsumerWidget {
                   Text(
                     '${S.role}: ${auth.profile?.roleLabel ?? auth.profile?.role.label ?? '—'}',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
                         ?.copyWith(fontWeight: FontWeight.bold),
                   ),
-                  if (auth.error != null) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.danger.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        children: [
-                          Text(S.accountProblem,
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodyMedium),
-                          const SizedBox(height: 6),
-                          Text(auth.error!,
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodySmall),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SecondaryButton(
-                      label: S.retry,
-                      icon: Icons.refresh,
-                      onPressed: () =>
-                          ref.read(authProvider.notifier).refreshProfile(),
-                    ),
-                  ],
                   const SizedBox(height: 24),
                   PrimaryButton(
-                    label: S.backToDashboard,
-                    icon: Icons.dashboard_outlined,
-                    onPressed: () => context.go('/dashboard'),
+                    label: S.backToHome,
+                    icon: Icons.home_outlined,
+                    onPressed: () => context.go(homeFor(auth.profile?.role)),
                   ),
                   const SizedBox(height: 10),
                   SecondaryButton(

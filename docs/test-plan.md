@@ -4,10 +4,10 @@ Run this against the real Supabase project with one demo user per role. Use
 `tool/seed_demo.dart` first if the project is empty. Record the date, the
 tester, the app build (APK or web) and the result of every step.
 
-> **Prerequisite:** all **RUN IN SUPABASE SQL EDITOR** scripts in
-> `supabase/README.md` must have been applied, including `0012`, `0013`,
-> `0014` and `0015`, and `supabase/checks/schema_check.sql` must return no
-> `MISSING` rows.
+> **Prerequisite:** the owner must have applied `0019_hardening_fixes.sql`
+> (plus `0001`–`0018` if this is a fresh project) and
+> `supabase/checks/schema_check.sql` must return all `PASS` rows. See the
+> **Owner manual actions** section in `README.md` and `supabase/README.md`.
 
 ## Test data
 
@@ -118,3 +118,15 @@ Or use the **Manual Supabase smoke test** workflow in the Actions tab and
 add the matching repository secrets. The tool exits non-zero on any failure
 and refuses to run against a URL containing `prod` unless the confirm input
 is set.
+
+## CI gates on this branch
+
+Every push and PR runs:
+
+- `build`: pinned toolchain versions, `dart format --set-exit-if-changed .`,
+  `flutter analyze`, `flutter test`, `deno check`, release APK and web builds.
+- `db-test`: PostgreSQL 16 service, `all_owner_sql.sql` twice, numbered
+  migrations, `schema_check.sql` (fails on any FAIL row) and `tool/db_test.sql`.
+
+Both APK and web bundles are uploaded as artifacts. The full route/provider/DB
+wire-check is in `docs/AUDIT.md`; every row is `OK`.

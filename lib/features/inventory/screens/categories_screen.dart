@@ -61,7 +61,8 @@ class CategoriesScreen extends ConsumerWidget {
                             ),
                           if (canEdit)
                             IconButton(
-                              tooltip: item.isActive ? 'Deactivate' : 'Reactivate',
+                              tooltip:
+                                  item.isActive ? 'Deactivate' : 'Reactivate',
                               icon: Icon(
                                 item.isActive
                                     ? Icons.block_outlined
@@ -83,7 +84,8 @@ class CategoriesScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _edit(BuildContext context, WidgetRef ref, Category? item) async {
+  Future<void> _edit(
+      BuildContext context, WidgetRef ref, Category? item) async {
     final name = TextEditingController(text: item?.name ?? '');
     final description = TextEditingController(text: item?.description ?? '');
     final formKey = GlobalKey<FormState>();
@@ -101,7 +103,8 @@ class CategoriesScreen extends ConsumerWidget {
                 AppTextField(
                   label: 'Name',
                   controller: name,
-                  validator: (value) => (value ?? '').trim().isEmpty ? 'Required' : null,
+                  validator: (value) =>
+                      (value ?? '').trim().isEmpty ? 'Required' : null,
                 ),
                 const SizedBox(height: 12),
                 AppTextField(label: 'Description', controller: description),
@@ -118,7 +121,9 @@ class CategoriesScreen extends ConsumerWidget {
             label: 'Save',
             width: 110,
             onPressed: () {
-              if (formKey.currentState!.validate()) Navigator.pop(context, true);
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(context, true);
+              }
             },
           ),
         ],
@@ -127,27 +132,30 @@ class CategoriesScreen extends ConsumerWidget {
     if (saved != true) return;
     try {
       await ref.read(inventoryRepositoryProvider).saveCategory(
-            {
-              'name': name.text.trim(),
-              'description': description.text.trim().isEmpty
-                  ? null
-                  : description.text.trim(),
-            },
-            id: item?.id,
-          );
+        {
+          'name': name.text.trim(),
+          'description':
+              description.text.trim().isEmpty ? null : description.text.trim(),
+        },
+        id: item?.id,
+      );
       if (!context.mounted) return;
       AppSnackbar.success(context, 'Category saved.');
       ref.invalidate(categoriesProvider);
     } catch (e) {
-      if (context.mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
+      if (context.mounted) {
+        AppSnackbar.error(context, AppErrorMapper.from(e).message);
+      }
     }
   }
 
-  Future<void> _toggle(BuildContext context, WidgetRef ref, Category item) async {
+  Future<void> _toggle(
+      BuildContext context, WidgetRef ref, Category item) async {
     final confirm = await showConfirmDialog(
       context,
       title: item.isActive ? 'Deactivate category' : 'Reactivate category',
-      message: '${item.name} will ${item.isActive ? 'no longer' : 'again'} be available.',
+      message:
+          '${item.name} will ${item.isActive ? 'no longer' : 'again'} be available.',
     );
     if (confirm != true) return;
     try {
@@ -157,7 +165,9 @@ class CategoriesScreen extends ConsumerWidget {
       if (!context.mounted) return;
       ref.invalidate(categoriesProvider);
     } catch (e) {
-      if (context.mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
+      if (context.mounted) {
+        AppSnackbar.error(context, AppErrorMapper.from(e).message);
+      }
     }
   }
 }

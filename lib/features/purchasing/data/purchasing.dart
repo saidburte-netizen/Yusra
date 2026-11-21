@@ -1,9 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/errors/app_error.dart';
 import '../../../core/supabase_client.dart';
 import '../../inventory/data/inventory_models.dart';
 import '../../inventory/data/inventory_providers.dart';
+import 'purchase_status_helpers.dart';
 
 double _money(dynamic value) => moneyValue(value);
 int _int(dynamic value) => intValue(value);
@@ -111,7 +113,8 @@ class PurchaseRepository {
   }
 
   Future<PurchaseOrder> order(String id) async {
-    final row = await _db.from('purchase_orders').select().eq('id', id).single();
+    final row =
+        await _db.from('purchase_orders').select().eq('id', id).single();
     return PurchaseOrder.fromJson(Map<String, dynamic>.from(row));
   }
 
@@ -122,7 +125,8 @@ class PurchaseRepository {
         .eq('po_id', poId)
         .order('id') as List;
     return rows
-        .map((row) => PurchaseOrderItem.fromJson(Map<String, dynamic>.from(row as Map)))
+        .map((row) =>
+            PurchaseOrderItem.fromJson(Map<String, dynamic>.from(row as Map)))
         .toList();
   }
 
@@ -136,17 +140,14 @@ class PurchaseRepository {
     required double tax,
     required List<PurchaseOrderItem> lines,
   }) async {
-    final rows = await _db
-        .from('purchase_orders')
-        .insert({
-          'branch_id': branchId,
-          'supplier_id': supplierId,
-          'status': 'draft',
-          'expected_date': expectedDate == null ? null : _date(expectedDate),
-          'notes': notes,
-          'tax': tax,
-        })
-        .select('id') as List;
+    final rows = await _db.from('purchase_orders').insert({
+      'branch_id': branchId,
+      'supplier_id': supplierId,
+      'status': 'draft',
+      'expected_date': expectedDate == null ? null : _date(expectedDate),
+      'notes': notes,
+      'tax': tax,
+    }).select('id') as List;
     final id = (rows.first as Map)['id'] as String;
     if (lines.isNotEmpty) {
       await _db.from('purchase_order_items').insert([
@@ -190,9 +191,40 @@ class PurchaseRepository {
     ]);
   }
 
-  /// Only admins may approve or cancel; the database guard enforces this too.
-  Future<void> setStatus(String id, String status) =>
-      _db.from('purchase_orders').update({'status': status}).eq('id', id);
+  /// Draft -> ordered/cancelled always goes through an RPC. The database owns
+  /// the role check and the status transition; the app never writes `status`
+  /// (or `quantity_received`) with a direct table update.
+  ///
+  /// The parameter/function-name fallbacks keep older deployments working
+  /// while the 0019 status RPC rolls out. All of them are RPCs.
+  Future<void> setStatus(String id, String status) async {
+    final functions = purchaseStatusRpcCandidates(status);
+    PostgrestException? missingFunction;
+    for (final function in functions) {
+      for (final params in [
+        {'p_po': id, 'p_status': status},
+        {'p_id': id, 'p_status': status},
+      ]) {
+        try {
+          await _db.rpc(function, params: params);
+          return;
+        } on PostgrestException catch (error) {
+          // PGRST202 means "function with these arguments does not exist".
+          // Only that case can safely be retried with the next candidate.
+          if (error.code == 'PGRST202') {
+            missingFunction = error;
+            continue;
+          }
+          rethrow;
+        }
+      }
+    }
+    throw missingFunction ??
+        const AppError(
+          'This server does not support changing purchase order status yet.',
+          kind: AppErrorKind.server,
+        );
+  }
 
   Future<void> receive(String poId, List<Map<String, dynamic>> items) =>
       _db.rpc('receive_purchase_order', params: {

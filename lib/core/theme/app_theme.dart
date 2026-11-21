@@ -63,8 +63,8 @@ abstract final class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppColors.radius),
           ),
-          textStyle: GoogleFonts.inter(
-              fontSize: 14, fontWeight: FontWeight.w600),
+          textStyle:
+              GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -107,16 +107,16 @@ abstract final class AppTheme {
                   ? AppColors.pink600
                   : AppColors.muted,
             )),
-        labelTextStyle: WidgetStateProperty.resolveWith((states) =>
-            GoogleFonts.inter(
-              fontSize: 11,
-              color: states.contains(WidgetState.selected)
-                  ? AppColors.pink600
-                  : AppColors.muted,
-              fontWeight: states.contains(WidgetState.selected)
-                  ? FontWeight.w700
-                  : FontWeight.w500,
-            )),
+        labelTextStyle:
+            WidgetStateProperty.resolveWith((states) => GoogleFonts.inter(
+                  fontSize: 11,
+                  color: states.contains(WidgetState.selected)
+                      ? AppColors.pink600
+                      : AppColors.muted,
+                  fontWeight: states.contains(WidgetState.selected)
+                      ? FontWeight.w700
+                      : FontWeight.w500,
+                )),
       ),
       navigationRailTheme: NavigationRailThemeData(
         backgroundColor: AppColors.white,

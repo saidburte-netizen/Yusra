@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 
+import '../device_permissions.dart';
 import '../strings.dart';
 import '../theme/app_colors.dart';
 
@@ -38,7 +40,13 @@ class BarcodeScanButton extends StatelessWidget {
           );
   }
 
-  void _open(BuildContext context) {
+  Future<void> _open(BuildContext context) async {
+    final allowed = await ensureDevicePermission(
+      context,
+      Permission.camera,
+      deniedMessage: S.cameraDenied,
+    );
+    if (!allowed || !context.mounted) return;
     showDialog<void>(
       context: context,
       builder: (_) => BarcodeScannerDialog(onDetected: onDetected),

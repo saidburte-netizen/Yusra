@@ -35,7 +35,11 @@ class PrimaryButton extends StatelessWidget {
                 ? Text(label)
                 : Row(
                     mainAxisSize: MainAxisSize.min,
-                    children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
+                    children: [
+                      Icon(icon, size: 18),
+                      const SizedBox(width: 8),
+                      Text(label)
+                    ],
                   ),
       ),
     );
@@ -73,7 +77,11 @@ class SecondaryButton extends StatelessWidget {
             ? Text(label)
             : Row(
                 mainAxisSize: MainAxisSize.min,
-                children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
+                children: [
+                  Icon(icon, size: 18),
+                  const SizedBox(width: 8),
+                  Text(label)
+                ],
               ),
       ),
     );

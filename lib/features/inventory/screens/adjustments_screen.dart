@@ -56,7 +56,13 @@ class AdjustmentsScreen extends ConsumerWidget {
                     .toList();
                 return Expanded(
                   child: DataTablePlus(
-                    columns: const ['Date', 'Medicine', 'Type', 'Change', 'Reason'],
+                    columns: const [
+                      'Date',
+                      'Medicine',
+                      'Type',
+                      'Change',
+                      'Reason'
+                    ],
                     rows: [
                       for (final movement in history)
                         DataTablePlusRow(
@@ -131,27 +137,33 @@ class AdjustmentsScreen extends ConsumerWidget {
                           ),
                         ),
                     ],
-                    onChanged: (value) => setState(() => batchId = value ?? batchId),
+                    onChanged: (value) =>
+                        setState(() => batchId = value ?? batchId),
                   ),
                   const SizedBox(height: 12),
                   AppDropdown<String>(
                     label: 'Type',
                     value: type,
                     items: const [
-                      DropdownMenuItem(value: 'adjustment', child: Text('Count correction')),
                       DropdownMenuItem(
-                          value: 'expired_writeoff', child: Text('Expired write-off')),
+                          value: 'adjustment', child: Text('Count correction')),
+                      DropdownMenuItem(
+                          value: 'expired_writeoff',
+                          child: Text('Expired write-off')),
                       DropdownMenuItem(value: 'damage', child: Text('Damage')),
                     ],
-                    onChanged: (value) => setState(() => type = value ?? 'adjustment'),
+                    onChanged: (value) =>
+                        setState(() => type = value ?? 'adjustment'),
                   ),
                   const SizedBox(height: 12),
                   AppTextField(
                     label: 'Change (negative to remove)',
                     controller: change,
-                    keyboardType: const TextInputType.numberWithOptions(signed: true),
-                    validator: (value) =>
-                        (int.tryParse(value ?? '') ?? 0) != 0 ? null : 'Must not be zero',
+                    keyboardType:
+                        const TextInputType.numberWithOptions(signed: true),
+                    validator: (value) => (int.tryParse(value ?? '') ?? 0) != 0
+                        ? null
+                        : 'Must not be zero',
                   ),
                   const SizedBox(height: 12),
                   AppTextField(
@@ -186,7 +198,9 @@ class AdjustmentsScreen extends ConsumerWidget {
                       );
                   if (context.mounted) Navigator.pop(context, true);
                 } catch (e) {
-                  if (context.mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
+                  if (context.mounted) {
+                    AppSnackbar.error(context, AppErrorMapper.from(e).message);
+                  }
                 } finally {
                   if (context.mounted) setState(() => busy = false);
                 }

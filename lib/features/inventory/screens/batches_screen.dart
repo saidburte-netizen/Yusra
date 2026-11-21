@@ -53,7 +53,8 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                 final visible = items.where((batch) {
                   return switch (_filter) {
                     'Expired' => batch.daysLeft < 0,
-                    'Under 30 days' => batch.daysLeft >= 0 && batch.daysLeft < 30,
+                    'Under 30 days' =>
+                      batch.daysLeft >= 0 && batch.daysLeft < 30,
                     'Near expiry' =>
                       batch.daysLeft >= 30 && batch.daysLeft <= alertDays,
                     _ => true,
@@ -99,10 +100,13 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                           ],
                         ),
                     ],
-                    filterChips: const ['Expired', 'Under 30 days', 'Near expiry'],
+                    filterChips: const [
+                      'Expired',
+                      'Under 30 days',
+                      'Near expiry'
+                    ],
                     selectedFilter: _filter,
-                    onFilterChanged: (value) =>
-                        setState(() => _filter = value),
+                    onFilterChanged: (value) => setState(() => _filter = value),
                     exportFileName: 'yusra-batches.csv',
                   ),
                 );

@@ -39,25 +39,31 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
         reprint: true,
       );
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      if (mounted) {
+        AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      }
     }
   }
 
   Future<void> _return(Sale sale, List<SaleItem> items) async {
     final role = ref.read(authProvider).profile?.role ?? AppRole.cashier;
     if (!can(role, Modules.saleReturns, PermAction.edit)) {
-      AppSnackbar.error(context, 'Only a pharmacist or admin can process returns.');
+      AppSnackbar.error(
+          context, 'Only a pharmacist or admin can process returns.');
       return;
     }
     final selectable = items.where((item) => item.remaining > 0).toList();
     if (selectable.isEmpty) {
-      AppSnackbar.error(context, 'Everything on this invoice has already been returned.');
+      AppSnackbar.error(
+          context, 'Everything on this invoice has already been returned.');
       return;
     }
     final reason = TextEditingController();
     final method = ValueNotifier<String>('cash');
     final quantities = <String, int>{for (final item in selectable) item.id: 0};
-    final restock = <String, bool>{for (final item in selectable) item.id: true};
+    final restock = <String, bool>{
+      for (final item in selectable) item.id: true
+    };
 
     final submitted = await showDialog<bool>(
       context: context,
@@ -84,9 +90,12 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(item.medicineName),
-                                    Text('Sold ${item.quantity}  •  Returnable ${item.remaining}  •  '
+                                    Text(
+                                        'Sold ${item.quantity}  •  Returnable ${item.remaining}  •  '
                                         '${formatMoney(item.unitPrice)}',
-                                        style: Theme.of(context).textTheme.labelSmall),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelSmall),
                                   ],
                                 ),
                               ),
@@ -115,18 +124,22 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                   const SizedBox(height: 10),
                   ValueListenableBuilder<String>(
                     valueListenable: method,
-                    builder: (context, value, _) => DropdownButtonFormField<String>(
+                    builder: (context, value, _) =>
+                        DropdownButtonFormField<String>(
                       value: value,
                       decoration: const InputDecoration(
                           labelText: 'Refund method', isDense: true),
                       items: const [
                         DropdownMenuItem(value: 'cash', child: Text('Cash')),
-                        DropdownMenuItem(value: 'mobile_money', child: Text('Mobile money')),
+                        DropdownMenuItem(
+                            value: 'mobile_money', child: Text('Mobile money')),
                         DropdownMenuItem(value: 'card', child: Text('Card')),
-                        DropdownMenuItem(value: 'bank_transfer', child: Text('Bank transfer')),
+                        DropdownMenuItem(
+                            value: 'bank_transfer',
+                            child: Text('Bank transfer')),
                       ],
-                      onChanged: (value) => setState(
-                          () => method.value = value ?? 'cash'),
+                      onChanged: (value) =>
+                          setState(() => method.value = value ?? 'cash'),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -159,7 +172,8 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
       final qty = quantities[item.id] ?? 0;
       if (qty <= 0) continue;
       if (qty > item.remaining) {
-        AppSnackbar.error(context, 'Return quantity exceeds what is left for ${item.medicineName}.');
+        AppSnackbar.error(context,
+            'Return quantity exceeds what is left for ${item.medicineName}.');
         return;
       }
       payload.add({
@@ -190,7 +204,8 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
         amount: payload.fold<double>(
           0,
           (sum, entry) {
-            final item = selectable.firstWhere((row) => row.id == entry['sale_item_id']);
+            final item =
+                selectable.firstWhere((row) => row.id == entry['sale_item_id']);
             return sum + item.unitPrice * (entry['quantity'] as int);
           },
         ),
@@ -198,7 +213,9 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
       );
       if (mounted) AppSnackbar.success(context, 'Return processed.');
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      if (mounted) {
+        AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -209,6 +226,8 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
     final sale = ref.watch(saleProvider(widget.id));
     final items = ref.watch(saleItemsProvider(widget.id));
     final payments = ref.watch(salePaymentsProvider(widget.id));
+    final role = ref.watch(authProvider).profile?.role ?? AppRole.cashier;
+    final canReturn = can(role, Modules.saleReturns, PermAction.edit);
 
     return Scaffold(
       body: Padding(
@@ -268,6 +287,12 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                   ),
                 ],
               ),
+              if (value.voidReason != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text('Void reason: ${value.voidReason}',
+                      style: const TextStyle(color: AppColors.danger)),
+                ),
               const SizedBox(height: 18),
               Text('Items', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
@@ -279,14 +304,22 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                       items.when(
                         data: (rows) => DataTablePlus(
                           columns: const [
-                            'Medicine', 'Batch', 'Expiry', 'Qty', 'Returned', 'Price', 'Total',
+                            'Medicine',
+                            'Batch',
+                            'Expiry',
+                            'Qty',
+                            'Returned',
+                            'Price',
+                            'Total',
                           ],
                           rows: [
                             for (final item in rows)
                               DataTablePlusRow(cells: [
                                 item.medicineName,
                                 item.batchNo ?? '—',
-                                item.expiryDate == null ? '—' : formatDate(item.expiryDate!),
+                                item.expiryDate == null
+                                    ? '—'
+                                    : formatDate(item.expiryDate!),
                                 '${item.quantity}',
                                 '${item.returnedQty}',
                                 formatMoney(item.unitPrice),
@@ -295,10 +328,14 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                           ],
                         ),
                         loading: () => const LoadingSkeleton(lines: 3),
-                        error: (error, _) => ErrorState(message: AppErrorMapper.from(error).message),
+                        error: (error, _) => ErrorState(
+                            message: AppErrorMapper.from(error).message,
+                            onRetry: () =>
+                                ref.invalidate(saleItemsProvider(widget.id))),
                       ),
                       const SizedBox(height: 18),
-                      Text('Payments', style: Theme.of(context).textTheme.titleMedium),
+                      Text('Payments',
+                          style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 8),
                       payments.when(
                         data: (rows) => DataTablePlus(
@@ -313,18 +350,22 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                           ],
                         ),
                         loading: () => const LoadingSkeleton(lines: 2),
-                        error: (error, _) => ErrorState(message: AppErrorMapper.from(error).message),
+                        error: (error, _) => ErrorState(
+                            message: AppErrorMapper.from(error).message,
+                            onRetry: () => ref
+                                .invalidate(salePaymentsProvider(widget.id))),
                       ),
                       const SizedBox(height: 18),
                       Row(
                         children: [
-                          if (value.status == 'completed')
+                          if (value.status == 'completed' && canReturn)
                             PrimaryButton(
                               label: _busy ? 'Working…' : 'Process return',
                               icon: Icons.assignment_return,
                               width: 180,
                               loading: _busy,
-                              onPressed: () => _return(value, items.valueOrNull ?? const []),
+                              onPressed: () =>
+                                  _return(value, items.valueOrNull ?? const []),
                             ),
                         ],
                       ),
@@ -335,7 +376,9 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
             ],
           ),
           loading: () => const LoadingSkeleton(lines: 5),
-          error: (error, _) => ErrorState(message: AppErrorMapper.from(error).message),
+          error: (error, _) => ErrorState(
+              message: AppErrorMapper.from(error).message,
+              onRetry: () => ref.invalidate(saleProvider(widget.id))),
         ),
       ),
     );

@@ -172,7 +172,8 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       if (isNew) {
         final inserted = await client
             .from('expenses')
-            .insert({...result.values, 'branch_id': branchId})
+            .insert(
+                {...result.values, 'branch_id': branchId, 'status': 'pending'})
             .select('id')
             .single();
         expenseId = inserted['id'] as String;
@@ -195,8 +196,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
             );
         await client
             .from('expenses')
-            .update({'receipt_path': path})
-            .eq('id', expenseId);
+            .update({'receipt_path': path}).eq('id', expenseId);
       }
 
       if (!mounted) return;
@@ -221,6 +221,28 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
           .eq('id', expense['id']);
       if (!mounted) return;
       AppSnackbar.success(context, S.saved);
+      await _load();
+    } catch (e) {
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
+    }
+  }
+
+  Future<void> _setStatus(Map<String, dynamic> expense, String status) async {
+    final role = ref.read(authProvider).profile?.role;
+    if (role != AppRole.superAdmin &&
+        role != AppRole.admin &&
+        role != AppRole.accountant) {
+      AppSnackbar.error(context, 'Access denied.');
+      return;
+    }
+    try {
+      await SupabaseService.client.rpc('set_expense_status', params: {
+        'p_expense': expense['id'],
+        'p_status': status,
+      });
+      if (!mounted) return;
+      AppSnackbar.success(context,
+          status == 'approved' ? 'Expense approved.' : 'Expense rejected.');
       await _load();
     } catch (e) {
       if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
@@ -259,6 +281,9 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   Widget build(BuildContext context) {
     final role = ref.watch(authProvider).profile?.role ?? AppRole.cashier;
     final canEdit = can(role, Modules.expenses, PermAction.edit);
+    final canApprove = role == AppRole.superAdmin ||
+        role == AppRole.admin ||
+        role == AppRole.accountant;
 
     return Scaffold(
       body: Padding(
@@ -315,20 +340,24 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(S.byCategory,
-                                    style: Theme.of(context).textTheme.titleMedium),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium),
                                 const SizedBox(height: 12),
                                 if (_byCategory.isEmpty)
                                   const Text(S.noData)
                                 else
                                   ..._byCategory.entries.map((entry) => Padding(
-                                        padding: const EdgeInsets.only(bottom: 8),
+                                        padding:
+                                            const EdgeInsets.only(bottom: 8),
                                         child: Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
                                             Row(
                                               mainAxisAlignment:
-                                                  MainAxisAlignment.spaceBetween,
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
                                               children: [
                                                 Text(entry.key),
                                                 MoneyText(entry.value),
@@ -352,61 +381,95 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                     ),
                     const SizedBox(height: 16),
                     Expanded(
-                      child: DataTablePlus(
-                        columns: const [
-                          'Date',
-                          S.category,
-                          'Amount',
-                          S.paymentMethod,
-                          'Description',
-                          S.actionLabel,
-                        ],
-                        filterChips: expenseCategories,
-                        selectedFilter: _categoryFilter,
-                        onFilterChanged: (value) =>
-                            setState(() => _categoryFilter = value),
-                        exportFileName: 'yusra-expenses.csv',
-                        rows: [
-                          for (final expense in _filtered)
-                            DataTablePlusRow(
-                              cells: [
-                                expense['expense_date'] == null
-                                    ? '—'
-                                    : formatDate(
-                                        DateTime.parse(expense['expense_date'] as String)),
-                                (expense['category'] as String?) ?? '—',
-                                formatMoney(_amount(expense)),
-                                _paymentMethodLabel(
-                                    expense['payment_method'] as String?),
-                                (expense['description'] as String?) ?? '—',
-                                '',
+                      child: _filtered.isEmpty
+                          ? const EmptyState(
+                              message: 'No expenses for this month.',
+                              icon: Icons.account_balance_wallet_outlined)
+                          : DataTablePlus(
+                              columns: const [
+                                'Date',
+                                S.category,
+                                'Amount',
+                                S.paymentMethod,
+                                'Status',
+                                'Description',
+                                S.actionLabel,
                               ],
-                              actions: [
-                                if (expense['receipt_path'] != null)
-                                  IconButton(
-                                    tooltip: S.receiptPhoto,
-                                    icon: const Icon(
-                                        Icons.receipt_long_outlined,
-                                        size: 18),
-                                    onPressed: () => _openReceipt(
-                                        expense['receipt_path'] as String),
-                                  ),
-                                if (canEdit)
-                                  IconButton(
-                                    tooltip: S.edit,
-                                    icon: const Icon(Icons.edit_outlined, size: 18),
-                                    onPressed: () => _edit(expense),
-                                  ),
-                                if (canEdit)
-                                  IconButton(
-                                    tooltip: S.delete,
-                                    icon: const Icon(Icons.delete_outline, size: 18),
-                                    onPressed: () => _delete(expense),
+                              filterChips: expenseCategories,
+                              selectedFilter: _categoryFilter,
+                              onFilterChanged: (value) =>
+                                  setState(() => _categoryFilter = value),
+                              exportFileName: 'yusra-expenses.csv',
+                              rows: [
+                                for (final expense in _filtered)
+                                  DataTablePlusRow(
+                                    cells: [
+                                      expense['expense_date'] == null
+                                          ? '—'
+                                          : formatDate(DateTime.parse(
+                                              expense['expense_date']
+                                                  as String)),
+                                      (expense['category'] as String?) ?? '—',
+                                      formatMoney(_amount(expense)),
+                                      _paymentMethodLabel(
+                                          expense['payment_method'] as String?),
+                                      (expense['status'] as String?) ??
+                                          'approved',
+                                      (expense['description'] as String?) ??
+                                          '—',
+                                      '',
+                                    ],
+                                    actions: [
+                                      if (expense['receipt_path'] != null)
+                                        IconButton(
+                                          tooltip: S.receiptPhoto,
+                                          icon: const Icon(
+                                              Icons.receipt_long_outlined,
+                                              size: 18),
+                                          onPressed: () => _openReceipt(
+                                              expense['receipt_path']
+                                                  as String),
+                                        ),
+                                      if (canApprove &&
+                                          (expense['status'] as String?) ==
+                                              'pending')
+                                        IconButton(
+                                          tooltip: 'Approve',
+                                          icon: const Icon(
+                                              Icons.check_circle_outline,
+                                              size: 18),
+                                          onPressed: () =>
+                                              _setStatus(expense, 'approved'),
+                                        ),
+                                      if (canApprove &&
+                                          (expense['status'] as String?) ==
+                                              'pending')
+                                        IconButton(
+                                          tooltip: 'Reject',
+                                          icon: const Icon(
+                                              Icons.cancel_outlined,
+                                              size: 18),
+                                          onPressed: () =>
+                                              _setStatus(expense, 'rejected'),
+                                        ),
+                                      if (canEdit)
+                                        IconButton(
+                                          tooltip: S.edit,
+                                          icon: const Icon(Icons.edit_outlined,
+                                              size: 18),
+                                          onPressed: () => _edit(expense),
+                                        ),
+                                      if (canEdit)
+                                        IconButton(
+                                          tooltip: S.delete,
+                                          icon: const Icon(Icons.delete_outline,
+                                              size: 18),
+                                          onPressed: () => _delete(expense),
+                                        ),
+                                    ],
                                   ),
                               ],
                             ),
-                        ],
-                      ),
                     ),
                   ],
                 ),
@@ -550,7 +613,9 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text(S.cancel)),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(S.cancel)),
         ElevatedButton(onPressed: _submit, child: const Text(S.save)),
       ],
     );

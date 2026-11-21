@@ -50,7 +50,8 @@ class SupabaseRest {
 
   /// Service-role client for seeding. The key is supplied through the
   /// environment at runtime and is never stored in the repository.
-  factory SupabaseRest.service({required String url, required String serviceRoleKey}) =>
+  factory SupabaseRest.service(
+          {required String url, required String serviceRoleKey}) =>
       SupabaseRest(url: url, anonKey: serviceRoleKey, token: serviceRoleKey);
 
   /// Creates an Auth user through the admin endpoint. The `handle_new_user`
@@ -135,9 +136,7 @@ class SupabaseRest {
     );
     final decoded = jsonDecode(response.body);
     if (decoded is! List) return [];
-    return decoded
-        .map((row) => Map<String, dynamic>.from(row as Map))
-        .toList();
+    return decoded.map((row) => Map<String, dynamic>.from(row as Map)).toList();
   }
 
   /// Inserts and returns the created rows (PostgREST `return=representation`).
@@ -153,9 +152,7 @@ class SupabaseRest {
     );
     final decoded = jsonDecode(response.body);
     if (decoded is! List) return [];
-    return decoded
-        .map((row) => Map<String, dynamic>.from(row as Map))
-        .toList();
+    return decoded.map((row) => Map<String, dynamic>.from(row as Map)).toList();
   }
 
   /// Returns the HTTP status so tests can assert that RLS refused a write.

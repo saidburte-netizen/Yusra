@@ -17,7 +17,8 @@ class StockOverviewScreen extends ConsumerStatefulWidget {
   const StockOverviewScreen({super.key});
 
   @override
-  ConsumerState<StockOverviewScreen> createState() => _StockOverviewScreenState();
+  ConsumerState<StockOverviewScreen> createState() =>
+      _StockOverviewScreenState();
 }
 
 class _StockOverviewScreenState extends ConsumerState<StockOverviewScreen> {
@@ -66,7 +67,8 @@ class _StockOverviewScreenState extends ConsumerState<StockOverviewScreen> {
                   0,
                   (sum, row) => sum + row.availableQty * row.costPrice,
                 );
-                final units = rows.fold<int>(0, (sum, row) => sum + row.availableQty);
+                final units =
+                    rows.fold<int>(0, (sum, row) => sum + row.availableQty);
                 final visible = <StockSummary>[];
                 final statusOf = <String, StockStatus>{};
                 for (final row in rows) {
@@ -78,7 +80,8 @@ class _StockOverviewScreenState extends ConsumerState<StockOverviewScreen> {
                     alertDays: alertDays,
                   );
                   statusOf[row.medicineId] = status;
-                  if (_statusFilter == null || StockRules.label(status) == _statusFilter) {
+                  if (_statusFilter == null ||
+                      StockRules.label(status) == _statusFilter) {
                     visible.add(row);
                   }
                 }
@@ -141,14 +144,16 @@ class _StockOverviewScreenState extends ConsumerState<StockOverviewScreen> {
                                 actions: [
                                   IconButton(
                                     tooltip: 'Details',
-                                    icon: const Icon(Icons.open_in_new, size: 18),
-                                    onPressed: () => context
-                                        .go('/inventory/medicines/${row.medicineId}'),
+                                    icon:
+                                        const Icon(Icons.open_in_new, size: 18),
+                                    onPressed: () => context.go(
+                                        '/inventory/medicines/${row.medicineId}'),
                                   ),
                                 ],
                               ),
                           ],
-                          filterChips: StockStatus.values.map(StockRules.label).toList(),
+                          filterChips:
+                              StockStatus.values.map(StockRules.label).toList(),
                           selectedFilter: _statusFilter,
                           onFilterChanged: (value) =>
                               setState(() => _statusFilter = value),

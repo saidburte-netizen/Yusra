@@ -80,8 +80,8 @@ class _PurchaseOrdersScreenState extends ConsumerState<PurchaseOrdersScreen> {
                 ),
                 data: (orders) {
                   final visible = orders
-                      .where((order) =>
-                          _status == null || order.status == _status)
+                      .where(
+                          (order) => _status == null || order.status == _status)
                       .toList();
                   return DataTablePlus(
                     columns: const [

@@ -64,7 +64,31 @@ abstract final class S {
   static const signedInAs = 'Signed in as';
   static const roleUnknown = 'unknown';
   static const accountProblem = 'We could not load your account details.';
-  static const forbiddenBody = 
+  static const profileErrorTitle = 'Could not load your account';
+  static const profileErrorBody =
+      'Your account details could not be read. Retry, or sign out and sign in again.';
+  static const emailNotConfirmed =
+      'Confirm your email address before signing in.';
+  static const tooManyAttempts =
+      'Too many attempts. Wait a moment and try again.';
+  static const noConnection =
+      'No connection. Check your internet and try again.';
+  static const notFoundTitle = '404';
+  static const notFoundBody = 'This page does not exist.';
+  static const backToHome = 'Back to home';
+  static const permissionNeeded = 'Permission needed';
+  static const openSettings = 'Open settings';
+  static const cameraDenied =
+      'Camera access is off. Enable it in settings to scan barcodes, or type the code.';
+  static const photosDenied =
+      'Photo access is off. Enable it in settings to attach an image.';
+  static const widgetKit = 'Widget kit';
+  static const rangeAll = 'All time';
+  static const rangeToday = 'Today';
+  static const rangeWeek = 'This week';
+  static const rangeMonth = 'This month';
+  static const rangeYear = 'This year';
+  static const forbiddenBody =
       'You do not have permission to open this page. Contact an administrator if you think this is a mistake.';
   static const backToDashboard = 'Back to dashboard';
   static const comingSoon = 'Coming soon';
@@ -160,7 +184,8 @@ abstract final class S {
   static const purchaseOrdersToReceive = 'Orders waiting to be received';
 
   // Expenses
-  static const expenseCategories = 'Rent, Salaries, Utilities, Transport, Supplies, Other';
+  static const expenseCategories =
+      'Rent, Salaries, Utilities, Transport, Supplies, Other';
   static const category = 'Category';
   static const paymentMethod = 'Payment method';
   static const receiptPhoto = 'Receipt photo';
@@ -196,6 +221,6 @@ abstract final class S {
   static const pendingApproval = 'Pending approval';
   static const approved = 'Approved';
   static const dateTimeLabel = 'Date & time';
-  static const auditNote = 'Actions are recorded with your email and time and cannot be edited or deleted without super admin approval.';
-
+  static const auditNote =
+      'Actions are recorded with your email and time and cannot be edited or deleted without super admin approval.';
 }

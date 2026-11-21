@@ -10,6 +10,7 @@ import '../features/admin/users_screen.dart';
 import '../features/auth/forbidden_screen.dart';
 import '../features/auth/forgot_password_screen.dart';
 import '../features/auth/login_screen.dart';
+import '../features/auth/profile_error_screen.dart';
 import '../features/auth/profile_screen.dart';
 import '../features/auth/reset_password_screen.dart';
 import '../features/customers/customers_routes.dart';
@@ -36,7 +37,7 @@ import 'widgets.dart';
 /// contributes its own route list, which Agent A only wires in here.
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    initialLocation: '/dashboard',
+    initialLocation: homeFor(ref.read(authProvider).profile?.role),
     // Bumping this notifier after auth changes makes go_router re-run redirect.
     refreshListenable: authRevision,
     redirect: (context, state) =>
@@ -52,14 +53,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 const Icon(Icons.explore_off_outlined,
                     size: 52, color: AppColors.gold500),
                 const SizedBox(height: 16),
-                Text('404', style: Theme.of(context).textTheme.titleLarge),
+                Text(S.notFoundTitle,
+                    style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
-                const Text('This page does not exist.'),
+                const Text(S.notFoundBody),
                 const SizedBox(height: 20),
                 PrimaryButton(
-                  label: S.backToDashboard,
+                  label: S.backToHome,
                   width: 200,
-                  onPressed: () => context.go('/dashboard'),
+                  onPressed: () {
+                    final auth = ref.read(authProvider);
+                    context.go(homeFor(auth.profile?.role));
+                  },
                 ),
               ],
             ),
@@ -83,6 +88,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/forbidden',
         builder: (context, state) => const ForbiddenScreen(),
+      ),
+      GoRoute(
+        path: '/profile_error',
+        builder: (context, state) => const ProfileErrorScreen(),
       ),
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
@@ -143,46 +152,75 @@ const Set<String> _publicPaths = {
   '/reset-password',
 };
 
+/// Exportable so tests can assert every route maps to the intended module.
+String? moduleForLocation(String location) {
+  // Most specific routes first; the generic menu-prefix loop below is only a
+  // fallback for screens that live directly under a module path.
+  if (location == '/sales/returns' || location.startsWith('/sales/returns/')) {
+    return Modules.saleReturns;
+  }
+  const stockPaths = [
+    '/inventory/batches',
+    '/inventory/adjustments',
+    '/inventory/movements',
+    '/inventory/alerts',
+    '/inventory/stocktake',
+  ];
+  for (final path in stockPaths) {
+    if (location == path || location.startsWith('$path/')) return Modules.stock;
+  }
+  for (final item in allMenuItems) {
+    if (location == item.path || location.startsWith('${item.path}/')) {
+      return item.module;
+    }
+  }
+  return null;
+}
+
 /// Pure redirect logic, kept public so it can be unit-tested without a router.
 String? redirectFor(AuthState auth, String location) {
+  final waiting = auth.status == AuthStatus.initial ||
+      auth.status == AuthStatus.loading ||
+      auth.status == AuthStatus.profileLoading;
+
   if (_publicPaths.contains(location)) {
     if (location == '/login' &&
         auth.status == AuthStatus.authenticated &&
         auth.profile?.isActive == true) {
-      return '/dashboard';
+      return homeFor(auth.profile!.role);
+    }
+    return null;
+  }
+
+  if (location == '/profile_error') {
+    if (auth.status == AuthStatus.unauthenticated) return '/login';
+    if (waiting) return null;
+    if (auth.status == AuthStatus.authenticated &&
+        auth.profile?.isActive == true) {
+      return homeFor(auth.profile!.role);
     }
     return null;
   }
 
   if (location == '/forbidden') {
-    if (auth.status == AuthStatus.unauthenticated ||
-        auth.status == AuthStatus.initial) {
-      return '/login';
+    if (auth.status == AuthStatus.unauthenticated || waiting) return '/login';
+    if (auth.status == AuthStatus.profileError) return '/profile_error';
+    if (auth.status == AuthStatus.authenticated &&
+        auth.profile?.isActive == true) {
+      return homeFor(auth.profile!.role);
     }
     return null;
   }
 
-  if (auth.status != AuthStatus.authenticated) {
-    return '/login';
-  }
-  if (auth.profile?.isActive != true) {
-    return '/forbidden';
-  }
+  // Wait for both session and profile before deciding where to send anyone.
+  if (waiting) return null;
+  if (auth.status == AuthStatus.profileError) return '/profile_error';
+  if (auth.status != AuthStatus.authenticated) return '/login';
+  if (auth.profile?.isActive != true) return '/forbidden';
 
-  final module = _moduleFor(location);
-  if (module != null &&
-      !can(auth.profile!.role, module, PermAction.view)) {
+  final module = moduleForLocation(location);
+  if (module != null && !can(auth.profile!.role, module, PermAction.view)) {
     return '/forbidden';
-  }
-  return null;
-}
-
-/// Maps a location to the contract module used by the permission matrix.
-String? _moduleFor(String location) {
-  for (final item in allMenuItems) {
-    if (location == item.path || location.startsWith('${item.path}/')) {
-      return item.module;
-    }
   }
   return null;
 }

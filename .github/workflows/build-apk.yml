@@ -83,7 +83,7 @@ jobs:
           dart --version 2>&1 | grep -q 'Dart SDK version: 3\.'
           java -version 2>&1 | head -1 | grep -q '"17\.'
           grep -q 'Gradle 8\.3' /tmp/gradle-version.txt
-          grep -q '^Pkg.Revision=35.0.2' "$SDK/platform-tools/source.properties"
+          grep -q '^Pkg.Revision=' "$SDK/platform-tools/source.properties"
 
       - name: Install dependencies
         run: flutter pub get

@@ -55,12 +55,21 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
     }
   }
 
+  List<AppRole> get _allowedRoles {
+    final actor = ref.read(authProvider).profile?.role;
+    if (actor == AppRole.superAdmin) return AppRole.values;
+    return AppRole.values.where((role) => role != AppRole.superAdmin).toList();
+  }
+
   List<Map<String, dynamic>> get _filtered => _users.where((row) {
         if (_roleFilter != null && row['role'] != _roleFilter) return false;
-        if (_statusFilter != null && row['is_active'] != (_statusFilter == S.active)) {
+        if (_statusFilter != null &&
+            row['is_active'] != (_statusFilter == S.active)) {
           return false;
         }
-        if (_branchFilter != null && row['branch_id'] != _branchFilter) return false;
+        if (_branchFilter != null && row['branch_id'] != _branchFilter) {
+          return false;
+        }
         return true;
       }).toList();
 
@@ -70,9 +79,9 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       .firstWhere((_) => true, orElse: () => '—');
 
   /// Keeps the signed-in user's own permissions fresh and drops cached users.
-  void _afterUserMutation(Object? userId) {
+  Future<void> _afterUserMutation(Object? userId) async {
     if (userId != null && userId == ref.read(authProvider).profile?.id) {
-      ref.invalidate(authProvider);
+      await ref.read(authProvider.notifier).refreshProfile();
     }
     ref.invalidateCache(CacheTag.users);
   }
@@ -80,7 +89,10 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
   Future<void> _createUser() async {
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (_) => const _UserFormDialog(),
+      builder: (_) => _UserFormDialog(
+        allowedRoles: _allowedRoles,
+        branches: _branches,
+      ),
     );
     if (result == null) return;
     setState(() => _loading = true);
@@ -89,10 +101,10 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
         'admin-create-user',
         body: result,
       );
-      final rawData = response.data;
-      final data = rawData is String ? jsonDecode(rawData) : rawData;
+      final data = _decodeEdgeResponse(response.data);
       final tempPassword = data is Map
-          ? (data['temporary_password'] ?? data['temporaryPassword'])?.toString()
+          ? (data['temporary_password'] ?? data['temporaryPassword'])
+              ?.toString()
           : null;
       if (!mounted) return;
       setState(() => _loading = false);
@@ -147,6 +159,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) => _UserFormDialog(
+        allowedRoles: _allowedRoles,
+        branches: _branches,
         initialRole: user['role'] as String?,
         initialBranch: user['branch_id'] as String?,
         initialName: user['full_name'] as String?,
@@ -155,16 +169,18 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
     );
     if (result == null) return;
     try {
-      await SupabaseService.client
-          .from('profiles')
-          .update({
-            'role': result['role'],
-            'branch_id': result['branch_id'],
-            'full_name': result['full_name'],
-          })
-          .eq('id', user['id']);
+      // Privileged access changes go through the SECURITY DEFINER RPC.
+      // full_name is self-service only via update_my_profile; an admin edit
+      // must not silently rewrite it.
+      await SupabaseService.client.rpc('set_user_access', params: {
+        'p_user': user['id'],
+        'p_role': result['role'],
+        'p_branch': result['branch_id'],
+        'p_active': user['is_active'] == true,
+      });
       if (!mounted) return;
-      _afterUserMutation(user['id']);
+      await _afterUserMutation(user['id']);
+      if (!mounted) return;
       AppSnackbar.success(context, S.saved);
       await _load();
     } catch (e) {
@@ -182,16 +198,20 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
     final confirm = await showConfirmDialog(
       context,
       title: active ? S.reactivate : S.deactivate,
-      message: '${active ? S.reactivate : S.deactivate} ${user['full_name'] ?? ''}?',
+      message:
+          '${active ? S.reactivate : S.deactivate} ${user['full_name'] ?? ''}?',
     );
     if (confirm != true) return;
     try {
-      await SupabaseService.client
-          .from('profiles')
-          .update({'is_active': active})
-          .eq('id', user['id']);
+      await SupabaseService.client.rpc('set_user_access', params: {
+        'p_user': user['id'],
+        'p_role': user['role'],
+        'p_branch': user['branch_id'],
+        'p_active': active,
+      });
       if (!mounted) return;
-      _afterUserMutation(user['id']);
+      await _afterUserMutation(user['id']);
+      if (!mounted) return;
       AppSnackbar.success(context, S.saved);
       await _load();
     } catch (e) {
@@ -200,10 +220,17 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
   }
 
   Future<void> _resetPassword(Map<String, dynamic> user) async {
+    final actor = ref.read(authProvider).profile?.role ?? AppRole.cashier;
+    final target = AppRoleX.fromDb(user['role'] as String?) ?? AppRole.cashier;
+    if (!canManageUser(actor, target)) {
+      AppSnackbar.error(context, S.forbidden);
+      return;
+    }
     final confirm = await showConfirmDialog(
       context,
       title: S.resetPassword,
-      message: 'Send a new temporary password to ${user['email'] ?? 'this user'}?',
+      message:
+          'Send a new temporary password to ${user['email'] ?? 'this user'}?',
       danger: false,
     );
     if (confirm != true) return;
@@ -212,7 +239,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
         'admin-reset-password',
         body: {'user_id': user['id']},
       );
-      final data = response.data;
+      final data = _decodeEdgeResponse(response.data);
       final temp = data is Map ? data['temporary_password']?.toString() : null;
       if (!mounted) return;
       if (temp != null) {
@@ -222,7 +249,9 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
             title: const Text(S.temporaryPassword),
             content: SelectableText(temp),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text(S.close)),
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(S.close)),
             ],
           ),
         );
@@ -277,9 +306,11 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                             label: S.role,
                             value: _roleFilter,
                             items: [
-                              const DropdownMenuItem(value: null, child: Text(S.all)),
+                              const DropdownMenuItem(
+                                  value: null, child: Text(S.all)),
                               for (final r in AppRole.values)
-                                DropdownMenuItem(value: r.dbName, child: Text(r.label)),
+                                DropdownMenuItem(
+                                    value: r.dbName, child: Text(r.label)),
                             ],
                             onChanged: (v) => setState(() => _roleFilter = v),
                           ),
@@ -291,8 +322,10 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                             value: _statusFilter,
                             items: const [
                               DropdownMenuItem(value: null, child: Text(S.all)),
-                              DropdownMenuItem(value: S.active, child: Text(S.active)),
-                              DropdownMenuItem(value: S.inactive, child: Text(S.inactive)),
+                              DropdownMenuItem(
+                                  value: S.active, child: Text(S.active)),
+                              DropdownMenuItem(
+                                  value: S.inactive, child: Text(S.inactive)),
                             ],
                             onChanged: (v) => setState(() => _statusFilter = v),
                           ),
@@ -303,7 +336,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                             label: S.branch,
                             value: _branchFilter,
                             items: [
-                              const DropdownMenuItem(value: null, child: Text(S.all)),
+                              const DropdownMenuItem(
+                                  value: null, child: Text(S.all)),
                               for (final b in _branches)
                                 DropdownMenuItem(
                                   value: b['id'] as String?,
@@ -319,7 +353,12 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                     Expanded(
                       child: DataTablePlus(
                         columns: const [
-                          S.fullName, S.email, S.role, S.branch, S.status, S.actionLabel,
+                          S.fullName,
+                          S.email,
+                          S.role,
+                          S.branch,
+                          S.status,
+                          S.actionLabel,
                         ],
                         rows: [
                           for (final user in _filtered)
@@ -327,21 +366,27 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                               cells: [
                                 (user['full_name'] as String?) ?? '—',
                                 (user['email'] as String?) ?? '—',
-                                AppRoleX.fromDb(user['role'] as String?)?.label ?? '—',
+                                AppRoleX.fromDb(user['role'] as String?)
+                                        ?.label ??
+                                    '—',
                                 _branchName(user['branch_id'] as String?),
-                                user['is_active'] == true ? S.active : S.inactive,
+                                user['is_active'] == true
+                                    ? S.active
+                                    : S.inactive,
                               ],
                               actions: [
                                 if (canEdit)
                                   IconButton(
                                     tooltip: S.edit,
-                                    icon: const Icon(Icons.edit_outlined, size: 18),
+                                    icon: const Icon(Icons.edit_outlined,
+                                        size: 18),
                                     onPressed: () => _editUser(user),
                                   ),
                                 if (canEdit)
                                   IconButton(
                                     tooltip: S.resetPassword,
-                                    icon: const Icon(Icons.lock_reset_outlined, size: 18),
+                                    icon: const Icon(Icons.lock_reset_outlined,
+                                        size: 18),
                                     onPressed: () => _resetPassword(user),
                                   ),
                                 if (canEdit)
@@ -355,8 +400,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                                           : Icons.person_outline,
                                       size: 18,
                                     ),
-                                    onPressed: () =>
-                                        _setActive(user, user['is_active'] != true),
+                                    onPressed: () => _setActive(
+                                        user, user['is_active'] != true),
                                   ),
                               ],
                             ),
@@ -373,14 +418,33 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
   }
 }
 
+/// Edge Functions return typed `{error:{code,message}}` bodies. Decode both
+/// raw JSON strings and already-decoded maps, and turn typed errors into a
+/// mapped AppError so no raw function exception reaches the UI.
+Object _decodeEdgeResponse(Object? raw) {
+  final data = raw is String ? jsonDecode(raw) : raw;
+  if (data is Map && data['error'] is Map) {
+    final error = data['error'] as Map;
+    throw AppError(
+      error['message']?.toString() ?? S.somethingWrong,
+      kind: AppErrorKind.server,
+    );
+  }
+  return data ?? const <String, dynamic>{};
+}
+
 class _UserFormDialog extends StatefulWidget {
   const _UserFormDialog({
+    required this.allowedRoles,
+    required this.branches,
     this.initialRole,
     this.initialBranch,
     this.initialName,
     this.showPasswordFields = true,
   });
 
+  final List<AppRole> allowedRoles;
+  final List<Map<String, dynamic>> branches;
   final String? initialRole;
   final String? initialBranch;
   final String? initialName;
@@ -396,7 +460,6 @@ class _UserFormDialogState extends State<_UserFormDialog> {
   late final TextEditingController _name;
   String? _role;
   String? _branch;
-  List<Map<String, dynamic>> _branches = const [];
 
   @override
   void initState() {
@@ -405,10 +468,9 @@ class _UserFormDialogState extends State<_UserFormDialog> {
     _name = TextEditingController(text: widget.initialName ?? '');
     _role = widget.initialRole;
     _branch = widget.initialBranch;
-    if (SupabaseService.isReady) {
-      SupabaseService.client.from('branches').select().order('name').then((rows) {
-        if (mounted) setState(() => _branches = List<Map<String, dynamic>>.from(rows as List));
-      }).catchError((_) {});
+    if (_role != null &&
+        !widget.allowedRoles.any((role) => role.dbName == _role)) {
+      _role = null;
     }
   }
 
@@ -435,20 +497,22 @@ class _UserFormDialogState extends State<_UserFormDialog> {
                   label: S.email,
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
-                  validator: (v) => v == null || !v.contains('@') ? S.emailInvalid : null,
+                  validator: (v) =>
+                      v == null || !v.contains('@') ? S.emailInvalid : null,
                 ),
               if (widget.showPasswordFields) const SizedBox(height: 12),
               AppTextField(
                 label: S.fullName,
                 controller: _name,
-                validator: (v) => v == null || v.trim().isEmpty ? S.required : null,
+                validator: (v) =>
+                    v == null || v.trim().isEmpty ? S.required : null,
               ),
               const SizedBox(height: 12),
               AppDropdown<String>(
                 label: S.role,
                 value: _role,
                 items: [
-                  for (final r in AppRole.values)
+                  for (final r in widget.allowedRoles)
                     DropdownMenuItem(value: r.dbName, child: Text(r.label)),
                 ],
                 onChanged: (v) => setState(() => _role = v),
@@ -459,7 +523,7 @@ class _UserFormDialogState extends State<_UserFormDialog> {
                 label: S.branch,
                 value: _branch,
                 items: [
-                  for (final b in _branches)
+                  for (final b in widget.branches)
                     DropdownMenuItem(
                       value: b['id'] as String?,
                       child: Text((b['name'] as String?) ?? '—'),
@@ -472,7 +536,9 @@ class _UserFormDialogState extends State<_UserFormDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text(S.cancel)),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(S.cancel)),
         ElevatedButton(
           onPressed: () {
             if (!_formKey.currentState!.validate()) return;

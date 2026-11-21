@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'dart:io';
+
+import 'dart:io' if (dart.library.io) 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -164,7 +165,9 @@ class AppErrorMapper {
         return 'This feature is not available on the server yet.';
     }
     final message = error.message.toLowerCase();
-    if (message.contains('shift')) return 'Check the open cash shift and try again.';
+    if (message.contains('shift')) {
+      return 'Check the open cash shift and try again.';
+    }
     if (message.contains('stock') || message.contains('quantity')) {
       return 'There is not enough stock to complete this operation.';
     }

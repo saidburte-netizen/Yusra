@@ -1,90 +1,123 @@
 // Issues a new temporary password for a user. Uses the service-role key only
 // inside this Edge Function; the Flutter app never holds it.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders, errors, json } from '../_shared/http.ts';
+import {
+  readJsonObject,
+  requiredString,
+  requiredUuid,
+  temporaryPassword,
+  ValidationError,
+} from '../_shared/validate.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+const BODY_KEYS = ['user_id'] as const;
 
-function temporaryPassword(): string {
-  const alphabet =
-    'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
-  const bytes = new Uint8Array(14);
-  crypto.getRandomValues(bytes);
-  let password = '';
-  for (const byte of bytes) password += alphabet[byte % alphabet.length];
-  return password;
+type AdminClient = ReturnType<typeof createClient>;
+
+interface Profile {
+  role: string | null;
+  is_active: boolean | null;
+  branch_id: string | null;
 }
 
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
+async function writeAudit(admin: AdminClient, entry: Record<string, unknown>) {
+  const { error } = await admin.from('audit_logs').insert(entry);
+  if (error) {
+    console.error('admin-reset-password: audit insert failed:', error.message);
+  }
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response(null, { status: 204, headers: corsHeaders(req) });
   }
-  if (req.method !== 'POST') {
-    return json({ error: 'Method not allowed' }, 405);
-  }
+  if (req.method !== 'POST') return errors.methodNotAllowed(req);
 
   try {
     const url = Deno.env.get('SUPABASE_URL');
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
     if (!url || !serviceKey || !anonKey) {
-      throw new Error('Server is not configured');
+      console.error('admin-reset-password: Supabase environment is not configured');
+      return errors.internal(req);
     }
 
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) throw new Error('Please sign in again');
+    if (!authHeader || !/^Bearer\s+\S+$/i.test(authHeader)) {
+      return errors.unauthenticated(req);
+    }
 
     const caller = createClient(url, anonKey, {
       global: { headers: { Authorization: authHeader } },
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const { data: identity, error: identityError } = await caller.auth.getUser();
-    if (identityError || !identity.user) throw new Error('Please sign in again');
+    if (identityError || !identity?.user) return errors.unauthenticated(req);
 
+    // Role is re-read from profiles through the service role on every call.
     const admin = createClient(url, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { data: actor, error: actorError } = await admin
+    const { data: actorRow, error: actorError } = await admin
       .from('profiles')
       .select('role, is_active, branch_id')
       .eq('id', identity.user.id)
-      .single();
-    if (actorError || !actor) throw new Error('Profile not found');
-    if (!actor.is_active) throw new Error('This account is inactive');
+      .maybeSingle();
+    if (actorError) {
+      console.error('admin-reset-password: profile lookup failed:', actorError.message);
+      return errors.internal(req);
+    }
+    if (!actorRow) {
+      return errors.notFound(req, 'Your staff profile was not found.');
+    }
+    const actor = actorRow as Profile;
+    if (!actor.is_active) {
+      return errors.forbidden(req, 'This account is inactive.');
+    }
     if (actor.role !== 'super_admin' && actor.role !== 'admin') {
-      throw new Error('You do not have permission to reset passwords');
+      return errors.forbidden(req);
     }
 
-    const body = await req.json();
-    const userId = String(body.user_id ?? '');
-    if (!userId) throw new Error('Select a user');
+    let body: Record<string, unknown>;
+    try {
+      body = await readJsonObject(req, BODY_KEYS);
+    } catch (error) {
+      if (error instanceof ValidationError) return errors.validation(req, error.message);
+      return errors.badRequest(req);
+    }
 
-    const { data: target, error: targetError } = await admin
+    let userId: string;
+    try {
+      userId = requiredUuid(requiredString(body.user_id, 'user_id', 36), 'user_id');
+    } catch (error) {
+      if (error instanceof ValidationError) return errors.validation(req, error.message);
+      return errors.validation(req, 'The submitted details are not valid.');
+    }
+
+    const { data: targetRow, error: targetError } = await admin
       .from('profiles')
       .select('role, branch_id, is_active')
       .eq('id', userId)
-      .single();
-    if (targetError || !target) throw new Error('User not found');
-    if (!target.is_active) throw new Error('This account is inactive');
+      .maybeSingle();
+    if (targetError) {
+      console.error('admin-reset-password: target lookup failed:', targetError.message);
+      return errors.internal(req);
+    }
+    if (!targetRow) {
+      return errors.notFound(req, 'That user was not found.');
+    }
+    const target = targetRow as Profile;
+    if (!target.is_active) {
+      return errors.forbidden(req, 'That account is inactive.');
+    }
     if (target.role === 'super_admin' && actor.role !== 'super_admin') {
-      throw new Error('Only a super admin can reset a super admin');
+      return errors.forbidden(req, 'Only a super admin can reset a super admin.');
     }
     if (
       actor.role !== 'super_admin' &&
-      target.branch_id !== actor.branch_id
+      (!actor.branch_id || target.branch_id !== actor.branch_id)
     ) {
-      throw new Error('You can only manage users in your own branch');
+      return errors.forbidden(req, 'You can only manage users in your own branch.');
     }
 
     const password = temporaryPassword();
@@ -98,29 +131,29 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({ password }),
     });
     if (!response.ok) {
-      const failure = await response.json();
-      const message = failure.msg ?? failure.message ?? 'Could not reset the password';
-      throw new Error(String(message));
+      const status = response.status;
+      console.error('admin-reset-password: Auth admin API failed with status', status);
+      if (status === 404) return errors.notFound(req, 'That user was not found.');
+      return errors.internal(req);
     }
 
-    try {
-      await admin.from('audit_logs').insert({
-        user_id: identity.user.id,
-        action: 'reset_password',
-        table_name: 'profiles',
-        record_id: userId,
-        branch_id: target.branch_id,
-        old_data: null,
-        new_data: { action: 'reset_password' },
-        created_at: new Date().toISOString(),
-      });
-    } catch {
-      // Audit is best effort.
-    }
+    await writeAudit(admin, {
+      user_id: identity.user.id,
+      action: 'reset_password',
+      table_name: 'profiles',
+      record_id: userId,
+      branch_id: target.branch_id,
+      old_data: null,
+      new_data: { action: 'reset_password' },
+      created_at: new Date().toISOString(),
+    });
 
-    return json({ user_id: userId, temporary_password: password });
+    return json(req, { user_id: userId, temporary_password: password });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Something went wrong';
-    return json({ error: message }, 400);
+    console.error(
+      'admin-reset-password: unexpected error:',
+      error instanceof Error ? error.message : String(error),
+    );
+    return errors.internal(req);
   }
 });

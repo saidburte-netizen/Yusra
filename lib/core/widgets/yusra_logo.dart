@@ -56,7 +56,8 @@ class YusraLogo extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            SizedBox(width: markSize, height: markSize, child: _mark(mono: mono)),
+            SizedBox(
+                width: markSize, height: markSize, child: _mark(mono: mono)),
             SizedBox(width: markSize * 0.12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,

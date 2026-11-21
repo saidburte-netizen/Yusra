@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/dates.dart';
@@ -118,7 +119,9 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen>
                 '${row.availableQty}',
                 '${row.reorderLevel}',
                 '${StockRules.suggestedOrder(row.reorderLevel, row.availableQty)}',
-                row.nearestExpiry == null ? '—' : formatDate(row.nearestExpiry!),
+                row.nearestExpiry == null
+                    ? '—'
+                    : formatDate(row.nearestExpiry!),
               ],
             ),
         ],
@@ -150,9 +153,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen>
                 ],
               ),
           ],
-          exportFileName: expired
-              ? 'yusra-expired.csv'
-              : 'yusra-expiring.csv',
+          exportFileName: expired ? 'yusra-expired.csv' : 'yusra-expiring.csv',
         );
       },
     );
@@ -161,7 +162,9 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen>
   Future<void> _createPurchaseOrder() async {
     final low = ref.read(lowStockProvider).value ?? const <StockSummary>[];
     if (low.isEmpty) {
-      if (mounted) AppSnackbar.error(context, 'Nothing is below reorder level.');
+      if (mounted) {
+        AppSnackbar.error(context, 'Nothing is below reorder level.');
+      }
       return;
     }
     final suppliers = await SupplierOption.load(ref);
@@ -182,7 +185,8 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen>
             value: supplierId,
             items: [
               for (final supplier in suppliers)
-                DropdownMenuItem(value: supplier.id, child: Text(supplier.name)),
+                DropdownMenuItem(
+                    value: supplier.id, child: Text(supplier.name)),
             ],
             onChanged: (value) => supplierId = value ?? supplierId,
           ),
@@ -209,31 +213,30 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen>
     }
     try {
       final id = await ref.read(purchaseRepositoryProvider).createDraft(
-            branchId: branch,
-            supplierId: chosen,
-            expectedDate: null,
-            notes: 'Generated from low stock alerts',
-            tax: 0,
-            lines: [
-              for (final row in low)
-                PurchaseOrderItem(
-                  id: '',
-                  poId: '',
-                  medicineId: row.medicineId,
-                  quantityOrdered: StockRules.suggestedOrder(
-                    row.reorderLevel,
-                    row.availableQty,
-                  ),
-                  unitCost: row.costPrice,
-                  medicineName: row.name,
-                ),
-            ],
-          );
+        branchId: branch,
+        supplierId: chosen,
+        expectedDate: null,
+        notes: 'Generated from low stock alerts',
+        tax: 0,
+        lines: [
+          for (final row in low)
+            PurchaseOrderItem(
+              id: '',
+              poId: '',
+              medicineId: row.medicineId,
+              quantityOrdered: StockRules.suggestedOrder(
+                row.reorderLevel,
+                row.availableQty,
+              ),
+              unitCost: row.costPrice,
+              medicineName: row.name,
+            ),
+        ],
+      );
       if (!mounted) return;
       AppSnackbar.success(context, 'Draft purchase order created.');
       ref.invalidate(purchaseOrdersProvider);
-      // ignore: use_build_context_synchronously
-      Navigator.of(context).pushNamed('/purchasing/orders/$id');
+      context.go('/purchasing/orders/$id');
     } catch (e) {
       if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }

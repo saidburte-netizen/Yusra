@@ -87,7 +87,8 @@ class _DataTablePlusState extends State<DataTablePlus> {
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered;
-    final pageCount = (filtered.length / widget.rowsPerPage).ceil().clamp(1, 1 << 30).toInt();
+    final pageCount =
+        (filtered.length / widget.rowsPerPage).ceil().clamp(1, 1 << 30).toInt();
     if (_page >= pageCount) _page = pageCount - 1;
     final start = _page * widget.rowsPerPage;
     final pageRows = filtered.skip(start).take(widget.rowsPerPage).toList();
@@ -126,15 +127,16 @@ class _DataTablePlusState extends State<DataTablePlus> {
                       child: ChoiceChip(
                         label: Text(chip),
                         selected: widget.selectedFilter == chip,
-                        onSelected: (_) =>
-                            widget.onFilterChanged?.call(widget.selectedFilter == chip ? null : chip),
+                        onSelected: (_) => widget.onFilterChanged
+                            ?.call(widget.selectedFilter == chip ? null : chip),
                       ),
                     ),
                   ),
                 IconButton(
                   tooltip: S.exportCsv,
                   onPressed: _export,
-                  icon: const Icon(Icons.file_download_outlined, color: AppColors.gold700),
+                  icon: const Icon(Icons.file_download_outlined,
+                      color: AppColors.gold700),
                 ),
               ],
             ),
@@ -192,7 +194,8 @@ class _DataTablePlusState extends State<DataTablePlus> {
             ),
             Text('${_page + 1} / $pageCount'),
             IconButton(
-              onPressed: _page + 1 < pageCount ? () => setState(() => _page++) : null,
+              onPressed:
+                  _page + 1 < pageCount ? () => setState(() => _page++) : null,
               icon: const Icon(Icons.chevron_right),
             ),
           ],

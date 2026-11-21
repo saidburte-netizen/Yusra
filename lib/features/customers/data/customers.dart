@@ -33,6 +33,29 @@ class Customer {
       );
 }
 
+class CustomerStats {
+  const CustomerStats({
+    this.visits = 0,
+    this.lifetimeSpend = 0,
+    this.outstanding = 0,
+    this.lastVisit,
+  });
+
+  final int visits;
+  final double lifetimeSpend;
+  final double outstanding;
+  final DateTime? lastVisit;
+
+  factory CustomerStats.fromJson(Map<String, dynamic> json) => CustomerStats(
+        visits: (json['visits'] as num?)?.toInt() ?? 0,
+        lifetimeSpend: (json['lifetime_spend'] as num?)?.toDouble() ?? 0,
+        outstanding: (json['outstanding'] as num?)?.toDouble() ?? 0,
+        lastVisit: json['last_visit'] == null
+            ? null
+            : DateTime.tryParse(json['last_visit'] as String),
+      );
+}
+
 class CustomersRepository {
   SupabaseClient get _db => SupabaseService.client;
 
@@ -53,6 +76,15 @@ class CustomersRepository {
     return Customer.fromJson(Map<String, dynamic>.from(row));
   }
 
+  /// Server-side totals from 0019. Direct table reads are capped and can miss
+  /// voided or older sales, so the detail screen must use the RPC.
+  Future<CustomerStats> stats(String id) async {
+    if (!SupabaseService.isReady) return const CustomerStats();
+    final row = await _db.rpc('customer_stats', params: {'p_customer': id})
+        as Map<String, dynamic>?;
+    return CustomerStats.fromJson(row ?? const {});
+  }
+
   Future<Customer> save(Map<String, dynamic> values, {String? id}) async {
     final payload = <String, dynamic>{
       'name': (values['name'] as String? ?? '').trim(),
@@ -63,7 +95,8 @@ class CustomersRepository {
     };
     final rows = id == null
         ? await _db.from('customers').insert(payload).select() as List
-        : await _db.from('customers').update(payload).eq('id', id).select() as List;
+        : await _db.from('customers').update(payload).eq('id', id).select()
+            as List;
     return Customer.fromJson(Map<String, dynamic>.from(rows.first as Map));
   }
 
@@ -85,6 +118,12 @@ final customersProvider =
   return ref.read(customersRepositoryProvider).search(query);
 });
 
-final customerProvider = FutureProvider.family<Customer, String>((ref, id) async {
+final customerProvider =
+    FutureProvider.family<Customer, String>((ref, id) async {
   return ref.read(customersRepositoryProvider).byId(id);
+});
+
+final customerStatsProvider =
+    FutureProvider.family<CustomerStats, String>((ref, id) async {
+  return ref.read(customersRepositoryProvider).stats(id);
 });

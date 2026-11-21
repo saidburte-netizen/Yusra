@@ -39,12 +39,14 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Enter the cash in the drawer when you open your shift.'),
+            const Text(
+                'Enter the cash in the drawer when you open your shift.'),
             const SizedBox(height: 12),
             AppTextField(
               label: 'Opening cash (ETB)',
               controller: controller,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               autofocus: true,
             ),
           ],
@@ -70,7 +72,9 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
       ref.invalidate(shiftsProvider);
       if (mounted) AppSnackbar.success(context, 'Shift started.');
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      if (mounted) {
+        AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -93,7 +97,8 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
             AppTextField(
               label: 'Counted cash (ETB)',
               controller: countController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               autofocus: true,
             ),
             const SizedBox(height: 12),
@@ -123,7 +128,9 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
       final result = await ref.read(salesRepositoryProvider).closeShift(
             shift.id,
             counted,
-            noteController.text.trim().isEmpty ? null : noteController.text.trim(),
+            noteController.text.trim().isEmpty
+                ? null
+                : noteController.text.trim(),
           );
       ref.invalidate(myOpenShiftProvider);
       ref.invalidate(shiftsProvider);
@@ -142,7 +149,8 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
           difference: result.difference,
           status: 'closed',
         ),
-        saleCount: await ref.read(salesRepositoryProvider).shiftSaleCount(shift.id),
+        saleCount:
+            await ref.read(salesRepositoryProvider).shiftSaleCount(shift.id),
         byMethod: await _byMethod(shift.id),
         expectedCash: result.expectedCash,
         closingCash: result.closingCash,
@@ -155,7 +163,9 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
         );
       }
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      if (mounted) {
+        AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -171,12 +181,15 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
         branchName: await _branchName(),
         cashierName: shift.cashierName ?? profile?.fullName ?? '',
         shift: shift,
-        saleCount: await ref.read(salesRepositoryProvider).shiftSaleCount(shift.id),
+        saleCount:
+            await ref.read(salesRepositoryProvider).shiftSaleCount(shift.id),
         byMethod: await _byMethod(shift.id),
-        expectedCash: shift.openingCash,
+        expectedCash: shift.expectedCash ?? shift.openingCash,
       );
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      if (mounted) {
+        AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      }
     }
   }
 
@@ -265,15 +278,18 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
                     padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
-                        const Icon(Icons.point_of_sale, color: AppColors.pink600),
+                        const Icon(Icons.point_of_sale,
+                            color: AppColors.pink600),
                         const SizedBox(width: 14),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text('Your open shift',
-                                  style: TextStyle(fontWeight: FontWeight.bold)),
-                              Text('Opened ${formatDateTime(shift.openedAt ?? DateTime.now())}'
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold)),
+                              Text(
+                                  'Opened ${formatDateTime(shift.openedAt ?? DateTime.now())}'
                                   '  •  Opening cash ${formatMoney(shift.openingCash)}'),
                             ],
                           ),
@@ -297,7 +313,9 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
                 );
               },
               loading: () => const LoadingSkeleton(lines: 1),
-              error: (error, _) => ErrorState(message: AppErrorMapper.from(error).message),
+              error: (error, _) => ErrorState(
+                  message: AppErrorMapper.from(error).message,
+                  onRetry: () => ref.invalidate(myOpenShiftProvider)),
             ),
             const SizedBox(height: 12),
             Row(
@@ -321,7 +339,9 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
                 data: (rows) {
                   final visible = canViewAll
                       ? rows
-                      : rows.where((row) => row.cashierId == profile?.id).toList();
+                      : rows
+                          .where((row) => row.cashierId == profile?.id)
+                          .toList();
                   if (visible.isEmpty) {
                     return const EmptyState(
                       message: 'No shifts yet. Start a shift to begin selling.',
@@ -331,8 +351,14 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
                   return SingleChildScrollView(
                     child: DataTablePlus(
                       columns: const [
-                        'Shift', 'Cashier', 'Opened', 'Opening', 'Closing',
-                        'Expected', 'Difference', 'Status',
+                        'Shift',
+                        'Cashier',
+                        'Opened',
+                        'Opening',
+                        'Closing',
+                        'Expected',
+                        'Difference',
+                        'Status',
                       ],
                       rows: [
                         for (final shift in visible)
@@ -340,11 +366,19 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
                             cells: [
                               shift.id.substring(0, 8),
                               shift.cashierName ?? '—',
-                              shift.openedAt == null ? '—' : formatDateTime(shift.openedAt!),
+                              shift.openedAt == null
+                                  ? '—'
+                                  : formatDateTime(shift.openedAt!),
                               formatMoney(shift.openingCash),
-                              shift.closingCash == null ? '—' : formatMoney(shift.closingCash!),
-                              shift.expectedCash == null ? '—' : formatMoney(shift.expectedCash!),
-                              shift.difference == null ? '—' : formatMoney(shift.difference!),
+                              shift.closingCash == null
+                                  ? '—'
+                                  : formatMoney(shift.closingCash!),
+                              shift.expectedCash == null
+                                  ? '—'
+                                  : formatMoney(shift.expectedCash!),
+                              shift.difference == null
+                                  ? '—'
+                                  : formatMoney(shift.difference!),
                               shift.status.toUpperCase(),
                             ],
                             actions: [

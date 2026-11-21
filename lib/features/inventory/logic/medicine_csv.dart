@@ -92,8 +92,7 @@ abstract final class MedicineCsv {
     'storage_notes',
   ];
 
-  static String get template =>
-      '${codec.encoder.convert([headers])}\n'
+  static String get template => '${codec.encoder.convert([headers])}\n'
       'Paracetamol 500mg,Paracetamol,,Pain and fever,Tablet,500mg,Pack,Yusra,28.00,40.00,no,no,no,20,Store below 30C';
 
   static MedicineCsvResult parse(String source) {
@@ -101,7 +100,8 @@ abstract final class MedicineCsv {
     final rows = <MedicineCsvRow>[];
     final table = codec.decoder.convert(source.replaceAll('\r\n', '\n'));
     if (table.isEmpty) {
-      return MedicineCsvResult(rows: rows, errors: {1: 'The file is empty.'}, totalRows: 0);
+      return MedicineCsvResult(
+          rows: rows, errors: {1: 'The file is empty.'}, totalRows: 0);
     }
 
     final header = table.first
@@ -112,7 +112,9 @@ abstract final class MedicineCsv {
       if (!header.contains(required)) missing.add(required);
     }
     if (missing.isEmpty) {
-      final index = <String, int>{for (var i = 0; i < header.length; i++) header[i]: i};
+      final index = <String, int>{
+        for (var i = 0; i < header.length; i++) header[i]: i
+      };
       for (var i = 1; i < table.length; i++) {
         final cells = table[i];
         if (cells.every((cell) => cell.toString().trim().isEmpty)) continue;
@@ -127,11 +129,17 @@ abstract final class MedicineCsv {
         final name = cell('name');
         if (name.isEmpty) rowErrors.add('name is required');
         final cost = double.tryParse(cell('cost_price').replaceAll(',', ''));
-        final selling = double.tryParse(cell('selling_price').replaceAll(',', ''));
-        if (cost == null || cost < 0) rowErrors.add('cost_price must be a positive number');
-        if (selling == null || selling < 0) rowErrors.add('selling_price must be a positive number');
+        final selling =
+            double.tryParse(cell('selling_price').replaceAll(',', ''));
+        if (cost == null || cost < 0) {
+          rowErrors.add('cost_price must be a positive number');
+        }
+        if (selling == null || selling < 0) {
+          rowErrors.add('selling_price must be a positive number');
+        }
         final reorder = int.tryParse(cell('reorder_level'));
-        if (cell('reorder_level').isNotEmpty && (reorder == null || reorder < 0)) {
+        if (cell('reorder_level').isNotEmpty &&
+            (reorder == null || reorder < 0)) {
           rowErrors.add('reorder_level must be a whole number');
         }
         bool? boolFlag(String key) => switch (cell(key).toLowerCase()) {
@@ -139,7 +147,11 @@ abstract final class MedicineCsv {
               '' || 'no' || 'false' || '0' || 'n' => false,
               _ => null,
             };
-        for (final key in ['vat_applicable', 'requires_prescription', 'is_controlled']) {
+        for (final key in [
+          'vat_applicable',
+          'requires_prescription',
+          'is_controlled'
+        ]) {
           if (boolFlag(key) == null) rowErrors.add('$key must be yes or no');
         }
 

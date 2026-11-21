@@ -72,8 +72,8 @@ class _TeamAccessScreenState extends ConsumerState<TeamAccessScreen> {
     }
   }
 
-  void _afterMutation() {
-    ref.invalidate(authProvider);
+  Future<void> _afterMutation() async {
+    await ref.read(authProvider.notifier).refreshProfile();
     ref.invalidate(receiptSettingsProvider);
     ref.invalidateCache(CacheTag.users);
     ref.invalidateCache(CacheTag.settings);
@@ -110,7 +110,7 @@ class _TeamAccessScreenState extends ConsumerState<TeamAccessScreen> {
         'share_admin_access',
         params: {'p_targets': _selected.toList()},
       );
-      _afterMutation();
+      await _afterMutation();
       if (mounted) AppSnackbar.success(context, S.teamShareDone);
       await _load();
     } catch (e) {
@@ -142,7 +142,7 @@ class _TeamAccessScreenState extends ConsumerState<TeamAccessScreen> {
     setState(() => _busy = true);
     try {
       await SupabaseService.client.rpc('publish_app_settings');
-      _afterMutation();
+      await _afterMutation();
       if (mounted) AppSnackbar.success(context, S.settingsPublished);
     } catch (e) {
       if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
@@ -165,7 +165,7 @@ class _TeamAccessScreenState extends ConsumerState<TeamAccessScreen> {
         'p_branch': result.branchId,
         'p_active': result.active,
       });
-      _afterMutation();
+      await _afterMutation();
       if (mounted) AppSnackbar.success(context, S.accessUpdated);
       await _load();
     } catch (e) {
@@ -212,17 +212,17 @@ class _TeamAccessScreenState extends ConsumerState<TeamAccessScreen> {
                             runSpacing: 10,
                             children: [
                               ElevatedButton.icon(
-                                onPressed:
-                                    _busy || !_canEdit ? null : _publishSettings,
+                                onPressed: _busy || !_canEdit
+                                    ? null
+                                    : _publishSettings,
                                 icon: const Icon(Icons.public),
                                 label: const Text(S.publishSettings),
                               ),
                               ElevatedButton.icon(
-                                onPressed: _busy ||
-                                        !_canEdit ||
-                                        _selected.isEmpty
-                                    ? null
-                                    : _shareAccess,
+                                onPressed:
+                                    _busy || !_canEdit || _selected.isEmpty
+                                        ? null
+                                        : _shareAccess,
                                 icon: const Icon(Icons.group_add_outlined),
                                 label: Text(
                                   '${S.shareAccess} (${_selected.length})',
@@ -251,16 +251,18 @@ class _TeamAccessScreenState extends ConsumerState<TeamAccessScreen> {
                                 value: _selected.contains(member['id']),
                                 onChanged: _canEdit
                                     ? (value) => setState(() {
-                                        if (value == true) {
-                                          _selected.add(member['id'] as String);
-                                        } else {
-                                          _selected.remove(member['id']);
-                                        }
-                                      })
+                                          if (value == true) {
+                                            _selected
+                                                .add(member['id'] as String);
+                                          } else {
+                                            _selected.remove(member['id']);
+                                          }
+                                        })
                                     : null,
                               ),
                               title: Text(
-                                (member['full_name'] as String?)?.isEmpty ?? true
+                                (member['full_name'] as String?)?.isEmpty ??
+                                        true
                                     ? (member['email'] as String?) ?? '—'
                                     : member['full_name'] as String,
                               ),
@@ -320,7 +322,8 @@ class _AccessDialogState extends State<_AccessDialog> {
   @override
   void initState() {
     super.initState();
-    _role = AppRoleX.fromDb(widget.member['role'] as String?) ?? AppRole.cashier;
+    _role =
+        AppRoleX.fromDb(widget.member['role'] as String?) ?? AppRole.cashier;
     _branchId = widget.member['branch_id'] as String?;
     _active = widget.member['is_active'] == true;
   }

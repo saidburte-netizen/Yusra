@@ -12,7 +12,8 @@ abstract final class PurchaseDocuments {
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Text(S.appName,
-              style: const pw.TextStyle(fontSize: 20, color: PdfColors.pink800)),
+              style:
+                  const pw.TextStyle(fontSize: 20, color: PdfColors.pink800)),
           pw.Text(S.tagline, style: const pw.TextStyle(fontSize: 9)),
           pw.Divider(color: PdfColor.fromHex('#A8841F')),
           pw.Text(title, style: const pw.TextStyle(fontSize: 15)),
@@ -70,7 +71,8 @@ abstract final class PurchaseDocuments {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
-                pw.Text('Subtotal: $currency${order.subtotal.toStringAsFixed(2)}'),
+                pw.Text(
+                    'Subtotal: $currency${order.subtotal.toStringAsFixed(2)}'),
                 pw.Text('Tax: $currency${order.tax.toStringAsFixed(2)}'),
                 pw.Text('Total: $currency${order.total.toStringAsFixed(2)}',
                     style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),

@@ -1,14 +1,15 @@
 import '../../core/dates.dart';
+import '../strings.dart';
 
 enum ActivityRange { all, today, week, month, year }
 
 extension ActivityRangeLabel on ActivityRange {
   String get label => switch (this) {
-        ActivityRange.all => 'All time',
-        ActivityRange.today => 'Today',
-        ActivityRange.week => 'This week',
-        ActivityRange.month => 'This month',
-        ActivityRange.year => 'This year',
+        ActivityRange.all => S.rangeAll,
+        ActivityRange.today => S.rangeToday,
+        ActivityRange.week => S.rangeWeek,
+        ActivityRange.month => S.rangeMonth,
+        ActivityRange.year => S.rangeYear,
       };
 }
 

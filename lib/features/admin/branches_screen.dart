@@ -6,6 +6,7 @@ import '../../core/nav/app_shell.dart';
 import '../../core/dates.dart';
 import '../../core/errors/app_error.dart';
 import '../../core/permissions.dart';
+import '../../core/state/app_cache.dart';
 import '../../core/strings.dart';
 import '../../core/supabase_client.dart';
 import '../../core/widgets.dart';
@@ -38,10 +39,8 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
     });
     try {
       if (!SupabaseService.isReady) throw const SupabaseNotConfigured();
-      final rows = await SupabaseService.client
-          .from('branches')
-          .select()
-          .order('name');
+      final rows =
+          await SupabaseService.client.from('branches').select().order('name');
       if (!mounted) return;
       setState(() {
         _branches = List<Map<String, dynamic>>.from(rows as List);
@@ -54,6 +53,22 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
         _loading = false;
       });
     }
+  }
+
+  /// Selecting another branch changes the scope of nearly every list in the
+  /// app, so both Riverpod providers and the TTL cache must be refreshed.
+  void _invalidateBranchData() {
+    ref.invalidateCaches(const [
+      CacheTag.catalogue,
+      CacheTag.stock,
+      CacheTag.sales,
+      CacheTag.shifts,
+      CacheTag.purchases,
+      CacheTag.prescriptions,
+      CacheTag.expenses,
+      CacheTag.reports,
+      CacheTag.users,
+    ]);
   }
 
   List<Map<String, dynamic>> get _filtered => _branches.where((row) {
@@ -70,7 +85,8 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
     try {
       final client = SupabaseService.client;
       if (branch == null) {
-        final inserted = await client.from('branches').insert(result).select().single();
+        final inserted =
+            await client.from('branches').insert(result).select().single();
         // Make the first branch immediately usable for create flows.
         if (ref.read(selectedBranchProvider) == null) {
           final id = inserted['id'] as String?;
@@ -82,6 +98,7 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
       } else {
         await client.from('branches').update(result).eq('id', branch['id']);
       }
+      _invalidateBranchData();
       if (!mounted) return;
       AppSnackbar.success(context, S.saved);
       await _load();
@@ -94,14 +111,15 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
     final confirm = await showConfirmDialog(
       context,
       title: active ? S.reactivate : S.deactivate,
-      message: '${active ? S.reactivate : S.deactivate} ${branch['name'] ?? ''}?',
+      message:
+          '${active ? S.reactivate : S.deactivate} ${branch['name'] ?? ''}?',
     );
     if (confirm != true) return;
     try {
       await SupabaseService.client
           .from('branches')
-          .update({'is_active': active})
-          .eq('id', branch['id']);
+          .update({'is_active': active}).eq('id', branch['id']);
+      _invalidateBranchData();
       if (!mounted) return;
       AppSnackbar.success(context, S.saved);
       await _load();
@@ -110,9 +128,20 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
     }
   }
 
+  Future<void> _select(Map<String, dynamic> branch) async {
+    final id = branch['id'] as String?;
+    if (id == null) return;
+    ref.read(selectedBranchProvider.notifier).state = id;
+    ref.read(branchSelectionSetProvider.notifier).state = true;
+    _invalidateBranchData();
+    if (!mounted) return;
+    AppSnackbar.success(context, '${branch['name'] ?? 'Branch'} selected.');
+  }
+
   @override
   Widget build(BuildContext context) {
     final role = ref.watch(authProvider).profile?.role ?? AppRole.cashier;
+    final selectedBranchId = ref.watch(selectedBranchProvider);
     final canEdit = can(role, Modules.branches, PermAction.edit);
 
     return Scaffold(
@@ -123,7 +152,8 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
           children: [
             PageHeader(
               title: S.branches,
-              subtitle: canEdit ? null : '${S.view} ${S.branches.toLowerCase()}',
+              subtitle:
+                  canEdit ? null : '${S.view} ${S.branches.toLowerCase()}',
               actions: [
                 if (canEdit)
                   Padding(
@@ -142,6 +172,15 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
               const Expanded(child: Center(child: CircularProgressIndicator()))
             else if (_error != null)
               ErrorState(message: _error!, onRetry: _load)
+            else if (_branches.isEmpty)
+              EmptyState(
+                message: canEdit
+                    ? 'No branches yet. Create one to start recording sales and stock.'
+                    : 'No branches have been created yet. Ask a super admin to add one.',
+                icon: Icons.add_business_outlined,
+                actionLabel: canEdit ? S.add : null,
+                onAction: canEdit ? () => _edit(null) : null,
+              )
             else
               Expanded(
                 child: DataTablePlus(
@@ -156,21 +195,31 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
                   ],
                   filterChips: const [S.active, S.inactive],
                   selectedFilter: _statusFilter,
-                  onFilterChanged: (value) => setState(() => _statusFilter = value),
+                  onFilterChanged: (value) =>
+                      setState(() => _statusFilter = value),
                   rows: [
                     for (final branch in _filtered)
                       DataTablePlusRow(
                         cells: [
-                          (branch['name'] as String?) ?? '—',
+                          "${selectedBranchId == branch['id'] ? '✓ ' : ''}"
+                              "${(branch['name'] as String?) ?? '—'}",
                           (branch['code'] as String?) ?? '—',
                           (branch['address'] as String?) ?? '—',
                           (branch['phone'] as String?) ?? '—',
                           branch['is_active'] == true ? S.active : S.inactive,
                           branch['created_at'] == null
                               ? '—'
-                              : formatDate(DateTime.parse(branch['created_at'] as String)),
+                              : formatDate(DateTime.parse(
+                                  branch['created_at'] as String)),
                         ],
                         actions: [
+                          if (canEdit && selectedBranchId != branch['id'])
+                            IconButton(
+                              tooltip: 'Select branch',
+                              icon: const Icon(Icons.check_circle_outline,
+                                  size: 18),
+                              onPressed: () => _select(branch),
+                            ),
                           if (canEdit)
                             IconButton(
                               tooltip: S.edit,
@@ -188,8 +237,8 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
                                     : Icons.person_outline,
                                 size: 18,
                               ),
-                              onPressed: () =>
-                                  _setActive(branch, branch['is_active'] != true),
+                              onPressed: () => _setActive(
+                                  branch, branch['is_active'] != true),
                             ),
                         ],
                       ),
@@ -226,7 +275,8 @@ class _BranchFormDialogState extends State<_BranchFormDialog> {
     final initial = widget.initial;
     _name = TextEditingController(text: (initial?['name'] as String?) ?? '');
     _code = TextEditingController(text: (initial?['code'] as String?) ?? '');
-    _address = TextEditingController(text: (initial?['address'] as String?) ?? '');
+    _address =
+        TextEditingController(text: (initial?['address'] as String?) ?? '');
     _phone = TextEditingController(text: (initial?['phone'] as String?) ?? '');
     _active = initial?['is_active'] as bool? ?? true;
   }
@@ -254,13 +304,15 @@ class _BranchFormDialogState extends State<_BranchFormDialog> {
               AppTextField(
                 label: S.pharmacyName,
                 controller: _name,
-                validator: (v) => v == null || v.trim().isEmpty ? S.required : null,
+                validator: (v) =>
+                    v == null || v.trim().isEmpty ? S.required : null,
               ),
               const SizedBox(height: 12),
               AppTextField(
                 label: 'Code',
                 controller: _code,
-                validator: (v) => v == null || v.trim().isEmpty ? S.required : null,
+                validator: (v) =>
+                    v == null || v.trim().isEmpty ? S.required : null,
               ),
               const SizedBox(height: 12),
               AppTextField(
@@ -286,7 +338,9 @@ class _BranchFormDialogState extends State<_BranchFormDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text(S.cancel)),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(S.cancel)),
         ElevatedButton(
           onPressed: () {
             if (!_formKey.currentState!.validate()) return;
