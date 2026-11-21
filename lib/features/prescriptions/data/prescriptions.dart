@@ -18,7 +18,12 @@ class PrescriptionsRepository {
 
   Future<List<Prescription>> list(
       {required String? branchId, String? status}) async {
-    var query = _db.from('prescriptions').select('*, sales(id)');
+    // sales -> prescriptions is the only FK between the two tables
+    // (sales_prescription_id_fkey); the hint keeps PostgREST from guessing.
+    // No alias is used so Prescription.fromJson's `sales` key stays stable.
+    var query = _db
+        .from('prescriptions')
+        .select('*, sales!sales_prescription_id_fkey(id)');
     if (branchId != null) query = query.eq('branch_id', branchId);
     if (status != null) query = query.eq('status', status);
     final rows =

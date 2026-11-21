@@ -20,7 +20,15 @@ import '../sales/data/sales.dart';
 /// Tenant settings stored as key/value rows in `app_settings`. The service-role
 /// key is never needed here: RLS restricts writes to admins.
 class SettingsScreen extends ConsumerStatefulWidget {
-  const SettingsScreen({super.key});
+  const SettingsScreen({
+    super.key,
+    this.initialRows,
+    this.initialError,
+  });
+
+  /// Optional preloaded rows keep this screen pumpable in widget tests.
+  final List<Map<String, dynamic>>? initialRows;
+  final String? initialError;
 
   @override
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
@@ -82,7 +90,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     for (final key in [..._textKeys, ..._numberKeys]) {
       _controllers[key] = TextEditingController();
     }
-    _load();
+    if (widget.initialRows != null || widget.initialError != null) {
+      _applyRows(widget.initialRows ?? const []);
+      _error = widget.initialError;
+      _loading = false;
+    } else {
+      _load();
+    }
   }
 
   @override
@@ -91,6 +105,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  void _applyRows(List<Map<String, dynamic>> rows) {
+    _rows.clear();
+    for (final map in rows) {
+      final key = map['key'] as String?;
+      if (key != null) _rows[key] = map;
+    }
+    for (final key in [..._textKeys, ..._numberKeys]) {
+      _controllers[key]!.text = _read(_rows[key]);
+    }
+    // Stored as a fraction (0.15); the field works in percent (15).
+    final vatPercent = num.tryParse(_controllers['vat_rate']!.text);
+    if (vatPercent != null) {
+      _controllers['vat_rate']!.text = _plainNumber(vatPercent * 100);
+    }
+    _logoUrl = _read(_rows['logo_url']);
   }
 
   Future<void> _load() async {
@@ -102,21 +133,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (!SupabaseService.isReady) throw const SupabaseNotConfigured();
       final rows = await SupabaseService.client.from('app_settings').select();
       if (!mounted) return;
-      _rows.clear();
-      for (final row in rows as List) {
-        final map = Map<String, dynamic>.from(row as Map);
-        final key = map['key'] as String?;
-        if (key != null) _rows[key] = map;
-      }
-      for (final key in [..._textKeys, ..._numberKeys]) {
-        _controllers[key]!.text = _read(_rows[key]);
-      }
-      // Stored as a fraction (0.15); the field works in percent (15).
-      final vatPercent = num.tryParse(_controllers['vat_rate']!.text);
-      if (vatPercent != null) {
-        _controllers['vat_rate']!.text = _plainNumber(vatPercent * 100);
-      }
-      _logoUrl = _read(_rows['logo_url']);
+      _applyRows(List<Map<String, dynamic>>.from(
+          (rows as List).map((row) => Map<String, dynamic>.from(row as Map))));
       setState(() => _loading = false);
     } catch (e) {
       if (!mounted) return;
@@ -208,7 +226,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await SupabaseService.client.rpc('publish_app_settings');
       if (!mounted) return;
       ref.invalidateCache(CacheTag.settings);
+      if (!mounted) return;
       AppSnackbar.success(context, S.settingsPublished);
+      // The published rows are the ones displayed here; refresh them.
+      await _load();
     } catch (e) {
       if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     } finally {
@@ -264,7 +285,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       padding: const EdgeInsets.only(right: 8),
                       child: PrimaryButton(
                         label: S.save,
-                        icon: Icons.save_outlined,
                         loading: _saving,
                         onPressed: _save,
                         width: 130,
@@ -275,7 +295,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       padding: const EdgeInsets.only(right: 8),
                       child: PrimaryButton(
                         label: S.publishSettings,
-                        icon: Icons.group_add_outlined,
                         loading: _publishing,
                         onPressed: _publish,
                         width: 180,
@@ -329,7 +348,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                         if (canEdit)
                                           SecondaryButton(
                                             label: S.uploadLogo,
-                                            icon: Icons.upload,
                                             width: 160,
                                             onPressed: _pickLogo,
                                           ),

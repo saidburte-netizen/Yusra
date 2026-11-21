@@ -9,13 +9,20 @@ import '../../../core/permissions.dart';
 import '../../../core/widgets.dart';
 import '../../inventory/data/inventory_models.dart';
 import '../../inventory/data/inventory_providers.dart';
+import '../../inventory/widgets/stock_widgets.dart';
 import '../../suppliers/data/suppliers.dart';
 import '../data/purchase_documents.dart';
 import '../data/purchasing.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/strings.dart';
+import '../../inventory/widgets/responsive_ui.dart';
 
 /// B11/B12 — create/edit a draft, approve, print, and receive goods.
+///
+/// Purchase orders have no physical delete action by design: the database keeps
+/// immutable order history, so removal is a status transition to `cancelled`
+/// through the status RPC. This screen exposes that transition as "Cancel"
+/// instead of a fake delete button.
 class PurchaseOrderScreen extends ConsumerStatefulWidget {
   const PurchaseOrderScreen({super.key, required this.orderId});
 
@@ -102,9 +109,11 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
     return can(role, Modules.purchaseOrders, PermAction.edit);
   }
 
-  bool get _isAdmin {
-    final role = ref.read(authProvider).profile?.role;
-    return role == AppRole.admin || role == AppRole.superAdmin;
+  /// Approving, cancelling and receiving are edits to a purchase order, so
+  /// they follow the permission matrix rather than an admin-role check.
+  bool get _canManage {
+    final role = ref.read(authProvider).profile?.role ?? AppRole.cashier;
+    return can(role, Modules.purchaseOrders, PermAction.edit);
   }
 
   Future<void> _saveDraft() async {
@@ -132,6 +141,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
         );
         ref.invalidate(purchaseOrdersProvider);
         if (!mounted) return;
+        AppSnackbar.success(context, 'Draft created.');
         context.go('/purchasing/orders/$id');
       } else {
         await repo.updateDraft(
@@ -157,6 +167,10 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
   }
 
   Future<void> _setStatus(String status) async {
+    if (!_canManage) {
+      AppSnackbar.error(context, 'You cannot change this order.');
+      return;
+    }
     setState(() => _saving = true);
     try {
       await ref
@@ -205,7 +219,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
       builder: (_) => AlertDialog(
         title: Text(line.medicineName),
         content: SizedBox(
-          width: 360,
+          width: dialogContentWidth(context),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -224,9 +238,8 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          PrimaryButton(
+          ResponsivePrimaryButton(
             label: 'Save',
-            width: 110,
             onPressed: () => Navigator.pop(context, true),
           ),
         ],
@@ -293,6 +306,10 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
   }
 
   Future<void> _receive() async {
+    if (!_canManage) {
+      AppSnackbar.error(context, 'You cannot receive goods on this order.');
+      return;
+    }
     final payload = <Map<String, dynamic>>[];
     for (final line in _lines) {
       final remaining = line.remaining;
@@ -372,10 +389,9 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                       actions: [
                         Padding(
                           padding: const EdgeInsets.only(right: 8),
-                          child: SecondaryButton(
+                          child: ResponsiveSecondaryButton(
                             label: 'Print PO',
                             icon: Icons.picture_as_pdf_outlined,
-                            width: 120,
                             onPressed: _printOrder,
                           ),
                         ),
@@ -384,19 +400,17 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                             status != 'cancelled')
                           Padding(
                             padding: const EdgeInsets.only(right: 8),
-                            child: SecondaryButton(
+                            child: ResponsiveSecondaryButton(
                               label: 'Print GRN',
                               icon: Icons.print_outlined,
-                              width: 120,
                               onPressed: _printGrn,
                             ),
                           ),
-                        if (!_isNew && _isAdmin && status == 'draft') ...[
+                        if (!_isNew && _canManage && status == 'draft') ...[
                           Padding(
                             padding: const EdgeInsets.only(right: 8),
-                            child: SecondaryButton(
+                            child: ResponsiveSecondaryButton(
                               label: 'Cancel',
-                              width: 100,
                               onPressed: _saving
                                   ? null
                                   : () => _setStatus('cancelled'),
@@ -404,10 +418,9 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                           ),
                           Padding(
                             padding: const EdgeInsets.only(right: 8),
-                            child: PrimaryButton(
+                            child: ResponsivePrimaryButton(
                               label: 'Approve & send',
                               icon: Icons.send_outlined,
-                              width: 160,
                               loading: _saving,
                               onPressed: () => _setStatus('ordered'),
                             ),
@@ -423,60 +436,76 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                             Card(
                               child: Padding(
                                 padding: const EdgeInsets.all(16),
-                                child: Wrap(
-                                  spacing: 12,
-                                  runSpacing: 12,
-                                  children: [
-                                    SizedBox(
-                                      width: 280,
-                                      child: suppliers.when(
-                                        data: (items) => AppDropdown<String>(
-                                          label: 'Supplier',
-                                          value: _supplierId,
-                                          items: [
-                                            for (final supplier in items)
-                                              DropdownMenuItem(
-                                                value: supplier.id,
-                                                child: Text(supplier.name),
-                                              ),
-                                          ],
-                                          onChanged: _canEditDraft
-                                              ? (value) => setState(
-                                                  () => _supplierId = value)
-                                              : null,
-                                          validator: (value) =>
-                                              value == null ? 'Required' : null,
+                                child: LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final compact = constraints.maxWidth < 600;
+                                    final wide =
+                                        compact ? constraints.maxWidth : 280.0;
+                                    return Wrap(
+                                      spacing: 12,
+                                      runSpacing: 12,
+                                      children: [
+                                        SizedBox(
+                                          width: wide,
+                                          child: suppliers.when(
+                                            data: (items) =>
+                                                AppDropdown<String>(
+                                              label: 'Supplier',
+                                              value: _supplierId,
+                                              items: [
+                                                for (final supplier in items)
+                                                  DropdownMenuItem(
+                                                    value: supplier.id,
+                                                    child: Text(supplier.name),
+                                                  ),
+                                              ],
+                                              onChanged: _canEditDraft
+                                                  ? (value) => setState(
+                                                      () => _supplierId = value)
+                                                  : null,
+                                              validator: (value) =>
+                                                  value == null
+                                                      ? 'Required'
+                                                      : null,
+                                            ),
+                                            loading: () =>
+                                                const SizedBox(height: 56),
+                                            error: (_, __) =>
+                                                const SizedBox(height: 56),
+                                          ),
                                         ),
-                                        loading: () =>
-                                            const SizedBox(height: 56),
-                                        error: (_, __) =>
-                                            const SizedBox(height: 56),
-                                      ),
-                                    ),
-                                    DatePickerField(
-                                      label: 'Expected date',
-                                      value: _expectedDate,
-                                      onChanged: (value) {
-                                        if (_canEditDraft) {
-                                          setState(() => _expectedDate = value);
-                                        }
-                                      },
-                                    ),
-                                    SizedBox(
-                                      width: 140,
-                                      child: MoneyField(
-                                        label: 'Tax',
-                                        controller: _tax,
-                                      ),
-                                    ),
-                                    SizedBox(
-                                      width: 320,
-                                      child: AppTextField(
-                                        label: 'Notes',
-                                        controller: _notes,
-                                      ),
-                                    ),
-                                  ],
+                                        SizedBox(
+                                          width: wide,
+                                          child: DatePickerField(
+                                            label: 'Expected date',
+                                            value: _expectedDate,
+                                            onChanged: (value) {
+                                              if (_canEditDraft) {
+                                                setState(() =>
+                                                    _expectedDate = value);
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                        SizedBox(
+                                          width: compact
+                                              ? (constraints.maxWidth - 12) / 2
+                                              : 140,
+                                          child: MoneyField(
+                                            label: 'Tax',
+                                            controller: _tax,
+                                          ),
+                                        ),
+                                        SizedBox(
+                                          width: wide,
+                                          child: AppTextField(
+                                            label: 'Notes',
+                                            controller: _notes,
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
                                 ),
                               ),
                             ),
@@ -489,61 +518,63 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                                         .titleMedium),
                                 const Spacer(),
                                 if (_canEditDraft)
-                                  SecondaryButton(
+                                  ResponsiveSecondaryButton(
                                     label: 'Add line',
                                     icon: Icons.add,
-                                    width: 130,
                                     onPressed: _addLine,
                                   ),
                               ],
                             ),
                             const SizedBox(height: 8),
                             Card(
-                              child: DataTable(
-                                columns: const [
-                                  DataColumn(label: Text('Medicine')),
-                                  DataColumn(label: Text('Ordered')),
-                                  DataColumn(label: Text('Received')),
-                                  DataColumn(label: Text('Unit cost')),
-                                  DataColumn(label: Text('Total')),
-                                  DataColumn(label: Text('')),
-                                ],
-                                rows: [
-                                  for (var i = 0; i < _lines.length; i++)
-                                    DataRow(cells: [
-                                      DataCell(Text(_lines[i].medicineName)),
-                                      DataCell(
-                                          Text('${_lines[i].quantityOrdered}')),
-                                      DataCell(Text(
-                                          '${_lines[i].quantityReceived}')),
-                                      DataCell(Text(
-                                          formatMoney(_lines[i].unitCost))),
-                                      DataCell(Text(
-                                          formatMoney(_lines[i].lineTotal))),
-                                      DataCell(Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (_canEditDraft)
-                                            IconButton(
-                                              tooltip: 'Edit line',
-                                              icon: const Icon(
-                                                  Icons.edit_outlined,
-                                                  size: 18),
-                                              onPressed: () => _editLine(i),
-                                            ),
-                                          if (_canEditDraft)
-                                            IconButton(
-                                              tooltip: 'Remove line',
-                                              icon: const Icon(
-                                                  Icons.delete_outline,
-                                                  size: 18),
-                                              onPressed: () => setState(
-                                                  () => _lines.removeAt(i)),
-                                            ),
-                                        ],
-                                      )),
-                                    ]),
-                                ],
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: DataTable(
+                                  columns: const [
+                                    DataColumn(label: Text('Medicine')),
+                                    DataColumn(label: Text('Ordered')),
+                                    DataColumn(label: Text('Received')),
+                                    DataColumn(label: Text('Unit cost')),
+                                    DataColumn(label: Text('Total')),
+                                    DataColumn(label: Text('')),
+                                  ],
+                                  rows: [
+                                    for (var i = 0; i < _lines.length; i++)
+                                      DataRow(cells: [
+                                        DataCell(Text(_lines[i].medicineName)),
+                                        DataCell(Text(
+                                            '${_lines[i].quantityOrdered}')),
+                                        DataCell(Text(
+                                            '${_lines[i].quantityReceived}')),
+                                        DataCell(Text(
+                                            formatMoney(_lines[i].unitCost))),
+                                        DataCell(Text(
+                                            formatMoney(_lines[i].lineTotal))),
+                                        DataCell(Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (_canEditDraft)
+                                              IconButton(
+                                                tooltip: 'Edit line',
+                                                icon: const Icon(
+                                                    Icons.edit_outlined,
+                                                    size: 18),
+                                                onPressed: () => _editLine(i),
+                                              ),
+                                            if (_canEditDraft)
+                                              IconButton(
+                                                tooltip: 'Remove line',
+                                                icon: const Icon(
+                                                    Icons.delete_outline,
+                                                    size: 18),
+                                                onPressed: () => setState(
+                                                    () => _lines.removeAt(i)),
+                                              ),
+                                          ],
+                                        )),
+                                      ]),
+                                  ],
+                                ),
                               ),
                             ),
                             const SizedBox(height: 10),
@@ -567,16 +598,15 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                               const SizedBox(height: 16),
                               Align(
                                 alignment: Alignment.centerRight,
-                                child: PrimaryButton(
+                                child: ResponsivePrimaryButton(
                                   label: _isNew ? 'Create draft' : 'Save draft',
                                   icon: Icons.save_outlined,
-                                  width: 170,
                                   loading: _saving,
                                   onPressed: _saveDraft,
                                 ),
                               ),
                             ],
-                            if (openForReceiving) ...[
+                            if (openForReceiving && _canManage) ...[
                               const SizedBox(height: 22),
                               Text('Goods receiving',
                                   style:
@@ -613,10 +643,9 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                                           ),
                                       Align(
                                         alignment: Alignment.centerRight,
-                                        child: PrimaryButton(
+                                        child: ResponsivePrimaryButton(
                                           label: 'Receive goods',
                                           icon: Icons.inventory_outlined,
-                                          width: 180,
                                           loading: _saving,
                                           onPressed: _receive,
                                         ),
@@ -656,34 +685,46 @@ class _ReceiveLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          flex: 2,
-          child: Text('${line.medicineName}\nDue: ${line.remaining}'),
-        ),
-        const SizedBox(width: 8),
-        SizedBox(
-          width: 90,
-          child: AppTextField(
-            label: 'Qty now',
-            controller: qtyController,
-            keyboardType: TextInputType.number,
-          ),
-        ),
-        const SizedBox(width: 8),
-        SizedBox(
-          width: 160,
-          child: AppTextField(label: 'Batch no', controller: batchController),
-        ),
-        const SizedBox(width: 8),
-        DatePickerField(
-          label: 'Expiry',
-          value: expiry,
-          firstDate: DateTime.now().add(const Duration(days: 1)),
-          onChanged: onExpiry,
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stacked = constraints.maxWidth < 520;
+        final qtyWidth = stacked ? (constraints.maxWidth - 8) / 2 : 90.0;
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: stacked ? constraints.maxWidth : 180,
+              child: Text('${line.medicineName}\nDue: ${line.remaining}'),
+            ),
+            SizedBox(
+              width: qtyWidth,
+              child: AppTextField(
+                label: 'Qty now',
+                controller: qtyController,
+                keyboardType: TextInputType.number,
+              ),
+            ),
+            SizedBox(
+              width: stacked ? qtyWidth : 160,
+              child: AppTextField(
+                label: 'Batch no',
+                controller: batchController,
+              ),
+            ),
+            SizedBox(
+              width: stacked ? constraints.maxWidth : 160,
+              child: DatePickerField(
+                label: 'Expiry',
+                value: expiry,
+                firstDate: DateTime.now().add(const Duration(days: 1)),
+                onChanged: onExpiry,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -717,7 +758,7 @@ class _LinePickerDialogState extends ConsumerState<_LinePickerDialog> {
     return AlertDialog(
       title: const Text('Add medicine'),
       content: SizedBox(
-        width: 520,
+        width: dialogContentWidth(context),
         height: 480,
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -780,9 +821,8 @@ class _LinePickerDialogState extends ConsumerState<_LinePickerDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
-        PrimaryButton(
+        ResponsivePrimaryButton(
           label: 'Add',
-          width: 110,
           onPressed: () {
             if (_selected == null) return;
             Navigator.pop(context, {

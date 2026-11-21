@@ -27,7 +27,8 @@ class AuditScreen extends ConsumerStatefulWidget {
 }
 
 class _AuditScreenState extends ConsumerState<AuditScreen> {
-  ActivityRange _range = ActivityRange.today;
+  // The audit is a full history by default; narrower ranges are opt-in.
+  ActivityRange _range = ActivityRange.all;
   String? _statusFilter;
   bool _busy = false;
 
@@ -187,6 +188,9 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
                   var shown = filterActivities(entries, _range);
                   if (_statusFilter == S.pendingApproval) {
                     shown = shown.where((e) => e.correctionRequested).toList();
+                  }
+                  if (shown.isEmpty) {
+                    return const EmptyState(message: S.noActivity);
                   }
                   return DataTablePlus(
                     columns: const [

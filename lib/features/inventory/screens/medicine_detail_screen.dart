@@ -4,12 +4,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/dates.dart';
+import '../../../core/errors/app_error.dart';
 import '../../../core/money.dart';
 import '../../../core/permissions.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets.dart';
 import '../data/inventory_providers.dart';
 import '../widgets/stock_widgets.dart';
+import '../widgets/responsive_ui.dart';
 
 class MedicineDetailScreen extends ConsumerWidget {
   const MedicineDetailScreen({super.key, required this.medicineId});
@@ -18,9 +20,9 @@ class MedicineDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final medicineState = ref.watch(
-      medicinesProvider((query: '', categoryId: null)),
-    );
+    const ({String query, String? categoryId}) listFilter =
+        (query: '', categoryId: null);
+    final medicineState = ref.watch(medicinesProvider(listFilter));
     final batches = ref.watch(batchesProvider(medicineId));
     final movements = ref.watch(movementsProvider(
       (medicineId: medicineId, type: null),
@@ -29,6 +31,7 @@ class MedicineDetailScreen extends ConsumerWidget {
     final canEdit = can(role, Modules.stock, PermAction.edit);
     final medicine =
         medicineState.value?.where((item) => item.id == medicineId).firstOrNull;
+    void retry() => ref.invalidate(medicinesProvider(listFilter));
 
     return Scaffold(
       body: Padding(
@@ -45,9 +48,8 @@ class MedicineDetailScreen extends ConsumerWidget {
                 if (canEdit)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: SecondaryButton(
+                    child: ResponsiveSecondaryButton(
                       label: 'Adjust',
-                      width: 110,
                       onPressed: () {
                         final first = batches.value?.firstOrNull;
                         if (first == null) {
@@ -59,18 +61,28 @@ class MedicineDetailScreen extends ConsumerWidget {
                     ),
                   ),
                 if (canEdit)
-                  PrimaryButton(
+                  ResponsivePrimaryButton(
                     label: 'Add stock',
                     icon: Icons.add,
-                    width: 130,
                     onPressed: () => showAddStockDialog(context, ref),
                   ),
               ],
             ),
             if (medicineState.isLoading)
               const Center(child: CircularProgressIndicator())
+            else if (medicineState.hasError)
+              ErrorState(
+                message: AppErrorMapper.from(
+                        medicineState.error ?? 'Could not load the catalogue')
+                    .message,
+                onRetry: retry,
+              )
             else if (medicine == null)
-              const ErrorState(message: 'Medicine not found.')
+              ErrorState(
+                message: 'Medicine not found. It may have been removed or '
+                    'is outside the first 200 catalogue rows.',
+                onRetry: retry,
+              )
             else
               Expanded(
                 child: SingleChildScrollView(
@@ -113,7 +125,7 @@ class MedicineDetailScreen extends ConsumerWidget {
                       const SizedBox(height: 8),
                       stockState(
                         batches,
-                        builder: (items) => DataTablePlus(
+                        builder: (items) => ResponsiveDataTablePlus(
                           columns: const [
                             'Batch',
                             'Expiry',
@@ -158,7 +170,7 @@ class MedicineDetailScreen extends ConsumerWidget {
                       const SizedBox(height: 8),
                       stockState(
                         movements,
-                        builder: (items) => DataTablePlus(
+                        builder: (items) => ResponsiveDataTablePlus(
                           columns: const ['Date', 'Type', 'Change', 'Reason'],
                           rows: [
                             for (final movement in items)

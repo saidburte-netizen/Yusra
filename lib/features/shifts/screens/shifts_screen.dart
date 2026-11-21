@@ -13,6 +13,7 @@ import '../../inventory/data/inventory_providers.dart';
 import '../../sales/data/sales.dart';
 import '../../sales/logic/receipts.dart';
 import '../../../core/errors/app_error.dart';
+import '../../inventory/widgets/responsive_ui.dart';
 
 class ShiftsScreen extends ConsumerStatefulWidget {
   const ShiftsScreen({super.key});
@@ -213,7 +214,7 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
     if (!SupabaseService.isReady) return {};
     final rows = await SupabaseService.client
         .from('sales')
-        .select('sale_payments(method, amount)')
+        .select('sale_payments!sale_payments_sale_id_fkey(method, amount)')
         .eq('shift_id', shiftId)
         .eq('status', 'completed') as List;
     final result = <String, double>{};
@@ -251,10 +252,9 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
                 if (can(role, Modules.pos, PermAction.edit))
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: PrimaryButton(
+                    child: ResponsivePrimaryButton(
                       label: _busy ? 'Working…' : 'Start shift',
                       icon: Icons.play_arrow,
-                      width: 130,
                       loading: _busy,
                       onPressed: _openShift,
                     ),
@@ -276,56 +276,66 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
                   color: AppColors.pink50,
                   child: Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Icon(Icons.point_of_sale,
-                            color: AppColors.pink600),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Your open shift',
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold)),
-                              Text(
-                                  'Opened ${formatDateTime(shift.openedAt ?? DateTime.now())}'
-                                  '  •  Opening cash ${formatMoney(shift.openingCash)}'),
-                            ],
-                          ),
+                        Row(
+                          children: [
+                            const Icon(Icons.point_of_sale,
+                                color: AppColors.pink600),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Your open shift',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold)),
+                                  Text(
+                                      'Opened ${formatDateTime(shift.openedAt ?? DateTime.now())}'
+                                      '  •  Opening cash ${formatMoney(shift.openingCash)}'),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        SecondaryButton(
-                          label: 'X report',
-                          icon: Icons.receipt_long,
-                          width: 120,
-                          onPressed: () => _xReport(shift),
-                        ),
-                        const SizedBox(width: 8),
-                        PrimaryButton(
-                          label: 'Close shift',
-                          icon: Icons.stop,
-                          width: 130,
-                          onPressed: _busy ? null : () => _closeShift(shift),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            ResponsiveSecondaryButton(
+                              label: 'X report',
+                              icon: Icons.receipt_long,
+                              onPressed: () => _xReport(shift),
+                            ),
+                            ResponsivePrimaryButton(
+                              label: 'Close shift',
+                              icon: Icons.stop,
+                              onPressed:
+                                  _busy ? null : () => _closeShift(shift),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
                 );
               },
-              loading: () => const LoadingSkeleton(lines: 1),
+              loading: () => const ResponsiveLoadingSkeleton(lines: 1),
               error: (error, _) => ErrorState(
                   message: AppErrorMapper.from(error).message,
                   onRetry: () => ref.invalidate(myOpenShiftProvider)),
             ),
             const SizedBox(height: 12),
-            Row(
+            Wrap(
+              spacing: 8,
               children: [
                 ChoiceChip(
                   label: const Text('All shifts'),
                   selected: !_openOnly,
                   onSelected: (_) => setState(() => _openOnly = false),
                 ),
-                const SizedBox(width: 8),
                 ChoiceChip(
                   label: const Text('Open only'),
                   selected: _openOnly,
@@ -348,55 +358,55 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
                       icon: Icons.schedule,
                     );
                   }
-                  return SingleChildScrollView(
-                    child: DataTablePlus(
-                      columns: const [
-                        'Shift',
-                        'Cashier',
-                        'Opened',
-                        'Opening',
-                        'Closing',
-                        'Expected',
-                        'Difference',
-                        'Status',
-                      ],
-                      rows: [
-                        for (final shift in visible)
-                          DataTablePlusRow(
-                            cells: [
-                              shift.id.substring(0, 8),
-                              shift.cashierName ?? '—',
-                              shift.openedAt == null
-                                  ? '—'
-                                  : formatDateTime(shift.openedAt!),
-                              formatMoney(shift.openingCash),
-                              shift.closingCash == null
-                                  ? '—'
-                                  : formatMoney(shift.closingCash!),
-                              shift.expectedCash == null
-                                  ? '—'
-                                  : formatMoney(shift.expectedCash!),
-                              shift.difference == null
-                                  ? '—'
-                                  : formatMoney(shift.difference!),
-                              shift.status.toUpperCase(),
-                            ],
-                            actions: [
-                              if (shift.isOpen)
-                                IconButton(
-                                  tooltip: 'X report',
-                                  icon: const Icon(Icons.print_outlined),
-                                  onPressed: () => _xReport(shift),
-                                ),
-                            ],
-                          ),
-                      ],
-                      searchHint: 'Search shifts…',
-                      exportFileName: 'yusra-shifts.csv',
-                    ),
+                  return ResponsiveDataTablePlus(
+                    columns: const [
+                      'Shift',
+                      'Cashier',
+                      'Opened',
+                      'Opening',
+                      'Closing',
+                      'Expected',
+                      'Difference',
+                      'Status',
+                    ],
+                    rows: [
+                      for (final shift in visible)
+                        DataTablePlusRow(
+                          cells: [
+                            shift.id.length >= 8
+                                ? shift.id.substring(0, 8)
+                                : shift.id,
+                            shift.cashierName ?? '—',
+                            shift.openedAt == null
+                                ? '—'
+                                : formatDateTime(shift.openedAt!),
+                            formatMoney(shift.openingCash),
+                            shift.closingCash == null
+                                ? '—'
+                                : formatMoney(shift.closingCash!),
+                            shift.expectedCash == null
+                                ? '—'
+                                : formatMoney(shift.expectedCash!),
+                            shift.difference == null
+                                ? '—'
+                                : formatMoney(shift.difference!),
+                            shift.status.toUpperCase(),
+                          ],
+                          actions: [
+                            if (shift.isOpen)
+                              IconButton(
+                                tooltip: 'X report',
+                                icon: const Icon(Icons.print_outlined),
+                                onPressed: () => _xReport(shift),
+                              ),
+                          ],
+                        ),
+                    ],
+                    searchHint: 'Search shifts…',
+                    exportFileName: 'yusra-shifts.csv',
                   );
                 },
-                loading: () => const LoadingSkeleton(lines: 4),
+                loading: () => const ResponsiveLoadingSkeleton(lines: 4),
                 error: (error, _) => ErrorState(
                   message: AppErrorMapper.from(error).message,
                   onRetry: () => ref.invalidate(shiftsProvider),

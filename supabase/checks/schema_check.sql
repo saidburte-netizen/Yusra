@@ -1,5 +1,5 @@
--- Yusra Pharmacy — schema verification (0001 through 0020).
--- Run with the Supabase SQL Editor after applying 0020_fix_sale_return.sql.
+-- Yusra Pharmacy — schema verification (0001 through 0021).
+-- Run with the Supabase SQL Editor after applying 0021_grants.sql.
 -- Every row has a kind, object name, status of PASS or FAIL, and a FIX hint
 -- (blank for PASS). The db-test CI job fails on any non-PASS row.
 -- v_expired_batches is intentionally not required: the screen derives the same
@@ -224,6 +224,101 @@ results as (
          'Re-run 0012_rls_hardening.sql to enable RLS on ' || t.name || '.'
   from expected_tables t
   left join pg_class c on c.oid = to_regclass('public.' || t.name)
+  union all
+  -- Grants give PostgREST table-level access only; RLS still decides which
+  -- rows each signed-in staff member can see. These rows assert the effective
+  -- privileges installed by 0021_grants.sql, including the activity_log
+  -- revokes and the default privileges for future tables/sequences.
+  select 'grant', 'schema.public.anon.usage',
+         case when has_schema_privilege('anon', 'public', 'USAGE')
+              then 'PASS' else 'FAIL' end,
+         'Re-run 0021_grants.sql (grant usage on schema public to anon).'
+  union all
+  select 'grant', 'schema.public.authenticated.usage',
+         case when has_schema_privilege('authenticated', 'public', 'USAGE')
+              then 'PASS' else 'FAIL' end,
+         'Re-run 0021_grants.sql (grant usage on schema public to authenticated).'
+  union all
+  select 'grant', 'authenticated.core_tables.crud',
+         case when (
+           select bool_and(
+             has_table_privilege('authenticated', c.oid, 'SELECT')
+             and has_table_privilege('authenticated', c.oid, 'INSERT')
+             and has_table_privilege('authenticated', c.oid, 'UPDATE')
+             and has_table_privilege('authenticated', c.oid, 'DELETE')
+           )
+           from expected_tables t
+           join pg_class c on c.oid = to_regclass('public.' || t.name)
+           where t.name <> 'activity_log'
+         ) then 'PASS' else 'FAIL' end,
+         'Re-run 0021_grants.sql (grant CRUD on all public tables to authenticated).'
+  union all
+  select 'grant', 'authenticated.activity_log.select',
+         case when has_table_privilege('authenticated', to_regclass('public.activity_log'), 'SELECT')
+              then 'PASS' else 'FAIL' end,
+         'Re-run 0021_grants.sql (grant select on public.activity_log to authenticated).'
+  union all
+  select 'grant', 'authenticated.activity_log.no_update_delete',
+         case when not has_table_privilege('authenticated', to_regclass('public.activity_log'), 'UPDATE')
+                  and not has_table_privilege('authenticated', to_regclass('public.activity_log'), 'DELETE')
+              then 'PASS' else 'FAIL' end,
+         'Re-run 0021_grants.sql (revoke update, delete on public.activity_log from authenticated).'
+  union all
+  select 'grant', 'anon.activity_log.no_access',
+         case when not (
+                   has_table_privilege('anon', to_regclass('public.activity_log'), 'SELECT')
+                or has_table_privilege('anon', to_regclass('public.activity_log'), 'INSERT')
+                or has_table_privilege('anon', to_regclass('public.activity_log'), 'UPDATE')
+                or has_table_privilege('anon', to_regclass('public.activity_log'), 'DELETE')
+                or has_table_privilege('anon', to_regclass('public.activity_log'), 'TRUNCATE')
+                or has_table_privilege('anon', to_regclass('public.activity_log'), 'REFERENCES')
+                or has_table_privilege('anon', to_regclass('public.activity_log'), 'TRIGGER')
+              ) then 'PASS' else 'FAIL' end,
+         'Re-run 0021_grants.sql (revoke all on public.activity_log from anon).'
+  union all
+  select 'grant', 'authenticated.public_sequences.usage_select',
+         case when exists (
+                    select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                    where n.nspname = 'public' and c.relkind = 'S'
+                  )
+                  and not exists (
+                    select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                    where n.nspname = 'public' and c.relkind = 'S'
+                      and not (has_sequence_privilege('authenticated', c.oid, 'USAGE')
+                           and has_sequence_privilege('authenticated', c.oid, 'SELECT'))
+                  )
+              then 'PASS' else 'FAIL' end,
+         'Re-run 0021_grants.sql (grant usage, select on all public sequences to authenticated).'
+  union all
+  select 'grant', 'default_privileges.public.tables',
+         case when exists (
+           select 1 from pg_default_acl d
+           join pg_namespace n on n.oid = d.defaclnamespace
+           where n.nspname = 'public'
+             and d.defaclobjtype = 'r'
+             and d.defaclrole = (select c.relowner from pg_class c where c.oid = to_regclass('public.branches'))
+             and (select array_agg(x.privilege_type)
+                  from aclexplode(d.defaclacl) x
+                  join pg_roles r on r.oid = x.grantee
+                  where r.rolname = 'authenticated')
+                 @> array['SELECT','INSERT','UPDATE','DELETE']::text[]
+         ) then 'PASS' else 'FAIL' end,
+         'Re-run 0021_grants.sql (alter default privileges ... grant CRUD on tables).'
+  union all
+  select 'grant', 'default_privileges.public.sequences',
+         case when exists (
+           select 1 from pg_default_acl d
+           join pg_namespace n on n.oid = d.defaclnamespace
+           where n.nspname = 'public'
+             and d.defaclobjtype = 'S'
+             and d.defaclrole = (select c.relowner from pg_class c where c.oid = to_regclass('public.branches'))
+             and (select array_agg(x.privilege_type)
+                  from aclexplode(d.defaclacl) x
+                  join pg_roles r on r.oid = x.grantee
+                  where r.rolname = 'authenticated')
+                 @> array['SELECT','USAGE']::text[]
+         ) then 'PASS' else 'FAIL' end,
+         'Re-run 0021_grants.sql (alter default privileges ... grant usage, select on sequences).'
 )
 select kind, object, status,
        case when status = 'FAIL' then fix else '' end as fix

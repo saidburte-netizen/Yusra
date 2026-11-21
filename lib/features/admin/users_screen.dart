@@ -11,7 +11,18 @@ import '../../core/supabase_client.dart';
 import '../../core/widgets.dart';
 
 class UsersScreen extends ConsumerStatefulWidget {
-  const UsersScreen({super.key});
+  const UsersScreen({
+    super.key,
+    this.initialUsers,
+    this.initialBranches,
+    this.initialError,
+  });
+
+  /// Optional preloaded data keeps this screen pumpable in widget tests without
+  /// standing up a Supabase client. Production routes use the plain constructor.
+  final List<Map<String, dynamic>>? initialUsers;
+  final List<Map<String, dynamic>>? initialBranches;
+  final String? initialError;
 
   @override
   ConsumerState<UsersScreen> createState() => _UsersScreenState();
@@ -29,7 +40,14 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    if (widget.initialUsers != null || widget.initialError != null) {
+      _users = widget.initialUsers ?? const [];
+      _branches = widget.initialBranches ?? const [];
+      _error = widget.initialError;
+      _loading = false;
+    } else {
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -78,6 +96,73 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       .map((b) => (b['name'] as String?) ?? '—')
       .firstWhere((_) => true, orElse: () => '—');
 
+  void _viewUser(Map<String, dynamic> user) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text((user['full_name'] as String?) ?? '—'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text((user['email'] as String?) ?? '—'),
+              const SizedBox(height: 8),
+              Text(AppRoleX.fromDb(user['role'] as String?)?.label ?? '—'),
+              const SizedBox(height: 8),
+              Text(_branchName(user['branch_id'] as String?)),
+              const SizedBox(height: 8),
+              Text(user['is_active'] == true ? S.active : S.inactive),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Mirrors the checks made by set_user_access / admin-reset-password so a
+  /// button that the database would reject is never shown in the first place.
+  bool _canManage(Map<String, dynamic> user) {
+    final profile = ref.read(authProvider).profile;
+    if (profile == null) return false;
+    final actor = profile.role;
+    if (!can(actor, Modules.users, PermAction.edit)) return false;
+    final target = AppRoleX.fromDb(user['role'] as String?) ?? AppRole.cashier;
+    if (!canManageUser(actor, target)) return false;
+    // The RPC refuses self edits, and admins are scoped to their own branch.
+    if (user['id'] == profile.id) return false;
+    if (actor != AppRole.superAdmin &&
+        (profile.branchId == null || user['branch_id'] != profile.branchId)) {
+      return false;
+    }
+    return true;
+  }
+
+  bool _canDeactivate(Map<String, dynamic> user) {
+    if (!_canManage(user)) return false;
+    // set_user_access refuses to deactivate a super admin.
+    return AppRoleX.fromDb(user['role'] as String?) != AppRole.superAdmin;
+  }
+
+  /// A 404 from functions.invoke usually means the Edge Function itself was
+  /// never deployed. Keep AppErrorMapper's wording and add the exact command
+  /// the operator needs, for both network and not-found failures.
+  String _functionErrorMessage(Object error, String functionName) {
+    final mapped = AppErrorMapper.from(error);
+    if (mapped.kind == AppErrorKind.notFound ||
+        mapped.kind == AppErrorKind.network) {
+      return '${mapped.message} If $functionName is not deployed, run:\n'
+          'supabase functions deploy $functionName --project-ref <ref>';
+    }
+    return mapped.message;
+  }
+
   /// Keeps the signed-in user's own permissions fresh and drops cached users.
   Future<void> _afterUserMutation(Object? userId) async {
     if (userId != null && userId == ref.read(authProvider).profile?.id) {
@@ -97,6 +182,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
     if (result == null) return;
     setState(() => _loading = true);
     try {
+      if (!SupabaseService.isReady) throw const SupabaseNotConfigured();
       final response = await SupabaseService.client.functions.invoke(
         'admin-create-user',
         body: result,
@@ -141,18 +227,16 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
         );
       }
       if (!mounted) return;
-      AppSnackbar.success(context, S.saved);
+      AppSnackbar.success(context, 'User created.');
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      AppSnackbar.error(context, AppErrorMapper.from(e).message);
+      AppSnackbar.error(context, _functionErrorMessage(e, 'admin-create-user'));
     }
   }
 
   Future<void> _editUser(Map<String, dynamic> user) async {
-    final actor = ref.read(authProvider).profile?.role ?? AppRole.cashier;
-    final target = AppRoleX.fromDb(user['role'] as String?) ?? AppRole.cashier;
-    if (!canManageUser(actor, target)) {
+    if (!_canManage(user)) {
       AppSnackbar.error(context, S.forbidden);
       return;
     }
@@ -181,7 +265,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       if (!mounted) return;
       await _afterUserMutation(user['id']);
       if (!mounted) return;
-      AppSnackbar.success(context, S.saved);
+      AppSnackbar.success(context, 'User access updated.');
       await _load();
     } catch (e) {
       if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
@@ -189,9 +273,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
   }
 
   Future<void> _setActive(Map<String, dynamic> user, bool active) async {
-    final actor = ref.read(authProvider).profile?.role ?? AppRole.cashier;
-    final target = AppRoleX.fromDb(user['role'] as String?) ?? AppRole.cashier;
-    if (!canManageUser(actor, target)) {
+    if (!_canDeactivate(user)) {
       AppSnackbar.error(context, S.forbidden);
       return;
     }
@@ -212,7 +294,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       if (!mounted) return;
       await _afterUserMutation(user['id']);
       if (!mounted) return;
-      AppSnackbar.success(context, S.saved);
+      AppSnackbar.success(
+          context, active ? 'User reactivated.' : 'User deactivated.');
       await _load();
     } catch (e) {
       if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
@@ -220,9 +303,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
   }
 
   Future<void> _resetPassword(Map<String, dynamic> user) async {
-    final actor = ref.read(authProvider).profile?.role ?? AppRole.cashier;
-    final target = AppRoleX.fromDb(user['role'] as String?) ?? AppRole.cashier;
-    if (!canManageUser(actor, target)) {
+    if (!_canManage(user)) {
       AppSnackbar.error(context, S.forbidden);
       return;
     }
@@ -235,6 +316,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
     );
     if (confirm != true) return;
     try {
+      if (!SupabaseService.isReady) throw const SupabaseNotConfigured();
       final response = await SupabaseService.client.functions.invoke(
         'admin-reset-password',
         body: {'user_id': user['id']},
@@ -255,18 +337,21 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
             ],
           ),
         );
-      } else {
-        AppSnackbar.success(context, S.saved);
       }
+      if (!mounted) return;
+      AppSnackbar.success(context, 'Password reset.');
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
+      if (mounted) {
+        AppSnackbar.error(
+            context, _functionErrorMessage(e, 'admin-reset-password'));
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final role = ref.watch(authProvider).profile?.role;
-    final canEdit = role == AppRole.superAdmin || role == AppRole.admin;
+    final role = ref.watch(authProvider).profile?.role ?? AppRole.cashier;
+    final canEdit = can(role, Modules.users, PermAction.edit);
     return Scaffold(
       body: Padding(
         padding: const EdgeInsets.all(20),
@@ -281,7 +366,6 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                     padding: const EdgeInsets.only(right: 8),
                     child: PrimaryButton(
                       label: S.createUser,
-                      icon: Icons.person_add_outlined,
                       onPressed: _createUser,
                       width: 180,
                     ),
@@ -350,64 +434,82 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Expanded(
-                      child: DataTablePlus(
-                        columns: const [
-                          S.fullName,
-                          S.email,
-                          S.role,
-                          S.branch,
-                          S.status,
-                          S.actionLabel,
-                        ],
-                        rows: [
-                          for (final user in _filtered)
-                            DataTablePlusRow(
-                              cells: [
-                                (user['full_name'] as String?) ?? '—',
-                                (user['email'] as String?) ?? '—',
-                                AppRoleX.fromDb(user['role'] as String?)
-                                        ?.label ??
-                                    '—',
-                                _branchName(user['branch_id'] as String?),
-                                user['is_active'] == true
-                                    ? S.active
-                                    : S.inactive,
-                              ],
-                              actions: [
-                                if (canEdit)
-                                  IconButton(
-                                    tooltip: S.edit,
-                                    icon: const Icon(Icons.edit_outlined,
-                                        size: 18),
-                                    onPressed: () => _editUser(user),
-                                  ),
-                                if (canEdit)
-                                  IconButton(
-                                    tooltip: S.resetPassword,
-                                    icon: const Icon(Icons.lock_reset_outlined,
-                                        size: 18),
-                                    onPressed: () => _resetPassword(user),
-                                  ),
-                                if (canEdit)
-                                  IconButton(
-                                    tooltip: user['is_active'] == true
-                                        ? S.deactivate
-                                        : S.reactivate,
-                                    icon: Icon(
-                                      user['is_active'] == true
-                                          ? Icons.person_off_outlined
-                                          : Icons.person_outline,
-                                      size: 18,
+                    if (_users.isEmpty)
+                      const EmptyState(
+                        message: 'No users found.',
+                        icon: Icons.people_outline,
+                      )
+                    else
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: DataTablePlus(
+                            columns: const [
+                              S.fullName,
+                              S.email,
+                              S.role,
+                              S.branch,
+                              S.status,
+                            ],
+                            rows: [
+                              for (final user in _filtered)
+                                DataTablePlusRow(
+                                  cells: [
+                                    (user['full_name'] as String?) ?? '—',
+                                    (user['email'] as String?) ?? '—',
+                                    AppRoleX.fromDb(user['role'] as String?)
+                                            ?.label ??
+                                        '—',
+                                    _branchName(user['branch_id'] as String?),
+                                    user['is_active'] == true
+                                        ? S.active
+                                        : S.inactive,
+                                  ],
+                                  actions: [
+                                    IconButton(
+                                      tooltip: S.view,
+                                      icon: const Icon(
+                                          Icons.visibility_outlined,
+                                          size: 18),
+                                      onPressed: () => _viewUser(user),
                                     ),
-                                    onPressed: () => _setActive(
-                                        user, user['is_active'] != true),
-                                  ),
-                              ],
-                            ),
-                        ],
+                                    // Delete: n/a by design — deactivate instead.
+                                    // There is no delete-user RPC; removing an auth
+                                    // user would orphan sales and audit history.
+                                    if (canEdit && _canManage(user))
+                                      IconButton(
+                                        tooltip: S.edit,
+                                        icon: const Icon(Icons.edit_outlined,
+                                            size: 18),
+                                        onPressed: () => _editUser(user),
+                                      ),
+                                    if (canEdit && _canManage(user))
+                                      IconButton(
+                                        tooltip: S.resetPassword,
+                                        icon: const Icon(
+                                            Icons.lock_reset_outlined,
+                                            size: 18),
+                                        onPressed: () => _resetPassword(user),
+                                      ),
+                                    if (canEdit && _canDeactivate(user))
+                                      IconButton(
+                                        tooltip: user['is_active'] == true
+                                            ? S.deactivate
+                                            : S.reactivate,
+                                        icon: Icon(
+                                          user['is_active'] == true
+                                              ? Icons.person_off_outlined
+                                              : Icons.person_outline,
+                                          size: 18,
+                                        ),
+                                        onPressed: () => _setActive(
+                                            user, user['is_active'] != true),
+                                      ),
+                                  ],
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),

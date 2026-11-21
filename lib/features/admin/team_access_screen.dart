@@ -18,7 +18,17 @@ import '../sales/data/sales.dart';
 /// and sharing access copies the caller's role/branch; publishing settings
 /// re-writes the global app_settings rows and records an audit entry.
 class TeamAccessScreen extends ConsumerStatefulWidget {
-  const TeamAccessScreen({super.key});
+  const TeamAccessScreen({
+    super.key,
+    this.initialMembers,
+    this.initialBranches,
+    this.initialError,
+  });
+
+  /// Optional preloaded data keeps this screen pumpable in widget tests.
+  final List<Map<String, dynamic>>? initialMembers;
+  final List<Map<String, dynamic>>? initialBranches;
+  final String? initialError;
 
   @override
   ConsumerState<TeamAccessScreen> createState() => _TeamAccessScreenState();
@@ -41,8 +51,30 @@ class _TeamAccessScreenState extends ConsumerState<TeamAccessScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    if (widget.initialMembers != null || widget.initialError != null) {
+      _members = widget.initialMembers ?? const [];
+      _branches = widget.initialBranches ?? const [];
+      _error = widget.initialError;
+      _loading = false;
+    } else {
+      _load();
+    }
   }
+
+  /// set_user_access rejects self edits, cross-branch admin edits and
+  /// deactivating a super admin; do not offer those actions in the UI.
+  bool _canManageMember(Map<String, dynamic> member) {
+    if (!_canEdit) return false;
+    final profile = ref.read(authProvider).profile;
+    if (profile == null || member['id'] == profile.id) return false;
+    final target =
+        AppRoleX.fromDb(member['role'] as String?) ?? AppRole.cashier;
+    return canManageUser(profile.role, target);
+  }
+
+  bool _canDeactivateMember(Map<String, dynamic> member) =>
+      _canManageMember(member) &&
+      AppRoleX.fromDb(member['role'] as String?) != AppRole.superAdmin;
 
   Future<void> _load() async {
     setState(() {
@@ -80,7 +112,12 @@ class _TeamAccessScreenState extends ConsumerState<TeamAccessScreen> {
   }
 
   Future<void> _shareAccess() async {
-    if (_selected.isEmpty) {
+    final targets = _members
+        .where((member) =>
+            _selected.contains(member['id']) && _canManageMember(member))
+        .map((member) => member['id'] as String)
+        .toList();
+    if (targets.isEmpty) {
       AppSnackbar.show(context, S.selectTeammates, kind: SnackKind.info);
       return;
     }
@@ -89,7 +126,7 @@ class _TeamAccessScreenState extends ConsumerState<TeamAccessScreen> {
       builder: (_) => AlertDialog(
         title: const Text(S.shareAccess),
         content: Text(
-          '${S.selectTeammates}: ${_selected.length}.\n${S.teamAccessBody}',
+          '${S.selectTeammates}: ${targets.length}.\n${S.teamAccessBody}',
         ),
         actions: [
           TextButton(
@@ -108,7 +145,7 @@ class _TeamAccessScreenState extends ConsumerState<TeamAccessScreen> {
     try {
       await SupabaseService.client.rpc(
         'share_admin_access',
-        params: {'p_targets': _selected.toList()},
+        params: {'p_targets': targets},
       );
       await _afterMutation();
       if (mounted) AppSnackbar.success(context, S.teamShareDone);
@@ -143,7 +180,10 @@ class _TeamAccessScreenState extends ConsumerState<TeamAccessScreen> {
     try {
       await SupabaseService.client.rpc('publish_app_settings');
       await _afterMutation();
-      if (mounted) AppSnackbar.success(context, S.settingsPublished);
+      if (!mounted) return;
+      AppSnackbar.success(context, S.settingsPublished);
+      // Publishing changes the rows this screen reads; refresh the list.
+      await _load();
     } catch (e) {
       if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     } finally {
@@ -152,9 +192,17 @@ class _TeamAccessScreenState extends ConsumerState<TeamAccessScreen> {
   }
 
   Future<void> _editAccess(Map<String, dynamic> member) async {
+    if (!_canManageMember(member)) {
+      AppSnackbar.error(context, S.forbidden);
+      return;
+    }
     final result = await showDialog<_AccessInput>(
       context: context,
-      builder: (_) => _AccessDialog(member: member, branches: _branches),
+      builder: (_) => _AccessDialog(
+        member: member,
+        branches: _branches,
+        canDeactivate: _canDeactivateMember(member),
+      ),
     );
     if (result == null) return;
     setState(() => _busy = true);
@@ -249,7 +297,7 @@ class _TeamAccessScreenState extends ConsumerState<TeamAccessScreen> {
                             ListTile(
                               leading: Checkbox(
                                 value: _selected.contains(member['id']),
-                                onChanged: _canEdit
+                                onChanged: _canManageMember(member)
                                     ? (value) => setState(() {
                                           if (value == true) {
                                             _selected
@@ -271,7 +319,10 @@ class _TeamAccessScreenState extends ConsumerState<TeamAccessScreen> {
                                 ' · ${_branchName(member['branch_id'] as String?)}'
                                 ' · ${member['is_active'] == true ? S.active : S.inactive}',
                               ),
-                              trailing: _canEdit
+                              // Delete: n/a by design — deactivate instead.
+                              // Membership is never removed; set_user_access
+                              // keeps the audit history intact.
+                              trailing: _canManageMember(member)
                                   ? IconButton(
                                       icon: const Icon(
                                           Icons.manage_accounts_outlined),
@@ -305,10 +356,15 @@ class _AccessInput {
 }
 
 class _AccessDialog extends StatefulWidget {
-  const _AccessDialog({required this.member, required this.branches});
+  const _AccessDialog({
+    required this.member,
+    required this.branches,
+    required this.canDeactivate,
+  });
 
   final Map<String, dynamic> member;
   final List<Map<String, dynamic>> branches;
+  final bool canDeactivate;
 
   @override
   State<_AccessDialog> createState() => _AccessDialogState();
@@ -365,7 +421,10 @@ class _AccessDialogState extends State<_AccessDialog> {
             SwitchListTile(
               title: const Text(S.active),
               value: _active,
-              onChanged: (value) => setState(() => _active = value),
+              // RPC refuses to deactivate a super admin.
+              onChanged: widget.canDeactivate
+                  ? (value) => setState(() => _active = value)
+                  : null,
             ),
           ],
         ),

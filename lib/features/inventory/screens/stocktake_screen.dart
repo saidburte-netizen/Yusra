@@ -13,8 +13,14 @@ import '../data/inventory_models.dart';
 import '../data/inventory_providers.dart';
 import '../logic/stock_rules.dart';
 import '../../../core/errors/app_error.dart';
+import '../widgets/responsive_ui.dart';
 
 /// B9 — device-persisted stock take with live variance and RPC-backed apply.
+///
+/// Applying a saved draft always posts every non-zero variance in the visible
+/// category in one pass; a "save/apply partial" mode is n/a by design because
+/// a stock take is a complete count of the selected scope. The device draft
+/// can be saved or discarded, but is never written to the database as a row.
 class StocktakeScreen extends ConsumerStatefulWidget {
   const StocktakeScreen({super.key});
 
@@ -109,6 +115,37 @@ class _StocktakeScreenState extends ConsumerState<StocktakeScreen> {
     await prefs.setString(_draftKey, jsonEncode(draft));
   }
 
+  /// Removes the locally saved counts and resets every field to the system
+  /// quantity. This is a real delete of the device draft (not a DB row): the
+  /// stock take is a counting worksheet, so no draft table exists server-side.
+  Future<void> _discardDraft() async {
+    final confirm = await showConfirmDialog(
+      context,
+      title: 'Discard draft?',
+      message: 'The saved counts on this device will be removed and all '
+          'fields reset to the current system quantities.',
+      confirmLabel: 'Discard draft',
+    );
+    if (confirm != true || !mounted) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_draftKey);
+      final systemQty = {
+        for (final batch in _batches) batch.id: batch.quantity
+      };
+      for (final entry in _counts.entries) {
+        entry.value.text = '${systemQty[entry.key] ?? 0}';
+      }
+      if (!mounted) return;
+      setState(() {});
+      AppSnackbar.success(context, 'Draft discarded.');
+    } catch (e) {
+      if (mounted) {
+        AppSnackbar.error(context, AppErrorMapper.from(e).message);
+      }
+    }
+  }
+
   List<StockBatch> get _visibleBatches {
     if (_categoryId == null) return _batches;
     return _batches.where((batch) {
@@ -196,10 +233,9 @@ class _StocktakeScreenState extends ConsumerState<StocktakeScreen> {
               actions: [
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
-                  child: SecondaryButton(
+                  child: ResponsiveSecondaryButton(
                     label: 'Save draft',
                     icon: Icons.save_outlined,
-                    width: 130,
                     onPressed: _loading
                         ? null
                         : () async {
@@ -210,10 +246,17 @@ class _StocktakeScreenState extends ConsumerState<StocktakeScreen> {
                           },
                   ),
                 ),
-                PrimaryButton(
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ResponsiveSecondaryButton(
+                    label: 'Discard draft',
+                    icon: Icons.delete_outline,
+                    onPressed: _loading ? null : _discardDraft,
+                  ),
+                ),
+                ResponsivePrimaryButton(
                   label: 'Apply $_varianceLines variance(s)',
                   icon: Icons.check_circle_outline,
-                  width: 220,
                   loading: _applying,
                   onPressed: canApply && !_loading ? _apply : null,
                 ),
@@ -224,48 +267,57 @@ class _StocktakeScreenState extends ConsumerState<StocktakeScreen> {
               runSpacing: 10,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                SizedBox(
-                  width: 220,
-                  child: _branches.isEmpty
-                      ? AppTextField(
-                          label: 'Branch',
-                          controller: TextEditingController(
-                            text: _branchId ?? 'Current branch',
+                LayoutBuilder(
+                    builder: (context, constraints) => SizedBox(
+                          width: constraints.maxWidth < 600
+                              ? constraints.maxWidth
+                              : 220,
+                          child: _branches.isEmpty
+                              ? AppTextField(
+                                  label: 'Branch',
+                                  controller: TextEditingController(
+                                    text: _branchId ?? 'Current branch',
+                                  ),
+                                  enabled: false,
+                                )
+                              : AppDropdown<String?>(
+                                  label: 'Branch',
+                                  value: _branchId,
+                                  items: [
+                                    for (final branch in _branches)
+                                      DropdownMenuItem<String>(
+                                        value: branch['id'] as String?,
+                                        child: Text(
+                                            (branch['name'] as String?) ?? '—'),
+                                      ),
+                                  ],
+                                  onChanged: (value) {
+                                    setState(() => _branchId = value);
+                                    _load();
+                                  },
+                                ),
+                        )),
+                LayoutBuilder(
+                    builder: (context, constraints) => SizedBox(
+                          width: constraints.maxWidth < 600
+                              ? constraints.maxWidth
+                              : 220,
+                          child: AppDropdown<String?>(
+                            label: 'Category (optional)',
+                            value: _categoryId,
+                            items: [
+                              const DropdownMenuItem(
+                                  value: null, child: Text('All')),
+                              for (final category in categories)
+                                DropdownMenuItem(
+                                  value: category.id,
+                                  child: Text(category.name),
+                                ),
+                            ],
+                            onChanged: (value) =>
+                                setState(() => _categoryId = value),
                           ),
-                          enabled: false,
-                        )
-                      : AppDropdown<String?>(
-                          label: 'Branch',
-                          value: _branchId,
-                          items: [
-                            for (final branch in _branches)
-                              DropdownMenuItem<String>(
-                                value: branch['id'] as String?,
-                                child: Text((branch['name'] as String?) ?? '—'),
-                              ),
-                          ],
-                          onChanged: (value) {
-                            setState(() => _branchId = value);
-                            _load();
-                          },
-                        ),
-                ),
-                SizedBox(
-                  width: 220,
-                  child: AppDropdown<String?>(
-                    label: 'Category (optional)',
-                    value: _categoryId,
-                    items: [
-                      const DropdownMenuItem(value: null, child: Text('All')),
-                      for (final category in categories)
-                        DropdownMenuItem(
-                          value: category.id,
-                          child: Text(category.name),
-                        ),
-                    ],
-                    onChanged: (value) => setState(() => _categoryId = value),
-                  ),
-                ),
+                        )),
                 IconButton(
                   tooltip: 'Reload',
                   onPressed: _load,

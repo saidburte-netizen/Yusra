@@ -33,6 +33,20 @@ end $$;
 grant usage on schema public, auth, storage, extensions
   to anon, authenticated, service_role;
 
+-- PostgREST connects as a real login role and switches to the JWT's `role`
+-- claim. On Supabase that login is `authenticator`; on a plain server we create
+-- an equivalent here. It must NOT bypass RLS: membership lets PostgREST SET
+-- ROLE to anon/authenticated, and the RLS policies then do the real work.
+do $$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'e2e_authenticator') then
+    create role e2e_authenticator nologin;
+  end if;
+  alter role e2e_authenticator with login password 'e2e_authenticator';
+end $$;
+grant anon, authenticated, service_role to e2e_authenticator;
+grant usage on schema public, auth, storage, extensions to e2e_authenticator;
+
 -- Supabase's auth.users: only the columns referenced by the migrations.
 create table if not exists auth.users (
   id uuid primary key default gen_random_uuid(),

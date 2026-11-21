@@ -93,114 +93,131 @@ class _DataTablePlusState extends State<DataTablePlus> {
     final start = _page * widget.rowsPerPage;
     final pageRows = filtered.skip(start).take(widget.rowsPerPage).toList();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            SizedBox(
-              width: 260,
-              child: TextField(
-                controller: _search,
-                decoration: InputDecoration(
-                  hintText: widget.searchHint ?? '${S.search}…',
-                  prefixIcon: const Icon(Icons.search, size: 20),
-                  isDense: true,
-                ),
-                onChanged: (value) => setState(() {
-                  _query = value;
-                  _page = 0;
-                }),
-              ),
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final minHeight =
+            constraints.hasBoundedHeight ? constraints.maxHeight : 0.0;
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: minHeight),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (widget.filterChips != null)
-                  ...widget.filterChips!.map(
-                    (chip) => Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: ChoiceChip(
-                        label: Text(chip),
-                        selected: widget.selectedFilter == chip,
-                        onSelected: (_) => widget.onFilterChanged
-                            ?.call(widget.selectedFilter == chip ? null : chip),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 260),
+                      child: TextField(
+                        controller: _search,
+                        decoration: InputDecoration(
+                          hintText: widget.searchHint ?? '${S.search}…',
+                          prefixIcon: const Icon(Icons.search, size: 20),
+                          isDense: true,
+                        ),
+                        onChanged: (value) => setState(() {
+                          _query = value;
+                          _page = 0;
+                        }),
                       ),
                     ),
-                  ),
-                IconButton(
-                  tooltip: S.exportCsv,
-                  onPressed: _export,
-                  icon: const Icon(Icons.file_download_outlined,
-                      color: AppColors.gold700),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (widget.filterChips != null)
+                          ...widget.filterChips!.map(
+                            (chip) => Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: ChoiceChip(
+                                label: Text(chip),
+                                selected: widget.selectedFilter == chip,
+                                onSelected: (_) => widget.onFilterChanged?.call(
+                                    widget.selectedFilter == chip
+                                        ? null
+                                        : chip),
+                              ),
+                            ),
+                          ),
+                        IconButton(
+                          tooltip: S.exportCsv,
+                          onPressed: _export,
+                          icon: const Icon(Icons.file_download_outlined,
+                              color: AppColors.gold700),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (filtered.isEmpty)
-          const Padding(
-            padding: EdgeInsets.all(32),
-            child: Center(child: Text(S.noData)),
-          )
-        else
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              columns: [
-                for (var i = 0; i < widget.columns.length; i++)
-                  DataColumn(
-                    label: Text(widget.columns[i]),
-                    numeric: false,
-                    onSort: (_, __) => setState(() {
-                      if (_sortColumn == i) {
-                        _ascending = !_ascending;
-                      } else {
-                        _sortColumn = i;
-                        _ascending = true;
-                      }
-                    }),
+                const SizedBox(height: 12),
+                if (filtered.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Center(child: Text(S.noData)),
+                  )
+                else
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      columns: [
+                        for (var i = 0; i < widget.columns.length; i++)
+                          DataColumn(
+                            label: Text(widget.columns[i]),
+                            numeric: false,
+                            onSort: (_, __) => setState(() {
+                              if (_sortColumn == i) {
+                                _ascending = !_ascending;
+                              } else {
+                                _sortColumn = i;
+                                _ascending = true;
+                              }
+                            }),
+                          ),
+                        if (pageRows.any((row) => row.actions.isNotEmpty))
+                          const DataColumn(label: Text('')),
+                      ],
+                      rows: [
+                        for (final row in pageRows)
+                          DataRow(cells: [
+                            ...row.cells.map((cell) => DataCell(Text(cell))),
+                            if (row.actions.isNotEmpty)
+                              DataCell(Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: row.actions,
+                              )),
+                          ]),
+                      ],
+                    ),
                   ),
-                if (pageRows.any((row) => row.actions.isNotEmpty))
-                  const DataColumn(label: Text('')),
-              ],
-              rows: [
-                for (final row in pageRows)
-                  DataRow(cells: [
-                    ...row.cells.map((cell) => DataCell(Text(cell))),
-                    if (row.actions.isNotEmpty)
-                      DataCell(Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: row.actions,
-                      )),
-                  ]),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text('${filtered.length} ${S.view.toLowerCase()}'),
+                    const SizedBox(width: 16),
+                    IconButton(
+                      onPressed:
+                          _page > 0 ? () => setState(() => _page--) : null,
+                      icon: const Icon(Icons.chevron_left),
+                    ),
+                    Text('${_page + 1} / $pageCount'),
+                    IconButton(
+                      onPressed: _page + 1 < pageCount
+                          ? () => setState(() => _page++)
+                          : null,
+                      icon: const Icon(Icons.chevron_right),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Text('${filtered.length} ${S.view.toLowerCase()}'),
-            const SizedBox(width: 16),
-            IconButton(
-              onPressed: _page > 0 ? () => setState(() => _page--) : null,
-              icon: const Icon(Icons.chevron_left),
-            ),
-            Text('${_page + 1} / $pageCount'),
-            IconButton(
-              onPressed:
-                  _page + 1 < pageCount ? () => setState(() => _page++) : null,
-              icon: const Icon(Icons.chevron_right),
-            ),
-          ],
-        ),
-      ],
+        );
+      },
     );
   }
 }

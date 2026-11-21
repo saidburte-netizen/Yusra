@@ -17,9 +17,10 @@ import '../../core/strings.dart';
 import '../../core/supabase_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets.dart';
+import '../inventory/widgets/responsive_ui.dart';
 
-class _ReportDef {
-  const _ReportDef({
+class ReportDef {
+  const ReportDef({
     required this.title,
     required this.view,
     required this.columns,
@@ -42,8 +43,8 @@ class _ReportDef {
 
 /// Each report reads a dedicated Supabase view. Views are the single source of
 /// truth for aggregation so the app never recomputes financial figures in Dart.
-const List<_ReportDef> _reports = [
-  _ReportDef(
+const List<ReportDef> _reports = [
+  ReportDef(
     title: S.salesByDay,
     view: 'v_report_sales_by_day',
     columns: ['date', 'invoices', 'gross', 'discounts', 'vat', 'net'],
@@ -51,28 +52,28 @@ const List<_ReportDef> _reports = [
     chartValue: 'net',
     dateKey: 'date',
   ),
-  _ReportDef(
+  ReportDef(
     title: S.salesByCashier,
     view: 'v_report_sales_by_cashier',
     columns: ['cashier', 'invoices', 'total'],
     chartLabel: 'cashier',
     chartValue: 'total',
   ),
-  _ReportDef(
+  ReportDef(
     title: S.salesByPaymentMethod,
     view: 'v_report_sales_payment',
     columns: ['payment_method', 'invoices', 'total'],
     chartLabel: 'payment_method',
     chartValue: 'total',
   ),
-  _ReportDef(
+  ReportDef(
     title: S.salesByMedicine,
     view: 'v_report_sales_by_medicine',
     columns: ['medicine', 'qty', 'revenue', 'cost', 'profit'],
     chartLabel: 'medicine',
     chartValue: 'revenue',
   ),
-  _ReportDef(
+  ReportDef(
     title: S.profitReport,
     view: 'v_report_profit',
     columns: ['date', 'revenue', 'cost', 'profit', 'margin'],
@@ -80,14 +81,14 @@ const List<_ReportDef> _reports = [
     chartValue: 'profit',
     dateKey: 'date',
   ),
-  _ReportDef(
+  ReportDef(
     title: S.stockValuation,
     view: 'v_report_stock_valuation',
     columns: ['medicine', 'qty', 'unit_cost', 'value'],
     chartLabel: 'medicine',
     chartValue: 'value',
   ),
-  _ReportDef(
+  ReportDef(
     title: S.expiryLosses,
     view: 'v_report_expiry_losses',
     columns: ['expiry', 'medicine', 'batch', 'qty', 'value'],
@@ -95,14 +96,14 @@ const List<_ReportDef> _reports = [
     chartValue: 'value',
     dateKey: 'expiry',
   ),
-  _ReportDef(
+  ReportDef(
     title: S.purchasesBySupplier,
     view: 'v_report_purchases_supplier',
     columns: ['supplier', 'orders', 'total'],
     chartLabel: 'supplier',
     chartValue: 'total',
   ),
-  _ReportDef(
+  ReportDef(
     title: S.expensesReport,
     view: 'v_report_expenses',
     columns: ['date', 'category', 'amount'],
@@ -110,21 +111,21 @@ const List<_ReportDef> _reports = [
     chartValue: 'amount',
     dateKey: 'date',
   ),
-  _ReportDef(
+  ReportDef(
     title: S.netProfit,
     view: 'v_report_net_profit',
     columns: ['period', 'revenue', 'expenses', 'net'],
     chartLabel: 'period',
     chartValue: 'net',
   ),
-  _ReportDef(
+  ReportDef(
     title: S.shiftVariance,
     view: 'v_report_shift_variance',
     columns: ['cashier', 'shift', 'expected', 'actual', 'variance'],
     chartLabel: 'cashier',
     chartValue: 'variance',
   ),
-  _ReportDef(
+  ReportDef(
     title: S.controlledRegister,
     view: 'v_report_controlled_register',
     columns: ['date', 'medicine', 'qty', 'prescriber', 'patient'],
@@ -163,6 +164,38 @@ const String _viewsHint = 'If the report views are missing, apply '
 const String _branchHint =
     'If the branch filter reports a missing column, re-run '
     '0014_report_views.sql to add branch_id to the report views.';
+
+/// Reports read database views directly. Keeping the loader behind a provider
+/// lets widget tests supply dummy rows without a Supabase client while the app
+/// still uses the views as the single source of truth.
+typedef ReportRowsLoader = Future<List<Map<String, dynamic>>> Function(
+  ReportDef report,
+  String? branchId,
+  DateTime? from,
+  DateTime? to,
+);
+
+final reportRowsProvider = Provider<ReportRowsLoader>((ref) {
+  return (report, branchId, from, to) async {
+    if (!SupabaseService.isReady) throw const SupabaseNotConfigured();
+    var query = SupabaseService.client.from(report.view).select();
+    if (branchId != null) {
+      query = query.eq('branch_id', branchId);
+    }
+    if (report.dateKey != null) {
+      if (from != null) {
+        query = query.gte(
+            report.dateKey!, startOfAddisDayUtc(from).toIso8601String());
+      }
+      if (to != null) {
+        query =
+            query.lte(report.dateKey!, endOfAddisDayUtc(to).toIso8601String());
+      }
+    }
+    final result = await query.limit(1000);
+    return List<Map<String, dynamic>>.from(result as List);
+  };
+});
 
 class _Brand {
   const _Brand({
@@ -218,7 +251,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   String? _branchId;
   List<Map<String, String>> _branches = const [];
 
-  _ReportDef get _report => _reports[_selected];
+  ReportDef get _report => _reports[_selected];
 
   @override
   void initState() {
@@ -257,28 +290,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       _error = null;
     });
     try {
-      if (!SupabaseService.isReady) throw const SupabaseNotConfigured();
-      final report = _report;
-      var query = SupabaseService.client.from(report.view).select();
-      if (_branchId != null) {
-        query = query.eq('branch_id', _branchId!);
-      }
-      if (report.dateKey != null) {
-        if (_from != null) {
-          query = query.gte(
-              report.dateKey!, startOfAddisDayUtc(_from!).toIso8601String());
-        }
-        if (_to != null) {
-          query = query.lte(
-            report.dateKey!,
-            endOfAddisDayUtc(_to!).toIso8601String(),
-          );
-        }
-      }
-      final result = await query.limit(1000);
+      final rows = await ref
+          .read(reportRowsProvider)
+          .call(_report, _branchId, _from, _to);
       if (!mounted) return;
       setState(() {
-        _rows = List<Map<String, dynamic>>.from(result as List);
+        _rows = rows;
         _loading = false;
       });
     } catch (e) {
@@ -469,6 +486,51 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     }
   }
 
+  /// Phones get a horizontal chip strip; larger screens keep the vertical
+  /// report list. The same index drives both so selection stays in sync.
+  Widget _reportPicker({required bool horizontal}) {
+    if (horizontal) {
+      return SizedBox(
+        height: 44,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: _reports.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (context, index) => ChoiceChip(
+            label: Text(_reports[index].title),
+            selected: index == _selected,
+            onSelected: (_) => _select(index),
+          ),
+        ),
+      );
+    }
+    return Card(
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        itemCount: _reports.length,
+        separatorBuilder: (_, __) => const Divider(height: 1),
+        itemBuilder: (context, index) => ListTile(
+          dense: true,
+          selected: index == _selected,
+          selectedColor: AppColors.pink600,
+          leading: CircleAvatar(
+            radius: 13,
+            backgroundColor:
+                index == _selected ? AppColors.pink600 : AppColors.pink50,
+            child: Text('${index + 1}',
+                style: TextStyle(
+                    fontSize: 10,
+                    color: index == _selected
+                        ? AppColors.white
+                        : AppColors.pink600)),
+          ),
+          title: Text(_reports[index].title),
+          onTap: () => _select(index),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final role = ref.watch(authProvider).profile?.role ?? AppRole.cashier;
@@ -478,7 +540,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
     return Scaffold(
       body: Padding(
-        padding: const EdgeInsets.all(20),
+        padding:
+            EdgeInsets.all(MediaQuery.sizeOf(context).width < 600 ? 12 : 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -488,186 +551,183 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               actions: [
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
-                  child: OutlinedButton.icon(
-                    onPressed: _rows.isEmpty ? null : _exportPdf,
-                    icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-                    label: const Text(S.exportPdf),
+                  child: Tooltip(
+                    message: _rows.isEmpty ? 'No data to export.' : S.exportPdf,
+                    child: OutlinedButton.icon(
+                      onPressed: _rows.isEmpty ? null : _exportPdf,
+                      icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                      label: const Text(S.exportPdf),
+                    ),
                   ),
                 ),
-                IconButton(onPressed: _retry, icon: const Icon(Icons.refresh)),
+                IconButton(
+                  tooltip: S.refresh,
+                  onPressed: _retry,
+                  icon: const Icon(Icons.refresh),
+                ),
               ],
             ),
             Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 240,
-                    child: Card(
-                      child: ListView.separated(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        itemCount: _reports.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) => ListTile(
-                          dense: true,
-                          selected: index == _selected,
-                          selectedColor: AppColors.pink600,
-                          leading: CircleAvatar(
-                            radius: 13,
-                            backgroundColor: index == _selected
-                                ? AppColors.pink600
-                                : AppColors.pink50,
-                            child: Text('${index + 1}',
-                                style: TextStyle(
-                                    fontSize: 10,
-                                    color: index == _selected
-                                        ? AppColors.white
-                                        : AppColors.pink600)),
-                          ),
-                          title: Text(_reports[index].title),
-                          onTap: () => _select(index),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 8,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            if (_report.dateKey != null) ...[
-                              SizedBox(
-                                width: 170,
-                                child: DatePickerField(
-                                  label: S.dateFrom,
-                                  value: _from,
-                                  onChanged: (value) {
-                                    setState(() => _from = value);
-                                    _load();
-                                  },
-                                ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final stacked = constraints.maxWidth < 600;
+                  final dateWidth = stacked ? constraints.maxWidth : 170.0;
+                  final branchWidth = stacked ? constraints.maxWidth : 190.0;
+                  final content = Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          if (_report.dateKey != null) ...[
+                            SizedBox(
+                              width: dateWidth,
+                              child: DatePickerField(
+                                label: S.dateFrom,
+                                value: _from,
+                                onChanged: (value) {
+                                  setState(() => _from = value);
+                                  _load();
+                                },
                               ),
-                              SizedBox(
-                                width: 170,
-                                child: DatePickerField(
-                                  label: S.dateTo,
-                                  value: _to,
-                                  onChanged: (value) {
-                                    setState(() => _to = value);
-                                    _load();
-                                  },
-                                ),
+                            ),
+                            SizedBox(
+                              width: dateWidth,
+                              child: DatePickerField(
+                                label: S.dateTo,
+                                value: _to,
+                                onChanged: (value) {
+                                  setState(() => _to = value);
+                                  _load();
+                                },
                               ),
-                            ],
-                            if (role == AppRole.superAdmin &&
-                                _branches.isNotEmpty)
-                              SizedBox(
-                                width: 190,
-                                child: AppDropdown<String?>(
-                                  label: S.branch,
-                                  hint: S.allBranches,
-                                  value: _branchId,
-                                  items: [
-                                    const DropdownMenuItem<String?>(
-                                      value: null,
-                                      child: Text(S.allBranches),
-                                    ),
-                                    for (final branch in _branches)
-                                      DropdownMenuItem<String?>(
-                                        value: branch['id'],
-                                        child: Text(branch['name'] ?? S.branch),
-                                      ),
-                                  ],
-                                  onChanged: (value) {
-                                    setState(() => _branchId = value);
-                                    _load();
-                                  },
-                                ),
-                              ),
-                            TextButton.icon(
-                              onPressed: () {
-                                setState(() {
-                                  _from = null;
-                                  _to = null;
-                                  _branchId = null;
-                                });
-                                _load();
-                              },
-                              icon: const Icon(Icons.filter_alt_off_outlined),
-                              label: const Text(S.reset),
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 12),
-                        if (_loading)
-                          const Expanded(
-                              child: Center(child: CircularProgressIndicator()))
-                        else if (_error != null)
-                          Expanded(
-                              child:
-                                  ErrorState(message: _error!, onRetry: _retry))
-                        else if (_rows.isEmpty)
-                          const Expanded(
-                            child: EmptyState(
-                              message: 'No data for the selected period.',
-                              icon: Icons.insights_outlined,
-                            ),
-                          )
-                        else ...[
-                          if (_rows.isNotEmpty)
+                          if (role == AppRole.superAdmin &&
+                              _branches.isNotEmpty)
                             SizedBox(
-                              height: 220,
-                              child: Card(
-                                child: Padding(
-                                  padding:
-                                      const EdgeInsets.fromLTRB(12, 12, 12, 4),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(S.chart,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleSmall),
-                                      Expanded(
-                                        child: _ReportChart(
-                                          points: _chartPoints(),
-                                          money: _moneyKeys
-                                              .contains(_report.chartValue),
-                                        ),
-                                      ),
-                                    ],
+                              width: branchWidth,
+                              child: AppDropdown<String?>(
+                                label: S.branch,
+                                hint: S.allBranches,
+                                value: _branchId,
+                                items: [
+                                  const DropdownMenuItem<String?>(
+                                    value: null,
+                                    child: Text(S.allBranches),
                                   ),
-                                ),
+                                  for (final branch in _branches)
+                                    DropdownMenuItem<String?>(
+                                      value: branch['id'],
+                                      child: Text(branch['name'] ?? S.branch),
+                                    ),
+                                ],
+                                onChanged: (value) {
+                                  setState(() => _branchId = value);
+                                  _load();
+                                },
                               ),
                             ),
-                          const SizedBox(height: 12),
-                          Expanded(
-                            child: DataTablePlus(
-                              columns: [
-                                for (final key in _report.columns) _label(key),
-                              ],
-                              exportFileName: 'yusra-${_report.view}.csv',
-                              rows: [
-                                for (final row in _rows)
-                                  DataTablePlusRow(
-                                    cells: [
-                                      for (final key in _report.columns)
-                                        _cell(key, row[key]),
-                                    ],
-                                  ),
-                              ],
-                            ),
+                          TextButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _from = null;
+                                _to = null;
+                                _branchId = null;
+                              });
+                              _load();
+                            },
+                            icon: const Icon(Icons.filter_alt_off_outlined),
+                            label: const Text(S.reset),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (_loading)
+                        const Expanded(
+                            child: Center(child: CircularProgressIndicator()))
+                      else if (_error != null)
+                        Expanded(
+                            child:
+                                ErrorState(message: _error!, onRetry: _retry))
+                      else if (_rows.isEmpty)
+                        const Expanded(
+                          child: EmptyState(
+                            message: 'No data for the selected period. '
+                                'PDF export is unavailable until rows load.',
+                            icon: Icons.insights_outlined,
+                          ),
+                        )
+                      else ...[
+                        SizedBox(
+                          height: 220,
+                          child: Card(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(S.chart,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall),
+                                  Expanded(
+                                    child: _ReportChart(
+                                      points: _chartPoints(),
+                                      money: _moneyKeys
+                                          .contains(_report.chartValue),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Expanded(
+                          child: ResponsiveDataTablePlus(
+                            columns: [
+                              for (final key in _report.columns) _label(key),
+                            ],
+                            exportFileName: 'yusra-${_report.view}.csv',
+                            rows: [
+                              for (final row in _rows)
+                                DataTablePlusRow(
+                                  cells: [
+                                    for (final key in _report.columns)
+                                      _cell(key, row[key]),
+                                  ],
+                                ),
+                            ],
+                          ),
+                        ),
                       ],
-                    ),
-                  ),
-                ],
+                    ],
+                  );
+                  if (stacked) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _reportPicker(horizontal: true),
+                        const SizedBox(height: 12),
+                        Expanded(child: content),
+                      ],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 240,
+                        child: _reportPicker(horizontal: false),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(child: content),
+                    ],
+                  );
+                },
               ),
             ),
           ],

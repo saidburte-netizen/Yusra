@@ -126,26 +126,53 @@ class PageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final heading = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleLarge),
+            if (subtitle != null) ...[
+              const SizedBox(height: 4),
+              Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ],
+        );
+
+        // Phones: the title owns the whole first line, actions flow underneath.
+        // No fixed widths here, so a long title wraps normally instead of
+        // squeezing into one word per line.
+        if (constraints.maxWidth < 600) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 18),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(title, style: Theme.of(context).textTheme.titleLarge),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 4),
-                  Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
-                ],
+                heading,
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: actions,
+                ),
               ],
             ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 18),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(child: heading),
+              ...actions,
+            ],
           ),
-          ...actions,
-        ],
-      ),
+        );
+      },
     );
   }
 }

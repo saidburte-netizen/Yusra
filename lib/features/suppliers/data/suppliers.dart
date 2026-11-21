@@ -89,3 +89,17 @@ final suppliersProvider =
   if (!SupabaseService.isReady) return const <Supplier>[];
   return ref.read(supplierRepositoryProvider).list(query: query);
 });
+
+/// Single supplier by id. Lets the detail screen render from the real DB
+/// without loading the whole list first.
+final supplierProvider =
+    FutureProvider.family<Supplier, String>((ref, id) async {
+  if (!SupabaseService.isReady) throw const SupabaseNotConfigured();
+  final rows = await SupabaseService.client
+      .from('suppliers')
+      .select()
+      .eq('id', id)
+      .limit(1) as List;
+  if (rows.isEmpty) throw StateError('Supplier not found');
+  return Supplier.fromJson(Map<String, dynamic>.from(rows.first as Map));
+});

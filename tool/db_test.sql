@@ -442,7 +442,111 @@ begin
      'expected=' || v_expected_cash::text || ',result=' || coalesce(v_detail, 'null'));
 end $$;
 
+-- ---------------------------------------------------------------------------
+-- 9. PostgREST grant checks (0021_grants.sql). These assert table-level
+--    privileges only: RLS remains the gatekeeper for which rows are visible.
+--    Every check is inserted into db_test_results, so a missing grant is
+--    reported by the tabular result below AND by the failure guard at the end.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_log oid := to_regclass('public.activity_log');
+begin
+  insert into db_test_results values
+    ('grant_anon_schema_usage',
+     case when has_schema_privilege('anon', 'public', 'USAGE')
+          then 'PASS' else 'FAIL' end,
+     'anon needs schema USAGE for PostgREST'),
+    ('grant_authenticated_schema_usage',
+     case when has_schema_privilege('authenticated', 'public', 'USAGE')
+          then 'PASS' else 'FAIL' end,
+     'authenticated needs schema USAGE for PostgREST'),
+    ('grant_authenticated_core_table_access',
+     case when (select bool_and(
+                      has_table_privilege('authenticated', c.oid, 'SELECT')
+                  and has_table_privilege('authenticated', c.oid, 'INSERT')
+                  and has_table_privilege('authenticated', c.oid, 'UPDATE')
+                  and has_table_privilege('authenticated', c.oid, 'DELETE'))
+                from pg_class c
+                join pg_namespace n on n.oid = c.relnamespace
+                where n.nspname = 'public'
+                  and c.relkind in ('r', 'p', 'v', 'f')
+                  and c.relname <> 'activity_log')
+          then 'PASS' else 'FAIL' end,
+     'CRUD on every public table except activity_log'),
+    ('grant_authenticated_activity_log_select',
+     case when has_table_privilege('authenticated', v_log, 'SELECT')
+          then 'PASS' else 'FAIL' end,
+     'authenticated can read the activity log'),
+    ('grant_authenticated_activity_log_no_update_delete',
+     case when not has_table_privilege('authenticated', v_log, 'UPDATE')
+               and not has_table_privilege('authenticated', v_log, 'DELETE')
+          then 'PASS' else 'FAIL' end,
+     'activity_log is append-only for clients'),
+    ('grant_anon_activity_log_no_access',
+     case when not (
+                   has_table_privilege('anon', v_log, 'SELECT')
+                or has_table_privilege('anon', v_log, 'INSERT')
+                or has_table_privilege('anon', v_log, 'UPDATE')
+                or has_table_privilege('anon', v_log, 'DELETE')
+                or has_table_privilege('anon', v_log, 'TRUNCATE')
+                or has_table_privilege('anon', v_log, 'REFERENCES')
+                or has_table_privilege('anon', v_log, 'TRIGGER')
+              ) then 'PASS' else 'FAIL' end,
+     'anon has no activity_log privileges'),
+    ('grant_authenticated_sequence_access',
+     case when exists (
+                   select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                   where n.nspname = 'public' and c.relkind = 'S'
+                 )
+                 and not exists (
+                   select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                   where n.nspname = 'public' and c.relkind = 'S'
+                     and not (has_sequence_privilege('authenticated', c.oid, 'USAGE')
+                          and has_sequence_privilege('authenticated', c.oid, 'SELECT'))
+                 )
+          then 'PASS' else 'FAIL' end,
+     'USAGE and SELECT on every public sequence'),
+    ('grant_default_privileges_tables',
+     case when exists (
+       select 1 from pg_default_acl d
+       join pg_namespace n on n.oid = d.defaclnamespace
+       where n.nspname = 'public'
+         and d.defaclobjtype = 'r'
+         and d.defaclrole = (select c.relowner from pg_class c where c.oid = to_regclass('public.branches'))
+         and (select array_agg(x.privilege_type)
+              from aclexplode(d.defaclacl) x
+              join pg_roles r on r.oid = x.grantee
+              where r.rolname = 'authenticated')
+             @> array['SELECT','INSERT','UPDATE','DELETE']::text[]
+     ) then 'PASS' else 'FAIL' end,
+     'future public tables inherit CRUD for authenticated'),
+    ('grant_default_privileges_sequences',
+     case when exists (
+       select 1 from pg_default_acl d
+       join pg_namespace n on n.oid = d.defaclnamespace
+       where n.nspname = 'public'
+         and d.defaclobjtype = 'S'
+         and d.defaclrole = (select c.relowner from pg_class c where c.oid = to_regclass('public.branches'))
+         and (select array_agg(x.privilege_type)
+              from aclexplode(d.defaclacl) x
+              join pg_roles r on r.oid = x.grantee
+              where r.rolname = 'authenticated')
+             @> array['SELECT','USAGE']::text[]
+     ) then 'PASS' else 'FAIL' end,
+     'future public sequences inherit USAGE/SELECT for authenticated');
+end $$;
+
 select test, status, detail from db_test_results order by test;
+
+-- Compact grant-only lines, e.g. "PASS grant authenticated core table access".
+-- The tabular result above and the failure guard below are unchanged.
+select case when status = 'FAIL'
+            then 'FAIL ' || replace(test, '_', ' ') || ': ' || detail
+            else 'PASS ' || replace(test, '_', ' ') end as grant_check
+from db_test_results
+where test like 'grant_%'
+order by test;
 
 do $$
 declare

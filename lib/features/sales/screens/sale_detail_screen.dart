@@ -12,6 +12,7 @@ import '../../../core/strings.dart';
 import '../data/sales.dart';
 import '../logic/receipts.dart';
 import '../../../core/errors/app_error.dart';
+import '../../inventory/widgets/responsive_ui.dart';
 
 class SaleDetailScreen extends ConsumerStatefulWidget {
   const SaleDetailScreen({super.key, required this.id});
@@ -58,6 +59,8 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
           context, 'Everything on this invoice has already been returned.');
       return;
     }
+    final dialogWidth =
+        (MediaQuery.sizeOf(context).width - 48).clamp(240.0, 520.0).toDouble();
     final reason = TextEditingController();
     final method = ValueNotifier<String>('cash');
     final quantities = <String, int>{for (final item in selectable) item.id: 0};
@@ -71,7 +74,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
         builder: (context, setState) => AlertDialog(
           title: Text('Return invoice ${sale.invoiceNo}'),
           content: SizedBox(
-            width: 520,
+            width: dialogWidth,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -226,156 +229,166 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
     final sale = ref.watch(saleProvider(widget.id));
     final items = ref.watch(saleItemsProvider(widget.id));
     final payments = ref.watch(salePaymentsProvider(widget.id));
-    final role = ref.watch(authProvider).profile?.role ?? AppRole.cashier;
+    final profile = ref.watch(authProvider).profile;
+    final role = profile?.role ?? AppRole.cashier;
+    final ownOnly = isOwnOnly(role, Modules.sales);
     final canReturn = can(role, Modules.saleReturns, PermAction.edit);
 
     return Scaffold(
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: sale.when(
-          data: (value) => Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              PageHeader(
-                title: 'Invoice ${value.invoiceNo}',
-                subtitle: value.createdAt == null
-                    ? null
-                    : formatDateTime(value.createdAt!),
-                actions: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: SecondaryButton(
-                      label: 'Back',
-                      icon: Icons.arrow_back,
-                      width: 100,
-                      onPressed: () => context.go('/sales'),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Reprint',
-                    onPressed: _reprint,
-                    icon: const Icon(Icons.print_outlined),
-                  ),
-                ],
-              ),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
+          data: (value) {
+            if (ownOnly && value.cashierId != profile?.id) {
+              return const ErrorState(
+                message: 'You can only view your own invoices.',
+                onRetry: null,
+              );
+            }
+            return SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  StatCard(
-                    title: 'Total',
-                    value: formatMoney(value.total),
-                    icon: Icons.payments,
-                  ),
-                  StatCard(
-                    title: 'Paid',
-                    value: formatMoney(value.paid),
-                    icon: Icons.account_balance_wallet_outlined,
-                  ),
-                  StatCard(
-                    title: 'Change',
-                    value: formatMoney(value.changeDue),
-                    icon: Icons.redeem_outlined,
-                  ),
-                  StatCard(
-                    title: 'Status',
-                    value: value.status.toUpperCase(),
-                    icon: Icons.verified_outlined,
-                    color: value.status == 'completed'
-                        ? AppColors.success
-                        : AppColors.warning,
-                  ),
-                ],
-              ),
-              if (value.voidReason != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Text('Void reason: ${value.voidReason}',
-                      style: const TextStyle(color: AppColors.danger)),
-                ),
-              const SizedBox(height: 18),
-              Text('Items', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      items.when(
-                        data: (rows) => DataTablePlus(
-                          columns: const [
-                            'Medicine',
-                            'Batch',
-                            'Expiry',
-                            'Qty',
-                            'Returned',
-                            'Price',
-                            'Total',
-                          ],
-                          rows: [
-                            for (final item in rows)
-                              DataTablePlusRow(cells: [
-                                item.medicineName,
-                                item.batchNo ?? '—',
-                                item.expiryDate == null
-                                    ? '—'
-                                    : formatDate(item.expiryDate!),
-                                '${item.quantity}',
-                                '${item.returnedQty}',
-                                formatMoney(item.unitPrice),
-                                formatMoney(item.lineTotal),
-                              ]),
-                          ],
+                  PageHeader(
+                    title: 'Invoice ${value.invoiceNo}',
+                    subtitle: value.createdAt == null
+                        ? null
+                        : formatDateTime(value.createdAt!),
+                    actions: [
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ResponsiveSecondaryButton(
+                          label: 'Back',
+                          icon: Icons.arrow_back,
+                          onPressed: () => context.go('/sales'),
                         ),
-                        loading: () => const LoadingSkeleton(lines: 3),
-                        error: (error, _) => ErrorState(
-                            message: AppErrorMapper.from(error).message,
-                            onRetry: () =>
-                                ref.invalidate(saleItemsProvider(widget.id))),
                       ),
-                      const SizedBox(height: 18),
-                      Text('Payments',
-                          style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 8),
-                      payments.when(
-                        data: (rows) => DataTablePlus(
-                          columns: const ['Method', 'Reference', 'Amount'],
-                          rows: [
-                            for (final payment in rows)
-                              DataTablePlusRow(cells: [
-                                payment.method.replaceAll('_', ' '),
-                                payment.reference ?? '—',
-                                formatMoney(payment.amount),
-                              ]),
-                          ],
-                        ),
-                        loading: () => const LoadingSkeleton(lines: 2),
-                        error: (error, _) => ErrorState(
-                            message: AppErrorMapper.from(error).message,
-                            onRetry: () => ref
-                                .invalidate(salePaymentsProvider(widget.id))),
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
-                        children: [
-                          if (value.status == 'completed' && canReturn)
-                            PrimaryButton(
-                              label: _busy ? 'Working…' : 'Process return',
-                              icon: Icons.assignment_return,
-                              width: 180,
-                              loading: _busy,
-                              onPressed: () =>
-                                  _return(value, items.valueOrNull ?? const []),
-                            ),
-                        ],
+                      IconButton(
+                        tooltip: 'Reprint',
+                        onPressed: _reprint,
+                        icon: const Icon(Icons.print_outlined),
                       ),
                     ],
                   ),
-                ),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      StatCard(
+                        title: 'Total',
+                        value: formatMoney(value.total),
+                        icon: Icons.payments,
+                      ),
+                      StatCard(
+                        title: 'Paid',
+                        value: formatMoney(value.paid),
+                        icon: Icons.account_balance_wallet_outlined,
+                      ),
+                      StatCard(
+                        title: 'Change',
+                        value: formatMoney(value.changeDue),
+                        icon: Icons.redeem_outlined,
+                      ),
+                      StatCard(
+                        title: 'Status',
+                        value: value.status.toUpperCase(),
+                        icon: Icons.verified_outlined,
+                        color: value.status == 'completed'
+                            ? AppColors.success
+                            : AppColors.warning,
+                      ),
+                    ],
+                  ),
+                  if (value.voidReason != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text('Void reason: ${value.voidReason}',
+                          style: const TextStyle(color: AppColors.danger)),
+                    ),
+                  const SizedBox(height: 18),
+                  Text('Items', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        items.when(
+                          data: (rows) => ResponsiveDataTablePlus(
+                            columns: const [
+                              'Medicine',
+                              'Batch',
+                              'Expiry',
+                              'Qty',
+                              'Returned',
+                              'Price',
+                              'Total',
+                            ],
+                            rows: [
+                              for (final item in rows)
+                                DataTablePlusRow(cells: [
+                                  item.medicineName,
+                                  item.batchNo ?? '—',
+                                  item.expiryDate == null
+                                      ? '—'
+                                      : formatDate(item.expiryDate!),
+                                  '${item.quantity}',
+                                  '${item.returnedQty}',
+                                  formatMoney(item.unitPrice),
+                                  formatMoney(item.lineTotal),
+                                ]),
+                            ],
+                          ),
+                          loading: () =>
+                              const ResponsiveLoadingSkeleton(lines: 3),
+                          error: (error, _) => ErrorState(
+                              message: AppErrorMapper.from(error).message,
+                              onRetry: () =>
+                                  ref.invalidate(saleItemsProvider(widget.id))),
+                        ),
+                        const SizedBox(height: 18),
+                        Text('Payments',
+                            style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 8),
+                        payments.when(
+                          data: (rows) => ResponsiveDataTablePlus(
+                            columns: const ['Method', 'Reference', 'Amount'],
+                            rows: [
+                              for (final payment in rows)
+                                DataTablePlusRow(cells: [
+                                  payment.method.replaceAll('_', ' '),
+                                  payment.reference ?? '—',
+                                  formatMoney(payment.amount),
+                                ]),
+                            ],
+                          ),
+                          loading: () =>
+                              const ResponsiveLoadingSkeleton(lines: 2),
+                          error: (error, _) => ErrorState(
+                              message: AppErrorMapper.from(error).message,
+                              onRetry: () => ref
+                                  .invalidate(salePaymentsProvider(widget.id))),
+                        ),
+                        const SizedBox(height: 18),
+                        Row(
+                          children: [
+                            if (value.status == 'completed' && canReturn)
+                              ResponsivePrimaryButton(
+                                label: _busy ? 'Working…' : 'Process return',
+                                icon: Icons.assignment_return,
+                                loading: _busy,
+                                onPressed: () => _return(
+                                    value, items.valueOrNull ?? const []),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          loading: () => const LoadingSkeleton(lines: 5),
+            );
+          },
+          loading: () => const ResponsiveLoadingSkeleton(lines: 5),
           error: (error, _) => ErrorState(
               message: AppErrorMapper.from(error).message,
               onRetry: () => ref.invalidate(saleProvider(widget.id))),
