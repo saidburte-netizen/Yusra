@@ -304,6 +304,15 @@ jobs:
           echo "=== tool/db_test.sql result table ==="
           bash tool/ci_psql.sh -d yusra_migrations -v ON_ERROR_STOP=1 -f tool/db_test.sql | tee /tmp/db-test.txt
           test -s /tmp/db-test.txt
+          # db_test.sql raises on failure, but explicitly inspect every row too
+          # so a future change that stops raising cannot turn red into green.
+          awk -F '|' '
+            NF >= 3 && $3 ~ /FAIL/ {
+              print "::error::db_test row failed: " $0
+              bad = 1
+            }
+            END { exit bad ? 1 : 0 }
+          ' /tmp/db-test.txt
 
   smoke-test:
     name: Manual Supabase smoke test
