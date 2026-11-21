@@ -13,6 +13,7 @@ import '../../../core/permissions.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets.dart';
 import '../../../core/strings.dart';
+import '../../../core/state/async_state_view.dart';
 import '../../customers/data/customers.dart';
 import '../../prescriptions/data/prescriptions.dart';
 import '../../inventory/data/inventory_models.dart';
@@ -108,7 +109,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       return;
     }
 
-    final payments = await showPaymentDialog(context, total: _cart.total(vatRate));
+    final payments =
+        await showPaymentDialog(context, total: _cart.total(vatRate));
     if (payments == null || !mounted) return;
     final paymentError = validatePayments(
       total: _cart.total(vatRate),
@@ -136,7 +138,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           );
       final sale = await ref.read(salesRepositoryProvider).sale(saleId);
       final items = await ref.read(salesRepositoryProvider).saleItems(saleId);
-      final savedPayments = await ref.read(salesRepositoryProvider).salePayments(saleId);
+      final savedPayments =
+          await ref.read(salesRepositoryProvider).salePayments(saleId);
       await Receipts.printSale(
         sale: sale,
         items: items,
@@ -207,7 +210,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       await store.clearDraft();
       if (mounted) AppSnackbar.success(context, 'Cart held.');
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      if (mounted) {
+        AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      }
     }
   }
 
@@ -233,7 +238,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               (item) => ListTile(
                 leading: const Icon(Icons.shopping_cart_outlined),
                 title: Text(item.label),
-                subtitle: Text('${item.cart.itemCount} items  •  ${formatDateTime(item.savedAt)}'),
+                subtitle: Text(
+                    '${item.cart.itemCount} items  •  ${formatDateTime(item.savedAt)}'),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete_outline),
                   onPressed: () async {
@@ -263,7 +269,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       _updateCart(chosen.cart);
       if (mounted) AppSnackbar.success(context, 'Cart resumed.');
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      if (mounted) {
+        AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      }
     }
   }
 
@@ -287,26 +295,34 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                 const SizedBox(height: 10),
                 Expanded(
                   child: ref.watch(customersProvider(query.text)).when(
-                        data: (customers) => ListView(
-                          children: [
-                            ListTile(
-                              title: const Text('Walk-in customer'),
-                              onTap: () => Navigator.pop(context),
-                            ),
-                            ...customers.map(
-                              (customer) => ListTile(
-                                title: Text(customer.name),
-                                subtitle: Text(customer.phone ?? ''),
-                                selected: customer.id == _customerId,
-                                onTap: () => Navigator.pop(context, customer),
+                        data: (customers) => customers.isEmpty
+                            ? const EmptyState(
+                                message: 'No customers found.',
+                                icon: Icons.people_outline)
+                            : ListView(
+                                children: [
+                                  ListTile(
+                                    title: const Text('Walk-in customer'),
+                                    onTap: () => Navigator.pop(context),
+                                  ),
+                                  ...customers.map(
+                                    (customer) => ListTile(
+                                      title: Text(customer.name),
+                                      subtitle: Text(customer.phone ?? ''),
+                                      selected: customer.id == _customerId,
+                                      onTap: () =>
+                                          Navigator.pop(context, customer),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
+                        loading: () =>
+                            const Center(child: CircularProgressIndicator()),
+                        error: (_, __) => ErrorState(
+                          message: 'Customers could not be loaded.',
+                          onRetry: () =>
+                              ref.invalidate(customersProvider(query.text)),
                         ),
-                        loading: () => const Center(child: CircularProgressIndicator()),
-                        error: (error, _) => Center(
-                              child: Text(AppErrorMapper.from(error).message),
-                            ),
                       ),
                 ),
               ],
@@ -328,7 +344,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   Widget build(BuildContext context) {
     final shiftState = ref.watch(myOpenShiftProvider);
     final settingsState = ref.watch(receiptSettingsProvider);
-    final medicinesState = ref.watch(medicinesProvider((query: '', categoryId: null)));
+    final medicinesState =
+        ref.watch(medicinesProvider((query: '', categoryId: null)));
     final stockState = ref.watch(stockSummaryProvider);
     final role = ref.watch(authProvider).profile?.role ?? AppRole.cashier;
     final canSell = can(role, Modules.pos, PermAction.edit);
@@ -343,17 +360,18 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       );
     }
 
-    final settings = settingsState.valueOrNull ?? const ReceiptSettings(
-      pharmacyName: 'Yusra Pharmacy',
-      tagline: 'Care made easy',
-      address: '',
-      phone: '',
-      tin: '',
-      licenseNo: '',
-      footer: 'Thank you for choosing Yusra Pharmacy.',
-      vatRate: 0.15,
-      maxCashierDiscountPct: 5,
-    );
+    final settings = settingsState.valueOrNull ??
+        const ReceiptSettings(
+          pharmacyName: 'Yusra Pharmacy',
+          tagline: 'Care made easy',
+          address: '',
+          phone: '',
+          tin: '',
+          licenseNo: '',
+          footer: 'Thank you for choosing Yusra Pharmacy.',
+          vatRate: 0.15,
+          maxCashierDiscountPct: 5,
+        );
     final shift = shiftState.valueOrNull;
 
     return Scaffold(
@@ -397,6 +415,14 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                 ),
               ],
             ),
+            if (settingsState.hasError)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: InlineErrorBanner(
+                  error: settingsState.error!,
+                  onRetry: () => ref.invalidate(receiptSettingsProvider),
+                ),
+              ),
             if (shift == null)
               Card(
                 color: AppColors.pink50,
@@ -407,7 +433,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                       const Icon(Icons.info_outline, color: AppColors.warning),
                       const SizedBox(width: 12),
                       const Expanded(
-                        child: Text('You need an open cash shift to make a sale.'),
+                        child:
+                            Text('You need an open cash shift to make a sale.'),
                       ),
                       ElevatedButton(
                         onPressed: () => context.go('/shifts'),
@@ -510,9 +537,12 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               compact: true,
               onDetected: (code) {
                 setState(() => _search.text = code);
-                final match = medicines.where(
-                  (medicine) => medicine.barcode == code || medicine.sku == code,
-                ).firstOrNull;
+                final match = medicines
+                    .where(
+                      (medicine) =>
+                          medicine.barcode == code || medicine.sku == code,
+                    )
+                    .firstOrNull;
                 if (match != null) {
                   final line = _lineFor(match, stock[match.id]);
                   if (line != null) _updateCart(_cart.add(line));
@@ -530,7 +560,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               ? const LoadingSkeleton(lines: 5)
               : medicinesState.hasError || stockState.hasError
                   ? ErrorState(
-                      message: AppErrorMapper.from((medicinesState.error ?? stockState.error)!).message,
+                      message: AppErrorMapper.from(
+                              (medicinesState.error ?? stockState.error)!)
+                          .message,
                       onRetry: () {
                         ref.invalidate(medicinesProvider);
                         ref.invalidate(stockSummaryProvider);
@@ -542,7 +574,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                           icon: Icons.medication_outlined,
                         )
                       : GridView.builder(
-                          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                          gridDelegate:
+                              const SliverGridDelegateWithMaxCrossAxisExtent(
                             maxCrossAxisExtent: 220,
                             mainAxisExtent: 132,
                             crossAxisSpacing: 10,
@@ -551,28 +584,37 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                           itemCount: visible.length,
                           itemBuilder: (context, index) {
                             final medicine = visible[index];
-                            final available = stock[medicine.id]?.availableQty ?? 0;
+                            final available =
+                                stock[medicine.id]?.availableQty ?? 0;
                             return Card(
                               child: InkWell(
                                 onTap: available < 1
                                     ? null
                                     : () {
-                                        final line = _lineFor(medicine, stock[medicine.id]);
-                                        if (line != null) _updateCart(_cart.add(line));
+                                        final line = _lineFor(
+                                            medicine, stock[medicine.id]);
+                                        if (line != null) {
+                                          _updateCart(_cart.add(line));
+                                        }
                                       },
-                                borderRadius: BorderRadius.circular(AppColors.radius),
+                                borderRadius:
+                                    BorderRadius.circular(AppColors.radius),
                                 child: Padding(
                                   padding: const EdgeInsets.all(12),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
                                           if (medicine.requiresPrescription)
                                             const Padding(
-                                              padding: EdgeInsets.only(right: 4),
-                                              child: Icon(Icons.medical_information,
-                                                  size: 14, color: AppColors.gold700),
+                                              padding:
+                                                  EdgeInsets.only(right: 4),
+                                              child: Icon(
+                                                  Icons.medical_information,
+                                                  size: 14,
+                                                  color: AppColors.gold700),
                                             ),
                                           Expanded(
                                             child: Text(
@@ -586,7 +628,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                                         ],
                                       ),
                                       Text(medicine.sku,
-                                          style: Theme.of(context).textTheme.labelSmall),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelSmall),
                                       const Spacer(),
                                       Text(formatMoney(medicine.sellingPrice),
                                           style: const TextStyle(
@@ -653,7 +697,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.person_outline),
-              title: Text(_customerId == null ? 'Walk-in customer' : 'Customer selected'),
+              title: Text(_customerId == null
+                  ? 'Walk-in customer'
+                  : 'Customer selected'),
               trailing: TextButton(
                 onPressed: _selectCustomer,
                 child: const Text('Change'),
@@ -677,7 +723,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                                 children: [
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(line.name,
                                             maxLines: 2,
@@ -685,34 +732,42 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                                         Text(
                                           '${formatMoney(line.unitPrice)}'
                                           '${line.vatApplicable ? ' + VAT' : ''}',
-                                          style: Theme.of(context).textTheme.labelSmall,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelSmall,
                                         ),
                                       ],
                                     ),
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.remove_circle_outline, size: 20),
-                                    onPressed: () => _updateCart(_cart.setQuantity(
+                                    icon: const Icon(
+                                        Icons.remove_circle_outline,
+                                        size: 20),
+                                    onPressed: () =>
+                                        _updateCart(_cart.setQuantity(
                                       line.medicineId,
                                       line.quantity - 1,
                                     )),
                                   ),
                                   Text('${line.quantity}',
-                                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold)),
                                   IconButton(
-                                    icon: const Icon(Icons.add_circle_outline, size: 20),
-                                    onPressed: line.quantity >= line.availableQty
+                                    icon: const Icon(Icons.add_circle_outline,
+                                        size: 20),
+                                    onPressed: line.quantity >=
+                                            line.availableQty
                                         ? null
                                         : () => _updateCart(_cart.setQuantity(
-                                            line.medicineId,
-                                            line.quantity + 1,
-                                          )),
+                                              line.medicineId,
+                                              line.quantity + 1,
+                                            )),
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.delete_outline,
                                         color: AppColors.danger),
-                                    onPressed: () =>
-                                        _updateCart(_cart.remove(line.medicineId)),
+                                    onPressed: () => _updateCart(
+                                        _cart.remove(line.medicineId)),
                                   ),
                                 ],
                               ),
@@ -745,7 +800,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                   child: AppTextField(
                     label: '',
                     controller: _discount,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                     onChanged: (value) => _updateCart(_cart.withDiscount(
                       double.tryParse(value.replaceAll(',', '')) ?? 0,
                       settings.vatRate,
@@ -790,9 +846,10 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                     label: _busy ? 'Saving…' : 'Pay ${formatMoney(total)}',
                     icon: Icons.payment,
                     loading: _busy,
-                    onPressed: shift == null || _cart.isEmpty || !canSell || _busy
-                        ? null
-                        : () => _checkout(shift, settings),
+                    onPressed:
+                        shift == null || _cart.isEmpty || !canSell || _busy
+                            ? null
+                            : () => _checkout(shift, settings),
                   ),
                 ),
               ],

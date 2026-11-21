@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +11,7 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/money.dart';
 import '../../../core/permissions.dart';
 import '../../../core/widgets.dart';
+import '../data/inventory_ids.dart';
 import '../data/inventory_models.dart';
 import '../data/inventory_providers.dart';
 import '../logic/medicine_csv.dart';
@@ -109,7 +110,8 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
                       items: [
                         const DropdownMenuItem(value: null, child: Text('All')),
                         for (final item in items)
-                          DropdownMenuItem(value: item.id, child: Text(item.name)),
+                          DropdownMenuItem(
+                              value: item.id, child: Text(item.name)),
                       ],
                       onChanged: (value) => setState(() => _categoryId = value),
                     ),
@@ -133,7 +135,8 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
                     items: const [
                       DropdownMenuItem(value: null, child: Text('All')),
                       DropdownMenuItem(value: 'active', child: Text('Active')),
-                      DropdownMenuItem(value: 'inactive', child: Text('Inactive')),
+                      DropdownMenuItem(
+                          value: 'inactive', child: Text('Inactive')),
                     ],
                     onChanged: (value) => setState(() => _status = value),
                   ),
@@ -195,8 +198,8 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
                             IconButton(
                               tooltip: 'Details',
                               icon: const Icon(Icons.open_in_new, size: 18),
-                              onPressed: () => context
-                                  .go('/inventory/medicines/${item.id}'),
+                              onPressed: () =>
+                                  context.go('/inventory/medicines/${item.id}'),
                             ),
                             if (canEdit)
                               IconButton(
@@ -206,7 +209,8 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
                               ),
                             if (canEdit)
                               IconButton(
-                                tooltip: item.isActive ? 'Deactivate' : 'Reactivate',
+                                tooltip:
+                                    item.isActive ? 'Deactivate' : 'Reactivate',
                                 icon: Icon(
                                   item.isActive
                                       ? Icons.block_outlined
@@ -251,7 +255,8 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
           );
       if (!mounted) return;
       AppSnackbar.success(context, 'Medicine saved.');
-      ref.invalidate(medicinesProvider((query: _query, categoryId: _categoryId)));
+      ref.invalidate(
+          medicinesProvider((query: _query, categoryId: _categoryId)));
     } catch (e) {
       if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
@@ -261,7 +266,8 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
     final confirm = await showConfirmDialog(
       context,
       title: medicine.isActive ? 'Deactivate medicine' : 'Reactivate medicine',
-      message: '${medicine.name} will ${medicine.isActive ? 'no longer' : 'again'} be available.',
+      message:
+          '${medicine.name} will ${medicine.isActive ? 'no longer' : 'again'} be available.',
     );
     if (confirm != true) return;
     try {
@@ -270,7 +276,8 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
           .setMedicineActive(medicine.id, !medicine.isActive);
       if (!mounted) return;
       AppSnackbar.success(context, 'Medicine updated.');
-      ref.invalidate(medicinesProvider((query: _query, categoryId: _categoryId)));
+      ref.invalidate(
+          medicinesProvider((query: _query, categoryId: _categoryId)));
     } catch (e) {
       if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
@@ -308,9 +315,15 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
     );
     final file = picked?.files.firstOrNull;
     if (file == null) return;
-    final source = file.bytes != null
-        ? String.fromCharCodes(file.bytes!)
-        : await File(file.path!).readAsString();
+    final bytes = file.bytes;
+    if (bytes == null) {
+      if (mounted) {
+        AppSnackbar.error(context,
+            'Could not read the selected file. Please choose it again.');
+      }
+      return;
+    }
+    final source = utf8.decode(bytes, allowMalformed: true);
     final parsed = MedicineCsv.parse(source);
     if (!mounted) return;
     final categories = ref.read(categoriesProvider).value ?? const <Category>[];
@@ -350,9 +363,8 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
           PrimaryButton(
             label: 'Import ${parsed.rows.length}',
             width: 150,
-            onPressed: parsed.rows.isEmpty
-                ? null
-                : () => Navigator.pop(context, true),
+            onPressed:
+                parsed.rows.isEmpty ? null : () => Navigator.pop(context, true),
           ),
         ],
       ),
@@ -363,7 +375,8 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
     try {
       for (final row in parsed.rows) {
         final categoryId = categories
-            .where((item) => item.name.toLowerCase() == row.categoryName.toLowerCase())
+            .where((item) =>
+                item.name.toLowerCase() == row.categoryName.toLowerCase())
             .firstOrNull
             ?.id;
         await repository.saveMedicine(row.toJson(categoryId: categoryId));
@@ -371,9 +384,13 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
       }
       if (!mounted) return;
       AppSnackbar.success(context, 'Imported $imported medicines.');
-      ref.invalidate(medicinesProvider((query: _query, categoryId: _categoryId)));
+      ref.invalidate(
+          medicinesProvider((query: _query, categoryId: _categoryId)));
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, 'Imported $imported before stopping. ${AppErrorMapper.from(e).message}');
+      if (mounted) {
+        AppSnackbar.error(context,
+            'Imported $imported before stopping. ${AppErrorMapper.from(e).message}');
+      }
     }
   }
 }
@@ -384,7 +401,8 @@ class _MedicineFormDialog extends ConsumerStatefulWidget {
   final Medicine? initial;
 
   @override
-  ConsumerState<_MedicineFormDialog> createState() => _MedicineFormDialogState();
+  ConsumerState<_MedicineFormDialog> createState() =>
+      _MedicineFormDialogState();
 }
 
 class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
@@ -405,6 +423,8 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
   bool _rx = false;
   bool _controlled = false;
   String? _imageUrl;
+  // New medicines need an id before the photo can be uploaded into its folder.
+  late final String _newMedicineId = generateUuidV4();
   var _busy = false;
 
   @override
@@ -432,8 +452,17 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
   @override
   void dispose() {
     for (final controller in [
-      _name, _generic, _barcode, _form, _strength, _unit,
-      _manufacturer, _cost, _price, _reorder, _storage,
+      _name,
+      _generic,
+      _barcode,
+      _form,
+      _strength,
+      _unit,
+      _manufacturer,
+      _cost,
+      _price,
+      _reorder,
+      _storage,
     ]) {
       controller.dispose();
     }
@@ -442,14 +471,19 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
 
   Future<void> _pickPhoto() async {
     final picker = ImagePicker();
-    final file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-    if (file == null || widget.initial == null) return;
+    final file =
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (file == null) return;
     setState(() => _busy = true);
     try {
       final bytes = await file.readAsBytes();
-      final url = await ref
-          .read(inventoryRepositoryProvider)
-          .uploadMedicineImage(widget.initial!.id, bytes);
+      final url =
+          await ref.read(inventoryRepositoryProvider).uploadMedicineImage(
+                widget.initial?.id ?? _newMedicineId,
+                bytes,
+                contentType: file.mimeType ?? 'image/png',
+              );
+      if (!mounted) return;
       setState(() => _imageUrl = url);
     } catch (e) {
       if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
@@ -460,7 +494,8 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final categories = ref.watch(categoriesProvider).value ?? const <Category>[];
+    final categories =
+        ref.watch(categoriesProvider).value ?? const <Category>[];
     return AlertDialog(
       title: Text(widget.initial == null ? 'New medicine' : 'Edit medicine'),
       content: SizedBox(
@@ -475,18 +510,22 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
                 AppTextField(
                   label: 'Name',
                   controller: _name,
-                  validator: (value) => (value ?? '').trim().isEmpty ? 'Required' : null,
+                  validator: (value) =>
+                      (value ?? '').trim().isEmpty ? 'Required' : null,
                 ),
                 const SizedBox(height: 10),
                 AppTextField(label: 'Generic name', controller: _generic),
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    Expanded(child: AppTextField(label: 'Barcode', controller: _barcode)),
+                    Expanded(
+                        child: AppTextField(
+                            label: 'Barcode', controller: _barcode)),
                     const SizedBox(width: 8),
                     BarcodeScanButton(
                       compact: true,
-                      onDetected: (code) => setState(() => _barcode.text = code),
+                      onDetected: (code) =>
+                          setState(() => _barcode.text = code),
                     ),
                   ],
                 ),
@@ -497,25 +536,32 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
                   items: [
                     const DropdownMenuItem(value: null, child: Text('None')),
                     for (final category in categories)
-                      DropdownMenuItem(value: category.id, child: Text(category.name)),
+                      DropdownMenuItem(
+                          value: category.id, child: Text(category.name)),
                   ],
                   onChanged: (value) => setState(() => _categoryId = value),
                 ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    Expanded(child: AppTextField(label: 'Dosage form', controller: _form)),
+                    Expanded(
+                        child: AppTextField(
+                            label: 'Dosage form', controller: _form)),
                     const SizedBox(width: 10),
-                    Expanded(child: AppTextField(label: 'Strength', controller: _strength)),
+                    Expanded(
+                        child: AppTextField(
+                            label: 'Strength', controller: _strength)),
                   ],
                 ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    Expanded(child: AppTextField(label: 'Unit', controller: _unit)),
+                    Expanded(
+                        child: AppTextField(label: 'Unit', controller: _unit)),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: AppTextField(label: 'Manufacturer', controller: _manufacturer),
+                      child: AppTextField(
+                          label: 'Manufacturer', controller: _manufacturer),
                     ),
                   ],
                 ),
@@ -526,7 +572,8 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
                       child: MoneyField(
                         label: 'Cost price',
                         controller: _cost,
-                        validator: (value) => (value ?? 0) >= 0 ? null : 'Invalid',
+                        validator: (value) =>
+                            (value ?? 0) >= 0 ? null : 'Invalid',
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -534,7 +581,8 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
                       child: MoneyField(
                         label: 'Selling price',
                         controller: _price,
-                        validator: (value) => (value ?? 0) >= 0 ? null : 'Invalid',
+                        validator: (value) =>
+                            (value ?? 0) >= 0 ? null : 'Invalid',
                       ),
                     ),
                   ],
@@ -549,7 +597,8 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
                       : 'Whole number required',
                 ),
                 const SizedBox(height: 10),
-                AppTextField(label: 'Storage notes', controller: _storage, maxLines: 2),
+                AppTextField(
+                    label: 'Storage notes', controller: _storage, maxLines: 2),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 6,
@@ -571,12 +620,12 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
                     ),
                   ],
                 ),
-                if (widget.initial != null)
-                  OutlinedButton.icon(
-                    onPressed: _busy ? null : _pickPhoto,
-                    icon: const Icon(Icons.image_outlined),
-                    label: Text(_imageUrl == null ? 'Upload photo' : 'Replace photo'),
-                  ),
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : _pickPhoto,
+                  icon: const Icon(Icons.image_outlined),
+                  label: Text(
+                      _imageUrl == null ? 'Upload photo' : 'Replace photo'),
+                ),
               ],
             ),
           ),
@@ -594,19 +643,26 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
           onPressed: () {
             if (!_formKey.currentState!.validate()) return;
             Navigator.pop(context, {
+              if (widget.initial == null) 'id': _newMedicineId,
               'name': _name.text.trim(),
-              'generic_name': _generic.text.trim().isEmpty ? null : _generic.text.trim(),
-              'barcode': _barcode.text.trim().isEmpty ? null : _barcode.text.trim(),
+              'generic_name':
+                  _generic.text.trim().isEmpty ? null : _generic.text.trim(),
+              'barcode':
+                  _barcode.text.trim().isEmpty ? null : _barcode.text.trim(),
               'category_id': _categoryId,
-              'dosage_form': _form.text.trim().isEmpty ? null : _form.text.trim(),
-              'strength': _strength.text.trim().isEmpty ? null : _strength.text.trim(),
+              'dosage_form':
+                  _form.text.trim().isEmpty ? null : _form.text.trim(),
+              'strength':
+                  _strength.text.trim().isEmpty ? null : _strength.text.trim(),
               'unit': _unit.text.trim().isEmpty ? 'Pack' : _unit.text.trim(),
-              'manufacturer':
-                  _manufacturer.text.trim().isEmpty ? null : _manufacturer.text.trim(),
+              'manufacturer': _manufacturer.text.trim().isEmpty
+                  ? null
+                  : _manufacturer.text.trim(),
               'cost_price': parseMoney(_cost.text) ?? 0,
               'selling_price': parseMoney(_price.text) ?? 0,
               'reorder_level': int.parse(_reorder.text),
-              'storage_notes': _storage.text.trim().isEmpty ? null : _storage.text.trim(),
+              'storage_notes':
+                  _storage.text.trim().isEmpty ? null : _storage.text.trim(),
               'vat_applicable': _vat,
               'requires_prescription': _rx,
               'is_controlled': _controlled,

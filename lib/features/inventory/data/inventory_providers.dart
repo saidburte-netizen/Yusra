@@ -56,7 +56,8 @@ final expiringBatchesProvider = FutureProvider<List<StockBatch>>((ref) async {
       .expiringBatches(ref.watch(branchScopeProvider));
 });
 
-final batchesProvider = FutureProvider.family<List<StockBatch>, String?>((ref, medicineId) async {
+final batchesProvider =
+    FutureProvider.family<List<StockBatch>, String?>((ref, medicineId) async {
   if (!SupabaseService.isReady) return const <StockBatch>[];
   return ref.read(inventoryRepositoryProvider).batches(
         branchId: ref.watch(branchScopeProvider),
@@ -64,8 +65,8 @@ final batchesProvider = FutureProvider.family<List<StockBatch>, String?>((ref, m
       );
 });
 
-final movementsProvider = FutureProvider.family<
-    List<StockMovement>, ({String? medicineId, String? type})>((ref, filter) async {
+final movementsProvider = FutureProvider.family<List<StockMovement>,
+    ({String? medicineId, String? type})>((ref, filter) async {
   if (!SupabaseService.isReady) return const <StockMovement>[];
   return ref.read(inventoryRepositoryProvider).movements(
         branchId: ref.watch(branchScopeProvider),
@@ -78,7 +79,8 @@ final movementsProvider = FutureProvider.family<
 final expiryAlertDaysProvider = FutureProvider<int>((ref) async {
   if (!SupabaseService.isReady) return 90;
   final key = AppCache.scopedKey(CacheTag.settings, 'global', 'expiry_days');
-  return ref.read(appCacheProvider).read(key, const Duration(minutes: 10), () async {
+  return ref.read(appCacheProvider).read(key, const Duration(minutes: 10),
+      () async {
     try {
       final row = await SupabaseService.client
           .from('app_settings')

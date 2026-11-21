@@ -28,10 +28,13 @@ class EmptyState extends StatelessWidget {
           children: [
             Icon(icon, size: 56, color: AppColors.pink300),
             const SizedBox(height: 16),
-            Text(message, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 16),
-              SecondaryButton(label: actionLabel!, onPressed: onAction, width: 180),
+              SecondaryButton(
+                  label: actionLabel!, onPressed: onAction, width: 180),
             ],
           ],
         ),
@@ -56,7 +59,9 @@ class ErrorState extends StatelessWidget {
           children: [
             const Icon(Icons.error_outline, size: 52, color: AppColors.danger),
             const SizedBox(height: 16),
-            Text(message, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium),
             if (onRetry != null) ...[
               const SizedBox(height: 16),
               PrimaryButton(label: S.retry, onPressed: onRetry, width: 160),
@@ -96,7 +101,8 @@ class LoadingSkeleton extends StatelessWidget {
 enum SnackKind { success, error, info }
 
 abstract final class AppSnackbar {
-  static void show(BuildContext context, String message, {SnackKind kind = SnackKind.info}) {
+  static void show(BuildContext context, String message,
+      {SnackKind kind = SnackKind.info}) {
     final color = switch (kind) {
       SnackKind.success => AppColors.success,
       SnackKind.error => AppColors.danger,
@@ -120,7 +126,8 @@ abstract final class AppSnackbar {
           ),
           backgroundColor: color,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
   }
@@ -226,7 +233,9 @@ class ConfirmDialog extends StatelessWidget {
       title: Text(title),
       content: Text(message),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text(S.cancel)),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(S.cancel)),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
             backgroundColor: danger ? AppColors.danger : AppColors.pink600,

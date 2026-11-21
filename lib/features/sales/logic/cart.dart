@@ -2,6 +2,7 @@
 // Prices from the database exclude VAT; VAT is applied per line only when the
 // medicine is marked vat_applicable. All quantities are whole units.
 
+import '../../../core/money.dart';
 import '../../../core/permissions.dart';
 
 /// Round to two decimals the way the database `numeric(14,2)` columns do.
@@ -34,8 +35,7 @@ class CartLine {
 
   double get subtotal => round2(quantity * unitPrice);
 
-  double tax(double vatRate) =>
-      vatApplicable ? round2(subtotal * vatRate) : 0;
+  double tax(double vatRate) => vatApplicable ? round2(subtotal * vatRate) : 0;
 
   double lineTotal(double vatRate) => round2(subtotal + tax(vatRate));
 
@@ -101,8 +101,8 @@ class Cart {
   bool get needsPrescription => lines.any((line) => line.requiresPrescription);
 
   /// True when a line is present but the counted quantity exceeds stock.
-  bool get hasOverQuantity =>
-      lines.any((line) => line.quantity > line.availableQty || line.quantity < 1);
+  bool get hasOverQuantity => lines
+      .any((line) => line.quantity > line.availableQty || line.quantity < 1);
 
   int quantityOf(String medicineId) => lines
       .where((line) => line.medicineId == medicineId)
@@ -145,7 +145,9 @@ class Cart {
   Cart withDiscount(double value, double vatRate) => copyWith(
         discount: value < 0
             ? 0
-            : value > subtotal(vatRate) ? subtotal(vatRate) : round2(value),
+            : value > subtotal(vatRate)
+                ? subtotal(vatRate)
+                : round2(value),
       );
 
   Cart copyWith({
@@ -197,7 +199,8 @@ class Cart {
               unitPrice: (raw['unit_price'] as num?)?.toDouble() ?? 0,
               sku: raw['sku'] as String? ?? '',
               vatApplicable: raw['vat_applicable'] as bool? ?? false,
-              requiresPrescription: raw['requires_prescription'] as bool? ?? false,
+              requiresPrescription:
+                  raw['requires_prescription'] as bool? ?? false,
               isControlled: raw['is_controlled'] as bool? ?? false,
             ),
         ],
@@ -225,7 +228,7 @@ String? validateDiscount({
       final cleanPercent = percent.endsWith('.0')
           ? percent.substring(0, percent.length - 2)
           : percent;
-      return 'Discount is above your limit of $cleanPercent percent (ETB ${limit.toStringAsFixed(2)}).';
+      return 'Discount is above your limit of $cleanPercent percent (${formatMoney(limit)}).';
     }
   }
   return null;
@@ -273,5 +276,6 @@ List<double> quickCashAmounts(double total) {
     nextHundred + 50,
     nextHundred + 100,
     nextHundred + 200,
-  }.toList()..sort();
+  }.toList()
+    ..sort();
 }

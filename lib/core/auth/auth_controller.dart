@@ -9,7 +9,14 @@ import '../permissions.dart';
 import '../strings.dart';
 import '../supabase_client.dart';
 
-enum AuthStatus { initial, loading, authenticated, unauthenticated }
+enum AuthStatus {
+  initial,
+  loading,
+  profileLoading,
+  authenticated,
+  unauthenticated,
+  profileError,
+}
 
 class UserProfile {
   const UserProfile({
@@ -34,14 +41,21 @@ class UserProfile {
   final String? avatarUrl;
   final String? branchId;
 
-  factory UserProfile.fromJson(Map<String, dynamic> json, {required String email}) {
+  factory UserProfile.fromJson(Map<String, dynamic> json,
+      {required String email}) {
+    final roleText = json['role'] as String?;
+    final role = AppRoleX.fromDb(roleText);
+    final active = json['is_active'];
+    if (role == null || active is! bool || (json['id'] as String?) == null) {
+      throw const FormatException('Invalid profile response');
+    }
     return UserProfile(
-      id: (json['id'] as String?) ?? '',
+      id: json['id'] as String,
       email: email,
       fullName: (json['full_name'] as String?) ?? email.split('@').first,
-      role: AppRoleX.fromDb(json['role'] as String?) ?? AppRole.cashier,
-      roleLabel: json['role'] as String?,
-      isActive: json['is_active'] as bool? ?? true,
+      role: role,
+      roleLabel: roleText,
+      isActive: active,
       phone: json['phone'] as String?,
       avatarUrl: json['avatar_url'] as String?,
       branchId: json['branch_id'] as String?,
@@ -61,7 +75,10 @@ class AuthState {
   final String? error;
 
   bool get isAuthenticated => status == AuthStatus.authenticated;
-  bool get isInitialising => status == AuthStatus.initial;
+  bool get isInitialising =>
+      status == AuthStatus.initial ||
+      status == AuthStatus.loading ||
+      status == AuthStatus.profileLoading;
   bool get isActive => profile?.isActive ?? false;
 
   static const initial = AuthState(status: AuthStatus.initial);
@@ -72,8 +89,7 @@ class AuthState {
 /// Bumped whenever auth state changes so go_router re-runs its redirect.
 final ValueNotifier<int> authRevision = ValueNotifier<int>(0);
 
-final authProvider =
-    StateNotifierProvider<AuthController, AuthState>((ref) {
+final authProvider = StateNotifierProvider<AuthController, AuthState>((ref) {
   final controller = AuthController();
   ref.onDispose(controller.dispose);
   return controller;
@@ -104,7 +120,7 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   StreamSubscription<Object>? _subscription;
-  bool _loadingProfile = false;
+  Future<void>? _profileFuture;
 
   void _bump() => authRevision.value++;
 
@@ -129,14 +145,15 @@ class AuthController extends StateNotifier<AuthState> {
     await _loadProfile();
   }
 
-  Future<void> _loadProfile() async {
-    if (_loadingProfile) return;
-    _loadingProfile = true;
-    try {
-      await _loadProfileUnchecked();
-    } finally {
-      _loadingProfile = false;
-    }
+  /// Serialize profile reads so overlapping auth events cannot drop a refresh.
+  Future<void> _loadProfile() {
+    final pending = _profileFuture;
+    if (pending != null) return pending;
+    final future = _loadProfileUnchecked().whenComplete(() {
+      _profileFuture = null;
+    });
+    _profileFuture = future;
+    return future;
   }
 
   Future<void> _loadProfileUnchecked() async {
@@ -147,50 +164,38 @@ class AuthController extends StateNotifier<AuthState> {
       _bump();
       return;
     }
+    // Keep a previously loaded profile visible while a background refresh is
+    // in flight. Clearing it makes the router wait at a blank shell on every
+    // token refresh, which looks like a crash to the user.
+    if (state.profile == null || state.status != AuthStatus.authenticated) {
+      state = const AuthState(status: AuthStatus.profileLoading);
+    }
+    _bump();
     try {
-      // Prefer a SECURITY DEFINER RPC so a missing RLS policy or table grant
-      // cannot turn into a fake "cashier" profile and a false access denial.
-      // The direct read stays as a fallback for databases where the RPC has
-      // not been applied yet.
-      late final Map<String, dynamic> row;
-      try {
-        final rpcResult = await client.rpc('get_my_profile');
-        if (rpcResult == null) throw StateError('Empty profile response');
-        row = Map<String, dynamic>.from(rpcResult as Map);
-      } catch (_) {
-        row = await client
-            .from('profiles')
-            .select()
-            .eq('id', user.id)
-            .single();
-      }
+      // The SECURITY DEFINER RPC is the only profile read. A missing row or a
+      // broken migration is a profile error, never a fabricated cashier.
+      final rpcResult = await client.rpc('get_my_profile');
+      if (rpcResult == null) throw StateError('Empty profile response');
+      final row = Map<String, dynamic>.from(rpcResult as Map);
       state = AuthState(
         status: AuthStatus.authenticated,
         profile: UserProfile.fromJson(row, email: user.email ?? ''),
       );
     } catch (e) {
-      // Keep the user signed in, but surface the real reason the profile could
-      // not be read. Silently turning this into "inactive" made genuine RLS,
-      // project-configuration and missing-row problems look like access denied.
       state = AuthState(
-        status: AuthStatus.authenticated,
-        profile: UserProfile(
-          id: user.id,
-          email: user.email ?? '',
-          fullName: user.email ?? '',
-          role: AppRole.cashier,
-          roleLabel: S.roleUnknown,
-          isActive: false,
-        ),
+        status: AuthStatus.profileError,
         error: AppErrorMapper.from(e).message,
       );
     }
     _bump();
   }
 
+  /// Reload the profile after admin/team mutations without recreating this
+  /// provider (which would reset the router to the initial state).
   Future<void> refreshProfile() => _loadProfile();
 
-  Future<String?> signIn({required String email, required String password}) async {
+  Future<String?> signIn(
+      {required String email, required String password}) async {
     state = AuthState.loading;
     try {
       await SupabaseService.client.auth.signInWithPassword(
@@ -198,6 +203,7 @@ class AuthController extends StateNotifier<AuthState> {
         password: password,
       );
       await _loadProfile();
+      if (state.status == AuthStatus.profileError) return state.error;
       return state.profile?.isActive == false ? S.inactiveAccount : null;
     } on AuthException catch (e) {
       final message = _friendlyAuthError(e.message);
@@ -206,7 +212,8 @@ class AuthController extends StateNotifier<AuthState> {
       return message;
     } catch (_) {
       const message = S.somethingWrong;
-      state = const AuthState(status: AuthStatus.unauthenticated, error: message);
+      state =
+          const AuthState(status: AuthStatus.unauthenticated, error: message);
       _bump();
       return message;
     }
@@ -251,12 +258,10 @@ class AuthController extends StateNotifier<AuthState> {
         lower.contains('invalid email or password')) {
       return S.invalidCredentials;
     }
-    if (lower.contains('email not confirmed')) return 'Email not confirmed yet.';
-    if (lower.contains('too many requests')) {
-      return 'Too many attempts. Please wait a moment and try again.';
-    }
+    if (lower.contains('email not confirmed')) return S.emailNotConfirmed;
+    if (lower.contains('too many requests')) return S.tooManyAttempts;
     if (lower.contains('network') || lower.contains('failed to fetch')) {
-      return 'No connection. Check your internet and try again.';
+      return S.noConnection;
     }
     return S.somethingWrong;
   }

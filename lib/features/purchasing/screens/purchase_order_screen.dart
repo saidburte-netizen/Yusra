@@ -247,9 +247,10 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
   }
 
   Future<void> _printOrder() async {
-    final supplier = (ref.read(suppliersProvider('')).value ?? const <Supplier>[])
-        .where((item) => item.id == _supplierId)
-        .firstOrNull;
+    final supplier =
+        (ref.read(suppliersProvider('')).value ?? const <Supplier>[])
+            .where((item) => item.id == _supplierId)
+            .firstOrNull;
     try {
       await PurchaseDocuments.printOrder(
         order: _order ??
@@ -273,9 +274,10 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
   }
 
   Future<void> _printGrn() async {
-    final supplier = (ref.read(suppliersProvider('')).value ?? const <Supplier>[])
-        .where((item) => item.id == _supplierId)
-        .firstOrNull;
+    final supplier =
+        (ref.read(suppliersProvider('')).value ?? const <Supplier>[])
+            .where((item) => item.id == _supplierId)
+            .firstOrNull;
     final order = _order;
     if (order == null) return;
     try {
@@ -300,15 +302,18 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
       final batch = _receiveBatch[line.id]?.text.trim() ?? '';
       final expiry = _receiveExpiry[line.id];
       if (batch.isEmpty) {
-        AppSnackbar.error(context, 'Batch number is required for ${line.medicineName}.');
+        AppSnackbar.error(
+            context, 'Batch number is required for ${line.medicineName}.');
         return;
       }
       if (expiry == null || !expiry.isAfter(DateTime.now())) {
-        AppSnackbar.error(context, 'Future expiry date is required for ${line.medicineName}.');
+        AppSnackbar.error(context,
+            'Future expiry date is required for ${line.medicineName}.');
         return;
       }
       if (qty > remaining) {
-        AppSnackbar.error(context, 'Received quantity exceeds the amount due for ${line.medicineName}.');
+        AppSnackbar.error(context,
+            'Received quantity exceeds the amount due for ${line.medicineName}.');
         return;
       }
       payload.add({
@@ -346,7 +351,8 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
   Widget build(BuildContext context) {
     final suppliers = ref.watch(suppliersProvider(''));
     final status = _order?.status ?? 'draft';
-    final openForReceiving = status == 'ordered' || status == 'partially_received';
+    final openForReceiving =
+        status == 'ordered' || status == 'partially_received';
 
     return Scaffold(
       body: Padding(
@@ -373,7 +379,9 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                             onPressed: _printOrder,
                           ),
                         ),
-                        if (!_isNew && status != 'draft' && status != 'cancelled')
+                        if (!_isNew &&
+                            status != 'draft' &&
+                            status != 'cancelled')
                           Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: SecondaryButton(
@@ -436,12 +444,13 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                                               ? (value) => setState(
                                                   () => _supplierId = value)
                                               : null,
-                                          validator: (value) => value == null
-                                              ? 'Required'
-                                              : null,
+                                          validator: (value) =>
+                                              value == null ? 'Required' : null,
                                         ),
-                                        loading: () => const SizedBox(height: 56),
-                                        error: (_, __) => const SizedBox(height: 56),
+                                        loading: () =>
+                                            const SizedBox(height: 56),
+                                        error: (_, __) =>
+                                            const SizedBox(height: 56),
                                       ),
                                     ),
                                     DatePickerField(
@@ -475,8 +484,9 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                             Row(
                               children: [
                                 Text('Lines',
-                                    style:
-                                        Theme.of(context).textTheme.titleMedium),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium),
                                 const Spacer(),
                                 if (_canEditDraft)
                                   SecondaryButton(
@@ -502,27 +512,33 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                                   for (var i = 0; i < _lines.length; i++)
                                     DataRow(cells: [
                                       DataCell(Text(_lines[i].medicineName)),
-                                      DataCell(Text('${_lines[i].quantityOrdered}')),
-                                      DataCell(Text('${_lines[i].quantityReceived}')),
-                                      DataCell(Text(formatMoney(_lines[i].unitCost))),
-                                      DataCell(Text(formatMoney(_lines[i].lineTotal))),
+                                      DataCell(
+                                          Text('${_lines[i].quantityOrdered}')),
+                                      DataCell(Text(
+                                          '${_lines[i].quantityReceived}')),
+                                      DataCell(Text(
+                                          formatMoney(_lines[i].unitCost))),
+                                      DataCell(Text(
+                                          formatMoney(_lines[i].lineTotal))),
                                       DataCell(Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           if (_canEditDraft)
                                             IconButton(
                                               tooltip: 'Edit line',
-                                              icon: const Icon(Icons.edit_outlined,
+                                              icon: const Icon(
+                                                  Icons.edit_outlined,
                                                   size: 18),
                                               onPressed: () => _editLine(i),
                                             ),
                                           if (_canEditDraft)
                                             IconButton(
                                               tooltip: 'Remove line',
-                                              icon: const Icon(Icons.delete_outline,
+                                              icon: const Icon(
+                                                  Icons.delete_outline,
                                                   size: 18),
-                                              onPressed: () => setState(() =>
-                                                  _lines.removeAt(i)),
+                                              onPressed: () => setState(
+                                                  () => _lines.removeAt(i)),
                                             ),
                                         ],
                                       )),
@@ -542,7 +558,8 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleMedium
-                                          ?.copyWith(fontWeight: FontWeight.bold)),
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.bold)),
                                 ],
                               ),
                             ),
@@ -562,7 +579,8 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                             if (openForReceiving) ...[
                               const SizedBox(height: 22),
                               Text('Goods receiving',
-                                  style: Theme.of(context).textTheme.titleMedium),
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium),
                               const SizedBox(height: 8),
                               Card(
                                 child: Padding(
@@ -572,20 +590,25 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                                       for (final line in _lines)
                                         if (line.remaining > 0)
                                           Padding(
-                                            padding: const EdgeInsets.only(bottom: 12),
+                                            padding: const EdgeInsets.only(
+                                                bottom: 12),
                                             child: _ReceiveLine(
                                               line: line,
-                                              qtyController: _receiveQty.putIfAbsent(
+                                              qtyController:
+                                                  _receiveQty.putIfAbsent(
                                                 line.id,
                                                 () => TextEditingController(),
                                               ),
-                                              batchController: _receiveBatch.putIfAbsent(
+                                              batchController:
+                                                  _receiveBatch.putIfAbsent(
                                                 line.id,
                                                 () => TextEditingController(),
                                               ),
                                               expiry: _receiveExpiry[line.id],
-                                              onExpiry: (value) => setState(() =>
-                                                  _receiveExpiry[line.id] = value),
+                                              onExpiry: (value) => setState(
+                                                  () =>
+                                                      _receiveExpiry[line.id] =
+                                                          value),
                                             ),
                                           ),
                                       Align(
@@ -713,7 +736,8 @@ class _LinePickerDialogState extends ConsumerState<_LinePickerDialog> {
             Expanded(
               child: medicines.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => ErrorState(message: AppErrorMapper.from(error).message),
+                error: (error, _) =>
+                    ErrorState(message: AppErrorMapper.from(error).message),
                 data: (items) => ListView.builder(
                   itemCount: items.length,
                   itemBuilder: (context, index) {
@@ -721,7 +745,8 @@ class _LinePickerDialogState extends ConsumerState<_LinePickerDialog> {
                     return ListTile(
                       selected: _selected?.id == item.id,
                       title: Text(item.name),
-                      subtitle: Text('${item.sku}  •  ${formatMoney(item.costPrice)}'),
+                      subtitle: Text(
+                          '${item.sku}  •  ${formatMoney(item.costPrice)}'),
                       onTap: () => setState(() {
                         _selected = item;
                         _cost.text = '${item.costPrice}';
@@ -743,7 +768,8 @@ class _LinePickerDialogState extends ConsumerState<_LinePickerDialog> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                Expanded(child: MoneyField(label: 'Unit cost', controller: _cost)),
+                Expanded(
+                    child: MoneyField(label: 'Unit cost', controller: _cost)),
               ],
             ),
           ],

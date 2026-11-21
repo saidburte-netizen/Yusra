@@ -15,7 +15,7 @@ max_rows = 1000
 [db]
 port = 54322
 shadow_port = 54320
-major_version = 15
+major_version = 16
 
 [db.pooler]
 enabled = false
@@ -37,7 +37,7 @@ enabled = true
 site_url = "http://localhost:3000"
 additional_redirect_urls = ["https://yusra-pharmacy.web.app"]
 jwt_expiry = 3600
-enable_signup = true
+enable_signup = false
 enable_anonymous_signins = false
 enable_confirmations = false
 

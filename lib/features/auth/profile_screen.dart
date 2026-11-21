@@ -59,10 +59,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<String?> _uploadAvatar(String userId) async {
     if (_avatarBytes == null) return null;
     final path = '$userId/${DateTime.now().millisecondsSinceEpoch}.jpg';
-    await SupabaseService.client.storage
-        .from('avatars')
-        .uploadBinary(path, _avatarBytes!,
-            fileOptions: const FileOptions(upsert: true, contentType: 'image/jpeg'));
+    await SupabaseService.client.storage.from('avatars').uploadBinary(
+        path, _avatarBytes!,
+        fileOptions:
+            const FileOptions(upsert: true, contentType: 'image/jpeg'));
     return SupabaseService.client.storage.from('avatars').getPublicUrl(path);
   }
 
@@ -73,16 +73,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       final profile = ref.read(authProvider).profile;
       if (profile == null) return;
       final avatarUrl = await _uploadAvatar(profile.id);
-      final updates = <String, dynamic>{
-        'full_name': _name.text.trim(),
-        'phone': _phone.text.trim(),
-      };
-      if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
       if (!SupabaseService.isReady) throw const SupabaseNotConfigured();
-      await SupabaseService.client.from('profiles').update(updates).eq('id', profile.id);
+      // Safe RPC: name, phone and avatar only. Role, branch and active status
+      // can never be changed from this screen.
+      await SupabaseService.client.rpc('update_my_profile', params: {
+        'p_full_name': _name.text.trim(),
+        'p_phone': _phone.text.trim(),
+        'p_avatar_url': avatarUrl,
+      });
       if (_newPassword.text.isNotEmpty) {
-        final error =
-            await ref.read(authProvider.notifier).updatePassword(_newPassword.text);
+        final error = await ref
+            .read(authProvider.notifier)
+            .updatePassword(_newPassword.text);
         if (error != null && mounted) {
           AppSnackbar.error(context, error);
           return;
@@ -134,9 +136,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(profile?.fullName ?? '',
-                                    style: Theme.of(context).textTheme.titleMedium),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium),
                                 Text(profile?.email ?? '',
-                                    style: Theme.of(context).textTheme.bodySmall),
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall),
                                 Text(
                                   '${S.role}: ${profile?.role.label ?? '—'}',
                                   style: Theme.of(context).textTheme.bodySmall,
@@ -155,7 +160,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       AppTextField(
                         label: S.fullName,
                         controller: _name,
-                        validator: (v) => v == null || v.trim().isEmpty ? S.required : null,
+                        validator: (v) =>
+                            v == null || v.trim().isEmpty ? S.required : null,
                       ),
                       const SizedBox(height: 14),
                       AppTextField(

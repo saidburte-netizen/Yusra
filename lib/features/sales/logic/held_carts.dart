@@ -32,7 +32,8 @@ class HeldCart {
         label: (json['label'] as String?) ?? 'Held cart',
         savedAt: DateTime.tryParse(json['saved_at'] as String? ?? '') ??
             DateTime.fromMillisecondsSinceEpoch(0),
-        cart: Cart.fromJson(Map<String, dynamic>.from(json['cart'] as Map? ?? {})),
+        cart: Cart.fromJson(
+            Map<String, dynamic>.from(json['cart'] as Map? ?? {})),
       );
 }
 
@@ -49,7 +50,8 @@ class HeldCartStore {
     try {
       final decoded = jsonDecode(raw) as List;
       return decoded
-          .map((item) => HeldCart.fromJson(Map<String, dynamic>.from(item as Map)))
+          .map((item) =>
+              HeldCart.fromJson(Map<String, dynamic>.from(item as Map)))
           .toList();
     } catch (_) {
       return const [];
@@ -59,12 +61,14 @@ class HeldCartStore {
   Future<void> save(HeldCart held) async {
     final items = list().where((item) => item.id != held.id).toList()
       ..add(held);
-    await _prefs.setString(key, jsonEncode(items.map((item) => item.toJson()).toList()));
+    await _prefs.setString(
+        key, jsonEncode(items.map((item) => item.toJson()).toList()));
   }
 
   Future<void> delete(String id) async {
     final items = list().where((item) => item.id != id).toList();
-    await _prefs.setString(key, jsonEncode(items.map((item) => item.toJson()).toList()));
+    await _prefs.setString(
+        key, jsonEncode(items.map((item) => item.toJson()).toList()));
   }
 
   Future<void> saveDraft(Cart cart) =>

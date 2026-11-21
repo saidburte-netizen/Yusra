@@ -95,8 +95,10 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                         actions: [
                           IconButton(
                             tooltip: 'Orders',
-                            icon: const Icon(Icons.receipt_long_outlined, size: 18),
-                            onPressed: () => context.go('/suppliers/${item.id}'),
+                            icon: const Icon(Icons.receipt_long_outlined,
+                                size: 18),
+                            onPressed: () =>
+                                context.go('/suppliers/${item.id}'),
                           ),
                           if (canEdit)
                             IconButton(
@@ -106,7 +108,8 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                             ),
                           if (canEdit)
                             IconButton(
-                              tooltip: item.isActive ? 'Deactivate' : 'Reactivate',
+                              tooltip:
+                                  item.isActive ? 'Deactivate' : 'Reactivate',
                               icon: Icon(
                                 item.isActive
                                     ? Icons.block_outlined
@@ -162,7 +165,9 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      Expanded(child: AppTextField(label: 'Phone', controller: phone)),
+                      Expanded(
+                          child:
+                              AppTextField(label: 'Phone', controller: phone)),
                       const SizedBox(width: 10),
                       Expanded(
                         child: AppTextField(
@@ -179,14 +184,17 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  AppTextField(label: 'Address', controller: address, maxLines: 2),
+                  AppTextField(
+                      label: 'Address', controller: address, maxLines: 2),
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      Expanded(child: AppTextField(label: 'TIN', controller: tin)),
+                      Expanded(
+                          child: AppTextField(label: 'TIN', controller: tin)),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: AppTextField(label: 'Payment terms', controller: terms),
+                        child: AppTextField(
+                            label: 'Payment terms', controller: terms),
                       ),
                     ],
                   ),
@@ -206,7 +214,9 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
             label: 'Save',
             width: 110,
             onPressed: () {
-              if (formKey.currentState!.validate()) Navigator.pop(context, true);
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(context, true);
+              }
             },
           ),
         ],
@@ -215,23 +225,22 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
     if (saved != true) return;
     try {
       await ref.read(supplierRepositoryProvider).save(
-            {
-              'name': name.text.trim(),
-              'contact_person': contact.text.trim().isEmpty
-                  ? null
-                  : contact.text.trim(),
-              'phone': phone.text.trim().isEmpty ? null : phone.text.trim(),
-              'email': email.text.trim().isEmpty ? null : email.text.trim(),
-              'address': address.text.trim().isEmpty ? null : address.text.trim(),
-              'tin': tin.text.trim().isEmpty ? null : tin.text.trim(),
-              'payment_terms': terms.text.trim().isEmpty ? null : terms.text.trim(),
-              'notes': notes.text.trim().isEmpty ? null : notes.text.trim(),
-            },
-            id: item?.id,
-          );
+        {
+          'name': name.text.trim(),
+          'contact_person':
+              contact.text.trim().isEmpty ? null : contact.text.trim(),
+          'phone': phone.text.trim().isEmpty ? null : phone.text.trim(),
+          'email': email.text.trim().isEmpty ? null : email.text.trim(),
+          'address': address.text.trim().isEmpty ? null : address.text.trim(),
+          'tin': tin.text.trim().isEmpty ? null : tin.text.trim(),
+          'payment_terms': terms.text.trim().isEmpty ? null : terms.text.trim(),
+          'notes': notes.text.trim().isEmpty ? null : notes.text.trim(),
+        },
+        id: item?.id,
+      );
       if (!mounted) return;
       AppSnackbar.success(context, 'Supplier saved.');
-      ref.invalidate(suppliersProvider(_query));
+      ref.invalidate(suppliersProvider);
     } catch (e) {
       if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
@@ -250,7 +259,9 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
           .read(supplierRepositoryProvider)
           .setActive(item.id, !item.isActive);
       if (!mounted) return;
-      ref.invalidate(suppliersProvider(_query));
+      AppSnackbar.success(context,
+          item.isActive ? 'Supplier deactivated.' : 'Supplier reactivated.');
+      ref.invalidate(suppliersProvider);
     } catch (e) {
       if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     }
@@ -267,9 +278,8 @@ class SupplierDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final suppliers = ref.watch(suppliersProvider(''));
     final orders = ref.watch(purchaseOrdersProvider);
-    final supplier = suppliers.value
-        ?.where((item) => item.id == supplierId)
-        .firstOrNull;
+    final supplier =
+        suppliers.value?.where((item) => item.id == supplierId).firstOrNull;
 
     return Scaffold(
       body: Padding(
@@ -294,10 +304,12 @@ class SupplierDetailScreen extends ConsumerWidget {
             Expanded(
               child: orders.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => ErrorState(message: AppErrorMapper.from(error).message),
+                error: (error, _) =>
+                    ErrorState(message: AppErrorMapper.from(error).message),
                 data: (all) {
-                  final items =
-                      all.where((order) => order.supplierId == supplierId).toList();
+                  final items = all
+                      .where((order) => order.supplierId == supplierId)
+                      .toList();
                   return DataTablePlus(
                     columns: const [
                       'PO number',

@@ -54,15 +54,17 @@ class StatCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       value,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            color: accent,
-                            fontWeight: FontWeight.bold,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
+                      style:
+                          Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: accent,
+                        fontWeight: FontWeight.bold,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                     ),
                     if (subtitle != null) ...[
                       const SizedBox(height: 4),
-                      Text(subtitle!, style: Theme.of(context).textTheme.labelSmall),
+                      Text(subtitle!,
+                          style: Theme.of(context).textTheme.labelSmall),
                     ],
                   ],
                 ),
@@ -197,7 +199,8 @@ class ResponsiveGrid extends StatelessWidget {
       runSpacing: spacing,
       children: [
         for (final child in children)
-          SizedBox(width: (width - spacing * (columns - 1)) / columns, child: child),
+          SizedBox(
+              width: (width - spacing * (columns - 1)) / columns, child: child),
       ],
     );
   }

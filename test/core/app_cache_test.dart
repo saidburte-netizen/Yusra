@@ -34,7 +34,8 @@ void main() {
       final cache = AppCache();
       final settingsKey =
           AppCache.scopedKey(CacheTag.settings, 'user-1', 'receipt');
-      final stockKey = AppCache.scopedKey(CacheTag.stock, 'branch-1', 'summary');
+      final stockKey =
+          AppCache.scopedKey(CacheTag.stock, 'branch-1', 'summary');
 
       await cache.read(settingsKey, const Duration(minutes: 5), () async => 1);
       await cache.read(stockKey, const Duration(minutes: 5), () async => 2);
@@ -67,7 +68,8 @@ void main() {
 
     test('clear removes everything', () async {
       final cache = AppCache();
-      await cache.read('settings:u:1', const Duration(minutes: 5), () async => 1);
+      await cache.read(
+          'settings:u:1', const Duration(minutes: 5), () async => 1);
       cache.clear();
       expect(cache.length, 0);
     });

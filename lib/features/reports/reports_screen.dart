@@ -31,8 +31,10 @@ class _ReportDef {
   final String title;
   final String view;
   final List<String> columns;
+
   /// Column used for the chart's x-axis labels.
   final String chartLabel;
+
   /// Numeric column used for the chart's bars.
   final String chartValue;
   final String? dateKey;
@@ -133,14 +135,26 @@ const List<_ReportDef> _reports = [
 ];
 
 const Set<String> _moneyKeys = {
-  'gross', 'discounts', 'vat', 'net', 'total', 'revenue', 'cost', 'profit',
-  'margin', 'unit_cost', 'value', 'amount', 'expenses', 'expected', 'actual',
+  'gross',
+  'discounts',
+  'vat',
+  'net',
+  'total',
+  'revenue',
+  'cost',
+  'profit',
+  'margin',
+  'unit_cost',
+  'value',
+  'amount',
+  'expenses',
+  'expected',
+  'actual',
   'variance',
 };
 
 /// The reports are backed by views that are not part of the base schema.
-const String _viewsHint =
-    'If the report views are missing, apply '
+const String _viewsHint = 'If the report views are missing, apply '
     'supabase/migrations/0014_report_views.sql in the Supabase SQL Editor and '
     'try again.';
 
@@ -269,9 +283,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      final hint = e.toString().contains('branch_id') ? _branchHint : _viewsHint;
+      final message = AppErrorMapper.from(e).message;
+      final hint = message.toLowerCase().contains('branch_id')
+          ? _branchHint
+          : _viewsHint;
       setState(() {
-        _error = '${AppErrorMapper.from(e).message}\n\n$hint';
+        _error = '$message\n\n$hint';
         _loading = false;
       });
     }
@@ -329,9 +346,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final points = <_ChartPoint>[];
     for (final row in _rows) {
       final raw = row[_report.chartValue];
-      final value = raw is num
-          ? raw.toDouble()
-          : double.tryParse(raw?.toString() ?? '');
+      final value =
+          raw is num ? raw.toDouble() : double.tryParse(raw?.toString() ?? '');
       if (value == null) continue;
       points.add(_ChartPoint(
         row[_report.chartLabel]?.toString() ?? '—',
@@ -345,7 +361,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   Future<_Brand> _loadBrand() async {
     if (!SupabaseService.isReady) return _Brand.fallback();
     const keys = [
-      'pharmacy_name', 'tagline', 'address', 'phone', 'tin', 'license_no',
+      'pharmacy_name',
+      'tagline',
+      'address',
+      'phone',
+      'tin',
+      'license_no',
       'receipt_footer',
     ];
     try {
@@ -372,7 +393,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         phone: text('phone'),
         tin: text('tin'),
         licenseNo: text('license_no'),
-        footer: text('receipt_footer', 'Thank you for choosing Yusra Pharmacy.'),
+        footer:
+            text('receipt_footer', 'Thank you for choosing Yusra Pharmacy.'),
       );
     } catch (_) {
       return _Brand.fallback();
@@ -394,8 +416,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 pw.Text(brand.name,
                     style: pw.TextStyle(
                         fontSize: 20, color: PdfColor.fromHex('#A0457A'))),
-                pw.Text(brand.tagline,
-                    style: const pw.TextStyle(fontSize: 9)),
+                pw.Text(brand.tagline, style: const pw.TextStyle(fontSize: 9)),
                 pw.Divider(color: PdfColor.fromHex('#A8841F')),
                 if (brand.address.isNotEmpty)
                   pw.Text('${S.address}: ${brand.address}',
@@ -424,19 +445,18 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             ),
             pw.SizedBox(height: 12),
             pw.TableHelper.fromTextArray(
-              headers: tableRows.first.map((e) => e.toString()).toList(),
+              headers: tableRows.first.map((cell) => cell as String).toList(),
               data: tableRows.skip(1).toList(),
               border: pw.TableBorder.all(color: PdfColors.grey400),
-              headerDecoration:
-                  const pw.BoxDecoration(color: PdfColors.pink50),
+              headerDecoration: const pw.BoxDecoration(color: PdfColors.pink50),
               cellAlignment: pw.Alignment.centerLeft,
               headerStyle: const pw.TextStyle(fontSize: 9),
               cellStyle: const pw.TextStyle(fontSize: 8),
             ),
             pw.SizedBox(height: 16),
             pw.Text(brand.footer,
-                style: const pw.TextStyle(
-                    fontSize: 8, color: PdfColors.grey600)),
+                style:
+                    const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
           ],
         ),
       );
@@ -543,7 +563,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                 ),
                               ),
                             ],
-                            if (role == AppRole.superAdmin && _branches.isNotEmpty)
+                            if (role == AppRole.superAdmin &&
+                                _branches.isNotEmpty)
                               SizedBox(
                                 width: 190,
                                 child: AppDropdown<String?>(
@@ -587,14 +608,23 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                               child: Center(child: CircularProgressIndicator()))
                         else if (_error != null)
                           Expanded(
-                              child: ErrorState(message: _error!, onRetry: _retry))
+                              child:
+                                  ErrorState(message: _error!, onRetry: _retry))
+                        else if (_rows.isEmpty)
+                          const Expanded(
+                            child: EmptyState(
+                              message: 'No data for the selected period.',
+                              icon: Icons.insights_outlined,
+                            ),
+                          )
                         else ...[
                           if (_rows.isNotEmpty)
                             SizedBox(
                               height: 220,
                               child: Card(
                                 child: Padding(
-                                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                                  padding:
+                                      const EdgeInsets.fromLTRB(12, 12, 12, 4),
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,

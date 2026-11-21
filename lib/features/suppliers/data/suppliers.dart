@@ -60,7 +60,8 @@ class SupplierRepository {
     var request = _db.from('suppliers').select();
     if (query.trim().isNotEmpty) {
       final q = query.trim().replaceAll(RegExp(r'[,()]'), ' ');
-      request = request.or('name.ilike.%$q%,contact_person.ilike.%$q%,phone.ilike.%$q%');
+      request = request
+          .or('name.ilike.%$q%,contact_person.ilike.%$q%,phone.ilike.%$q%');
     }
     final rows = await request.order('name') as List;
     return rows
@@ -83,7 +84,8 @@ class SupplierRepository {
 final supplierRepositoryProvider =
     Provider<SupplierRepository>((ref) => SupplierRepository());
 
-final suppliersProvider = FutureProvider.family<List<Supplier>, String>((ref, query) async {
+final suppliersProvider =
+    FutureProvider.family<List<Supplier>, String>((ref, query) async {
   if (!SupabaseService.isReady) return const <Supplier>[];
   return ref.read(supplierRepositoryProvider).list(query: query);
 });

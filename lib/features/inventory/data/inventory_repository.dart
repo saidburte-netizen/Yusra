@@ -30,11 +30,13 @@ class InventoryRepository {
   Future<void> setCategoryActive(String id, bool active) =>
       _db.from('categories').update({'is_active': active}).eq('id', id);
 
-  Future<List<Medicine>> medicines({String query = '', String? categoryId}) async {
+  Future<List<Medicine>> medicines(
+      {String query = '', String? categoryId}) async {
     var request = _db.from('medicines').select();
     if (query.trim().isNotEmpty) {
       final q = query.trim().replaceAll(RegExp(r'[,()]'), ' ');
-      request = request.or('name.ilike.%$q%,generic_name.ilike.%$q%,barcode.ilike.%$q%,sku.ilike.%$q%');
+      request = request.or(
+          'name.ilike.%$q%,generic_name.ilike.%$q%,barcode.ilike.%$q%,sku.ilike.%$q%');
     }
     if (categoryId != null) request = request.eq('category_id', categoryId);
     final rows = await request.order('name').limit(200) as List;
@@ -52,6 +54,28 @@ class InventoryRepository {
         .then((row) => Medicine.fromJson(Map<String, dynamic>.from(row)));
   }
 
+  /// Server-side barcode/SKU lookup used by the POS scanner.
+  ///
+  /// Both comparisons run in Postgres (not in Dart) so a scanned code finds a
+  /// medicine even when the local catalogue page is filtered or paginated.
+  /// A partial match is used as a fallback for labels that contain the code
+  /// embedded in a longer value.
+  Future<Medicine?> findByBarcode(String code) async {
+    final value = code.trim();
+    if (value.isEmpty) return null;
+    final safe = value.replaceAll(RegExp(r'[,()]'), ' ');
+    final rows = await _db
+        .from('medicines')
+        .select()
+        .or('barcode.ilike.$safe,sku.ilike.$safe')
+        .limit(1) as List;
+    if (rows.isNotEmpty) {
+      return Medicine.fromJson(Map<String, dynamic>.from(rows.first as Map));
+    }
+    final partial = await medicines(query: value);
+    return partial.isEmpty ? null : partial.first;
+  }
+
   Future<void> saveMedicine(Map<String, dynamic> data, {String? id}) async {
     if (id == null) {
       await _db.from('medicines').insert(data);
@@ -63,12 +87,18 @@ class InventoryRepository {
   Future<void> setMedicineActive(String id, bool active) =>
       _db.from('medicines').update({'is_active': active}).eq('id', id);
 
-  Future<String> uploadMedicineImage(String medicineId, Uint8List bytes) async {
-    final path = '$medicineId/${DateTime.now().millisecondsSinceEpoch}.png';
+  /// Byte-based upload: no `dart:io` File is involved, so this is identical on
+  /// web and Android. [contentType] comes from the picked XFile when known.
+  Future<String> uploadMedicineImage(
+    String medicineId,
+    Uint8List bytes, {
+    String contentType = 'image/png',
+  }) async {
+    final path = '$medicineId/${DateTime.now().microsecondsSinceEpoch}.img';
     await _db.storage.from('medicine-images').uploadBinary(
           path,
           bytes,
-          fileOptions: const FileOptions(upsert: true, contentType: 'image/png'),
+          fileOptions: FileOptions(upsert: true, contentType: contentType),
         );
     return _db.storage.from('medicine-images').getPublicUrl(path);
   }
@@ -78,7 +108,8 @@ class InventoryRepository {
     if (branchId != null) query = query.eq('branch_id', branchId);
     final rows = await query.order('name') as List;
     return rows
-        .map((row) => StockSummary.fromJson(Map<String, dynamic>.from(row as Map)))
+        .map((row) =>
+            StockSummary.fromJson(Map<String, dynamic>.from(row as Map)))
         .toList();
   }
 
@@ -87,7 +118,8 @@ class InventoryRepository {
     if (branchId != null) query = query.eq('branch_id', branchId);
     final rows = await query.order('available_qty') as List;
     return rows
-        .map((row) => StockSummary.fromJson(Map<String, dynamic>.from(row as Map)))
+        .map((row) =>
+            StockSummary.fromJson(Map<String, dynamic>.from(row as Map)))
         .toList();
   }
 
@@ -96,7 +128,8 @@ class InventoryRepository {
     if (branchId != null) query = query.eq('branch_id', branchId);
     final rows = await query.order('expiry_date') as List;
     return rows
-        .map((row) => StockBatch.fromJson(Map<String, dynamic>.from(row as Map)))
+        .map(
+            (row) => StockBatch.fromJson(Map<String, dynamic>.from(row as Map)))
         .toList();
   }
 
@@ -131,7 +164,8 @@ class InventoryRepository {
     if (type != null) query = query.eq('movement_type', type);
     if (from != null) query = query.gte('created_at', from.toIso8601String());
     if (to != null) query = query.lte('created_at', to.toIso8601String());
-    final rows = await query.order('created_at', ascending: false).limit(500) as List;
+    final rows =
+        await query.order('created_at', ascending: false).limit(500) as List;
     return rows.map((row) {
       final map = Map<String, dynamic>.from(row as Map);
       final joined = map['medicines'];

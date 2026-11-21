@@ -12,7 +12,8 @@ class ResetPasswordScreen extends ConsumerStatefulWidget {
   const ResetPasswordScreen({super.key});
 
   @override
-  ConsumerState<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
+  ConsumerState<ResetPasswordScreen> createState() =>
+      _ResetPasswordScreenState();
 }
 
 class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
@@ -31,7 +32,8 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
-    final error = await ref.read(authProvider.notifier).updatePassword(_password.text);
+    final error =
+        await ref.read(authProvider.notifier).updatePassword(_password.text);
     if (!mounted) return;
     setState(() => _saving = false);
     if (error == null) {
@@ -60,7 +62,8 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                     children: [
                       const YusraLogo(variant: YusraLogoVariant.mark, size: 90),
                       const SizedBox(height: 16),
-                      Text(S.changePassword, style: Theme.of(context).textTheme.titleLarge),
+                      Text(S.changePassword,
+                          style: Theme.of(context).textTheme.titleLarge),
                       const SizedBox(height: 20),
                       AppTextField(
                         label: S.newPassword,

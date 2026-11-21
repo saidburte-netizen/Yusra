@@ -110,8 +110,9 @@ class _MovementsScreenState extends ConsumerState<MovementsScreen> {
               )),
               builder: (items) {
                 final medicineIds = medicines.value
-                        ?.where((item) =>
-                            item.name.toLowerCase().contains(_medicine.text.toLowerCase()))
+                        ?.where((item) => item.name
+                            .toLowerCase()
+                            .contains(_medicine.text.toLowerCase()))
                         .map((item) => item.id)
                         .toSet() ??
                     <String>{};
@@ -130,8 +131,8 @@ class _MovementsScreenState extends ConsumerState<MovementsScreen> {
                     if (movement.createdAt!.isBefore(_from!)) return false;
                   }
                   if (_to != null && movement.createdAt != null) {
-                    if (movement.createdAt!.isAfter(
-                        _to!.add(const Duration(days: 1)))) {
+                    if (movement.createdAt!
+                        .isAfter(_to!.add(const Duration(days: 1)))) {
                       return false;
                     }
                   }

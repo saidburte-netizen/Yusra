@@ -27,7 +27,8 @@ void main() {
   });
 
   group('stock status', () {
-    StockStatus status(int available, int expired, int days) => StockRules.status(
+    StockStatus status(int available, int expired, int days) =>
+        StockRules.status(
           available: available,
           expiredQty: expired,
           reorderLevel: 10,

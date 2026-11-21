@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'core/auth/auth_controller.dart';
 import 'core/errors/error_reporter.dart';
+import 'core/permissions.dart';
 import 'core/state/app_cache.dart';
 import 'core/supabase_client.dart';
 
@@ -18,11 +19,11 @@ Future<void> main() async {
   final container = ProviderContainer();
   await container.read(authProvider.notifier).bootstrap();
   // Never carry reference data from one signed-in user into the next.
-  String? cachedUserId = container.read(authProvider).profile?.id;
+  String? cacheKey = _identityKey(container.read(authProvider));
   container.listen(authProvider, (_, next) {
-    final userId = next.profile?.id;
-    if (userId != cachedUserId) {
-      cachedUserId = userId;
+    final key = _identityKey(next);
+    if (key != cacheKey) {
+      cacheKey = key;
       container.read(appCacheProvider).clear();
     }
   });
@@ -70,4 +71,15 @@ class _AuthRefreshOnResumeState extends ConsumerState<AuthRefreshOnResume>
 
   @override
   Widget build(BuildContext context) => widget.child;
+}
+
+String _identityKey(AuthState state) {
+  final profile = state.profile;
+  if (profile == null) return state.status.name;
+  return [
+    profile.id,
+    profile.role.dbName,
+    profile.branchId ?? '',
+    profile.isActive.toString(),
+  ].join('|');
 }

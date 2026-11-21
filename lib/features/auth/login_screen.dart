@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/env.dart';
+import '../../core/nav/menu_items.dart';
 import '../../core/strings.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets.dart';
@@ -43,9 +44,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!mounted) return;
     setState(() => _submitting = false);
     if (error == null) {
-      context.go('/dashboard');
+      final profile = ref.read(authProvider).profile;
+      context.go(homeFor(profile?.role));
     } else if (error == S.inactiveAccount) {
       context.go('/forbidden');
+    } else if (ref.read(authProvider).status == AuthStatus.profileError) {
+      context.go('/profile_error');
     } else {
       setState(() => _error = error);
     }
@@ -73,14 +77,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const YusraLogo(variant: YusraLogoVariant.full, size: 200),
+                        const YusraLogo(
+                            variant: YusraLogoVariant.full, size: 200),
                         const SizedBox(height: 8),
                         Text(
                           S.tagline,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                fontStyle: FontStyle.italic,
-                                color: AppColors.muted,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    fontStyle: FontStyle.italic,
+                                    color: AppColors.muted,
+                                  ),
                         ),
                         const SizedBox(height: 28),
                         if (!Env.isConfigured) ...[
@@ -98,10 +104,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           label: S.email,
                           controller: _email,
                           keyboardType: TextInputType.emailAddress,
-                          prefixIcon: const Icon(Icons.email_outlined, size: 20),
+                          prefixIcon:
+                              const Icon(Icons.email_outlined, size: 20),
                           textInputAction: TextInputAction.next,
                           validator: (value) {
-                            if (value == null || value.trim().isEmpty) return S.emailRequired;
+                            if (value == null || value.trim().isEmpty) {
+                              return S.emailRequired;
+                            }
                             if (!value.contains('@')) return S.emailInvalid;
                             return null;
                           },
@@ -114,9 +123,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           prefixIcon: const Icon(Icons.lock_outline, size: 20),
                           suffixIcon: IconButton(
                             icon: Icon(
-                              _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                              _obscure
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
                             ),
-                            onPressed: () => setState(() => _obscure = !_obscure),
+                            onPressed: () =>
+                                setState(() => _obscure = !_obscure),
                           ),
                           validator: (value) => value == null || value.isEmpty
                               ? S.passwordRequired
@@ -175,7 +187,8 @@ class _Notice extends StatelessWidget {
         children: [
           Icon(Icons.info_outline, color: color, size: 18),
           const SizedBox(width: 8),
-          Expanded(child: Text(text, style: TextStyle(color: color, fontSize: 12))),
+          Expanded(
+              child: Text(text, style: TextStyle(color: color, fontSize: 12))),
         ],
       ),
     );

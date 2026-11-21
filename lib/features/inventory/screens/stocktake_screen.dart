@@ -54,7 +54,8 @@ class _StocktakeScreenState extends ConsumerState<StocktakeScreen> {
     if (!SupabaseService.isReady) return;
     final profile = ref.read(authProvider).profile;
     if (profile != null && !canSeeAllBranches(profile.role)) return;
-    final rows = await SupabaseService.client.from('branches').select('id,name');
+    final rows =
+        await SupabaseService.client.from('branches').select('id,name');
     setState(() => _branches = List<Map<String, dynamic>>.from(rows as List));
   }
 
@@ -84,8 +85,7 @@ class _StocktakeScreenState extends ConsumerState<StocktakeScreen> {
       _counts.clear();
       for (final batch in batches) {
         final initial = draft[batch.id] ?? batch.quantity;
-        _counts[batch.id] =
-            TextEditingController(text: initial.toString());
+        _counts[batch.id] = TextEditingController(text: initial.toString());
       }
       setState(() {
         _batches = batches;
@@ -179,7 +179,8 @@ class _StocktakeScreenState extends ConsumerState<StocktakeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final categories = ref.watch(categoriesProvider).value ?? const <Category>[];
+    final categories =
+        ref.watch(categoriesProvider).value ?? const <Category>[];
     final role = ref.watch(authProvider).profile?.role ?? AppRole.cashier;
     final canApply = can(role, Modules.stock, PermAction.edit);
 
@@ -199,11 +200,14 @@ class _StocktakeScreenState extends ConsumerState<StocktakeScreen> {
                     label: 'Save draft',
                     icon: Icons.save_outlined,
                     width: 130,
-                    onPressed: _loading ? null : () async {
-                      await _saveDraft();
-                      if (!context.mounted) return;
-                      AppSnackbar.success(context, 'Draft saved on this device.');
-                    },
+                    onPressed: _loading
+                        ? null
+                        : () async {
+                            await _saveDraft();
+                            if (!context.mounted) return;
+                            AppSnackbar.success(
+                                context, 'Draft saved on this device.');
+                          },
                   ),
                 ),
                 PrimaryButton(

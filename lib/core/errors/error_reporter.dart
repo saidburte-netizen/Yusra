@@ -29,7 +29,8 @@ class AppErrorReporter {
       return true; // prevent the process from being torn down
     };
 
-    ErrorWidget.builder = (details) => _FatalErrorView(error: details.exception);
+    ErrorWidget.builder =
+        (details) => _FatalErrorView(error: details.exception);
   }
 
   /// Convenience for repository boundaries that should not throw raw errors.
@@ -55,7 +56,8 @@ class _FatalErrorView extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.error_outline, size: 48, color: AppColors.danger),
+                  const Icon(Icons.error_outline,
+                      size: 48, color: AppColors.danger),
                   const SizedBox(height: 16),
                   Text(S.somethingWrong,
                       style: Theme.of(context).textTheme.headlineSmall),

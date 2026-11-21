@@ -16,6 +16,8 @@ import '../../core/strings.dart';
 import '../../core/supabase_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets.dart';
+import '../inventory/data/inventory_providers.dart';
+import 'dashboard_metrics.dart';
 
 class DayPoint {
   const DayPoint(this.date, this.total);
@@ -64,9 +66,14 @@ class DashboardSnapshot {
     this.expired,
     this.pendingPrescriptions,
     this.pendingOrders,
+    this.periodSales,
+    this.periodProfit,
+    this.periodInvoices,
     this.daily = const [],
     this.topMedicines = const [],
     this.recentActivity = const [],
+    this.recentActivityLog = const [],
+    this.failedSections = const [],
     this.teamStatus = const [],
   });
 
@@ -80,9 +87,20 @@ class DashboardSnapshot {
   final int? expired;
   final int? pendingPrescriptions;
   final int? pendingOrders;
+
+  /// Sales/profit/invoice count for the selected [ActivityRange].
+  final double? periodSales;
+  final double? periodProfit;
+  final int? periodInvoices;
   final List<DayPoint> daily;
   final List<Map<String, dynamic>> topMedicines;
+
+  /// Kept for CSV/debug parity; the UI uses the typed activity_log list.
   final List<Map<String, dynamic>> recentActivity;
+  final List<ActivityEntry> recentActivityLog;
+
+  /// Human-readable names of queries that failed; drives the partial-data banner.
+  final List<String> failedSections;
   final List<TeamMemberStatus> teamStatus;
 
   static num _num(dynamic value) {
@@ -92,14 +110,21 @@ class DashboardSnapshot {
   }
 
   static Future<List<Map<String, dynamic>>?> _rows(
-      Future<dynamic> Function() query) async {
+    Future<dynamic> Function() query, {
+    List<String>? failures,
+    String? label,
+  }) async {
     try {
       final result = await query();
       if (result is List) {
         return List<Map<String, dynamic>>.from(result);
       }
+      if (label != null) failures?.add(label);
       return null;
     } catch (_) {
+      // Individual cards must not take down the whole dashboard; record the
+      // failed section so the screen can show a partial-data banner.
+      if (label != null) failures?.add(label);
       return null;
     }
   }
@@ -116,64 +141,42 @@ class DashboardSnapshot {
   /// Sale lines in [from]..[to] joined to medicines and their parent sale.
   /// PostgREST cannot group by, so aggregation is done in Dart.
   static Future<List<Map<String, dynamic>>?> _saleItemsBetween(
-          String from, String to) =>
-      _rows(() => SupabaseService.client
-          .from('sale_items')
-          .select('medicine_id, medicine_name, quantity, cost_price, '
-              'line_total, medicines(name), sales!inner(created_at)')
-          .gte('sales.created_at', from)
-          .lt('sales.created_at', to));
+    String from,
+    String to, {
+    String? branchId,
+    bool ownOnly = false,
+    String? userId,
+    List<String>? failures,
+  }) =>
+      _rows(() {
+        var query = SupabaseService.client
+            .from('sale_items')
+            .select('medicine_id, medicine_name, quantity, cost_price, '
+                'line_total, medicines(name), sales!inner(created_at)')
+            .gte('sales.created_at', from)
+            .lt('sales.created_at', to);
+        if (branchId != null) query = query.eq('sales.branch_id', branchId);
+        if (ownOnly && userId != null) {
+          query = query.eq('sales.cashier_id', userId);
+        }
+        return query;
+      }, failures: failures, label: 'Sales detail');
 
-  static bool _isExpired(Map<String, dynamic> row) {
-    final value = row['is_expired'];
-    return value == true || value == 'true';
-  }
+  static bool isExpiredBatch(Map<String, dynamic> row) =>
+      dashboardIsExpiredBatch(row);
 
-  static String _medicineName(Map<String, dynamic> row) {
-    final embedded = row['medicines'];
-    if (embedded is List && embedded.isNotEmpty) {
-      final first = embedded.first;
-      if (first is Map && first['name'] != null) {
-        return first['name'].toString();
-      }
-    } else if (embedded is Map && embedded['name'] != null) {
-      return embedded['name'].toString();
-    }
-    return (row['medicine_name'] as String?) ?? '—';
-  }
+  static List<Map<String, dynamic>> topMedicinesFrom(
+          List<Map<String, dynamic>>? items) =>
+      dashboardTopMedicines(items);
 
-  static List<Map<String, dynamic>> _topMedicines(
-      List<Map<String, dynamic>>? items) {
-    if (items == null) return const [];
-    final totals = <String, int>{};
-    final names = <String, String>{};
-    for (final row in items) {
-      final id = row['medicine_id']?.toString();
-      if (id == null || id.isEmpty) continue;
-      totals[id] = (totals[id] ?? 0) + _num(row['quantity']).toInt();
-      names.putIfAbsent(id, () => _medicineName(row));
-    }
-    final ranked = totals.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    return [
-      for (final entry in ranked.take(5))
-        {'name': names[entry.key] ?? '—', 'qty': entry.value},
-    ];
-  }
-
-  static double? _grossProfit(List<Map<String, dynamic>>? items) {
-    if (items == null) return null;
-    var total = 0.0;
-    for (final row in items) {
-      total += _num(row['line_total']).toDouble() -
-          _num(row['cost_price']).toDouble() * _num(row['quantity']).toDouble();
-    }
-    return total;
-  }
+  static double? grossProfitFrom(List<Map<String, dynamic>>? items) =>
+      dashboardGrossProfit(items);
 
   static Future<DashboardSnapshot> load({
     required AppRole role,
     required String? userId,
+    required ActivityRange range,
+    String? branchId,
   }) async {
     if (!SupabaseService.isReady) throw const SupabaseNotConfigured();
     final client = SupabaseService.client;
@@ -183,34 +186,47 @@ class DashboardSnapshot {
     final monthStart = DateTime.utc(now.year, now.month)
         .subtract(addisAbabaOffset)
         .toIso8601String();
-    // Fourteen days including today (not just today repeated).
-    final fortnightStart = startOfAddisDayUtc(
-            now.subtract(const Duration(days: 13)))
+    final rangeStart = activityRangeStart(range, now: now);
+    final periodStart = (rangeStart ?? DateTime.utc(1900)).toIso8601String();
+    // An unbounded range would draw thousands of chart points. Totals still
+    // cover all time, but the trend line shows the most recent 90 days.
+    final chartStart = (range == ActivityRange.all
+            ? startOfAddisDayUtc(now.subtract(const Duration(days: 89)))
+            : rangeStart!)
         .toIso8601String();
 
+    final failures = <String>[];
     final ownOnly = isOwnOnly(role, Modules.sales);
 
-    Future<List<Map<String, dynamic>>?> salesBetween(String from, String to) =>
+    Future<List<Map<String, dynamic>>?> salesBetween(
+      String from,
+      String to, {
+      required String label,
+    }) =>
         _rows(() {
           var query = client
               .from('sales')
               .select()
               .gte('created_at', from)
               .lt('created_at', to);
+          if (branchId != null) query = query.eq('branch_id', branchId);
           if (ownOnly && userId != null) {
             query = query.eq('cashier_id', userId);
           }
           return query;
-        });
+        }, failures: failures, label: label);
 
-    final todayRows = await salesBetween(dayStart, dayEnd);
-    final monthRows = await salesBetween(monthStart, dayEnd);
-    final fortnightRows = await salesBetween(fortnightStart, dayEnd);
+    final todayRows =
+        await salesBetween(dayStart, dayEnd, label: "Today's sales");
+    final monthRows =
+        await salesBetween(monthStart, dayEnd, label: 'Monthly sales');
+    final periodRows =
+        await salesBetween(periodStart, dayEnd, label: '${range.label} sales');
 
     final dailyMap = <String, double>{};
-    for (final row in fortnightRows ?? const []) {
+    for (final row in periodRows ?? const []) {
       final stamp = row['created_at'] as String?;
-      if (stamp == null) continue;
+      if (stamp == null || stamp.compareTo(chartStart) < 0) continue;
       final key = formatIsoDate(DateTime.parse(stamp));
       dailyMap[key] = (dailyMap[key] ?? 0) + _num(row['total']).toDouble();
     }
@@ -219,41 +235,87 @@ class DashboardSnapshot {
         .toList()
       ..sort((a, b) => a.date.compareTo(b.date));
 
-    final lowStock = await _rows(() => client.from('v_low_stock').select());
+    Future<List<Map<String, dynamic>>?> branchRows(
+      String table, {
+      required String label,
+      String? Function(PostgrestFilterBuilder query)? filter,
+    }) async {
+      return _rows(() {
+        var query = client.from(table).select();
+        if (branchId != null) query = query.eq('branch_id', branchId);
+        filter?.call(query);
+        return query;
+      }, failures: failures, label: label);
+    }
+
+    final lowStock = await branchRows('v_low_stock', label: 'Low stock');
     // v_expiring_batches includes both expired and not-yet-expired batches;
     // split it with its real `is_expired` flag.
-    final expiring = await _rows(() => client.from('v_expiring_batches').select());
-    final shifts = await _rows(() =>
-        client.from('shifts').select().eq('status', 'open'));
-    final prescriptions = await _rows(() => client
-        .from('prescriptions')
-        .select()
-        .eq('status', 'pending'));
+    final expiring =
+        await branchRows('v_expiring_batches', label: 'Expiry alerts');
+    final shifts = await _rows(() {
+      var query = client.from('shifts').select().eq('status', 'open');
+      if (branchId != null) query = query.eq('branch_id', branchId);
+      return query;
+    }, failures: failures, label: 'Open shifts');
+    final prescriptions = await _rows(() {
+      var query = client.from('prescriptions').select().eq('status', 'pending');
+      if (branchId != null) query = query.eq('branch_id', branchId);
+      return query;
+    }, failures: failures, label: 'Prescriptions');
     // po_status has no 'pending'/'approved' values: ordered and partially
     // received are the states that still need receiving.
-    final orders = await _rows(() => client
-        .from('purchase_orders')
-        .select()
-        .inFilter('status', const ['ordered', 'partially_received']));
+    final orders = await _rows(() {
+      var query = client
+          .from('purchase_orders')
+          .select()
+          .inFilter('status', const ['ordered', 'partially_received']);
+      if (branchId != null) query = query.eq('branch_id', branchId);
+      return query;
+    }, failures: failures, label: 'Purchase orders');
 
     // Profit and top medicines come from sale_items joined to medicines;
     // sales has no `profit` column and v_top_medicines does not exist.
-    final todayItems = await _saleItemsBetween(dayStart, dayEnd);
-    final fortnightItems = await _saleItemsBetween(fortnightStart, dayEnd);
-    final activity = await _rows(() => client
-        .from('audit_logs')
-        .select('id, user_id, action, table_name, old_data, new_data, created_at')
-        .order('created_at', ascending: false)
-        .limit(5));
+    final todayItems = await _saleItemsBetween(
+      dayStart,
+      dayEnd,
+      branchId: branchId,
+      ownOnly: ownOnly,
+      userId: userId,
+      failures: failures,
+    );
+    final periodItems = await _saleItemsBetween(
+      periodStart,
+      dayEnd,
+      branchId: branchId,
+      ownOnly: ownOnly,
+      userId: userId,
+      failures: failures,
+    );
 
-    // Admins see each employee's live standing. Everything is derived from
-    // data already fetched for the other counters, plus one profiles read.
+    // One unified activity stream (activity_log) feeds recent activity, the
+    // audit trail and each employee's last-active timestamp.
+    final activity = await _rows(() {
+      var query = client
+          .from('activity_log')
+          .select('id, actor_id, actor_email, actor_role, action, entity_type, '
+              'entity_id, summary, branch_id, created_at, '
+              'correction_requested, correction_reason, approved_at');
+      if (branchId != null) query = query.eq('branch_id', branchId);
+      return query.order('created_at', ascending: false).limit(100);
+    }, failures: failures, label: 'Activity log');
+
+    // Admins see each employee's live standing, scoped to the selected branch.
     final team = <TeamMemberStatus>[];
     if (role == AppRole.superAdmin || role == AppRole.admin) {
-      final people = await _rows(() => client
-          .from('profiles')
-          .select('id, email, full_name, role, is_active')
-          .eq('is_active', true));
+      final people = await _rows(() {
+        var query = client
+            .from('profiles')
+            .select('id, email, full_name, role, is_active')
+            .eq('is_active', true);
+        if (branchId != null) query = query.eq('branch_id', branchId);
+        return query;
+      }, failures: failures, label: 'Team members');
       final salesByUser = <String, _UserSales>{};
       for (final row in todayRows ?? const []) {
         final id = row['cashier_id']?.toString();
@@ -269,7 +331,7 @@ class DashboardSnapshot {
       }
       final lastActive = <String, DateTime>{};
       for (final row in activity ?? const []) {
-        final id = row['user_id']?.toString();
+        final id = row['actor_id']?.toString();
         final parsed = DateTime.tryParse(row['created_at']?.toString() ?? '');
         if (id == null || parsed == null) continue;
         final previous = lastActive[id];
@@ -289,9 +351,8 @@ class DashboardSnapshot {
           todaySales: sales?.total ?? 0,
           todayInvoices: sales?.count ?? 0,
           hasOpenShift: openShiftUsers.contains(id),
-          lastActive: lastActive[id] == null
-              ? null
-              : toAddisAbaba(lastActive[id]!),
+          lastActive:
+              lastActive[id] == null ? null : toAddisAbaba(lastActive[id]!),
         ));
       }
       team.sort((a, b) => b.todaySales.compareTo(a.todaySales));
@@ -300,17 +361,24 @@ class DashboardSnapshot {
     return DashboardSnapshot(
       todaySales: _sum(todayRows, 'total'),
       monthSales: _sum(monthRows, 'total'),
-      grossProfitToday: _grossProfit(todayItems),
+      grossProfitToday: grossProfitFrom(todayItems),
       invoiceCount: todayRows?.length,
       openShifts: shifts?.length,
       lowStock: lowStock?.length,
-      expiringSoon: expiring?.where((row) => !_isExpired(row)).length,
-      expired: expiring?.where(_isExpired).length,
+      expiringSoon: expiring?.where((row) => !isExpiredBatch(row)).length,
+      expired: expiring?.where(isExpiredBatch).length,
       pendingPrescriptions: prescriptions?.length,
       pendingOrders: orders?.length,
+      periodSales: _sum(periodRows, 'total'),
+      periodProfit: grossProfitFrom(periodItems),
+      periodInvoices: periodRows?.length,
       daily: daily,
-      topMedicines: _topMedicines(fortnightItems),
+      topMedicines: topMedicinesFrom(periodItems),
       recentActivity: activity ?? const [],
+      recentActivityLog: [
+        for (final row in activity ?? const []) ActivityEntry.fromJson(row),
+      ],
+      failedSections: failures.toSet().toList(),
       teamStatus: team,
     );
   }
@@ -329,10 +397,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   bool _loading = true;
   RealtimeChannel? _channel;
   ActivityRange _range = ActivityRange.today;
+  String? _branchId;
 
   @override
   void initState() {
     super.initState();
+    _branchId = ref.read(branchScopeProvider);
     _load();
     _subscribeToChanges();
   }
@@ -364,8 +434,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           schema: 'public',
           table: 'sales',
           callback: (_) => _refreshQuiet(),
-        )
-      ..subscribe();
+        )..subscribe();
   }
 
   /// Realtime events can arrive in bursts. Reload without flipping into the
@@ -376,6 +445,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       final data = await DashboardSnapshot.load(
         role: auth.profile?.role ?? AppRole.cashier,
         userId: auth.profile?.id,
+        range: _range,
+        branchId: _branchId,
       );
       if (!mounted) return;
       setState(() => _data = data);
@@ -394,6 +465,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       final data = await DashboardSnapshot.load(
         role: auth.profile?.role ?? AppRole.cashier,
         userId: auth.profile?.id,
+        range: _range,
+        branchId: _branchId,
       );
       if (!mounted) return;
       setState(() {
@@ -417,6 +490,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
+    ref.listen<String?>(branchScopeProvider, (previous, next) {
+      if (previous != next) {
+        _branchId = next;
+        _load();
+      }
+    });
     final role = auth.profile?.role ?? AppRole.cashier;
     final ownOnly = isOwnOnly(role, Modules.sales);
 
@@ -439,13 +518,44 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       for (final r in ActivityRange.values)
                         DropdownMenuItem(value: r, child: Text(r.label)),
                     ],
-                    onChanged: (v) =>
-                        setState(() => _range = v ?? ActivityRange.all),
+                    onChanged: (v) {
+                      setState(() => _range = v ?? ActivityRange.all);
+                      _load();
+                    },
                   ),
                 ),
                 IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
               ],
             ),
+            if (!_loading &&
+                _error == null &&
+                _data?.failedSections.isNotEmpty == true)
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline,
+                        size: 18, color: AppColors.warning),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Some dashboard sections could not be loaded: '
+                        '${_data!.failedSections.join(', ')}. '
+                        'The numbers shown may be incomplete.',
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _load,
+                      child: const Text(S.retry),
+                    ),
+                  ],
+                ),
+              ),
             if (_loading)
               const Expanded(child: Center(child: CircularProgressIndicator()))
             else if (_error != null)
@@ -489,7 +599,11 @@ class _DashboardBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shortcuts = menuFor(role).where((item) => item.path != '/dashboard').take(4).toList();
+    final shortcuts = menuFor(role)
+        .where((item) => item.path != '/dashboard')
+        .take(4)
+        .toList();
+    final showFinance = can(role, Modules.reports, PermAction.view);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -501,20 +615,23 @@ class _DashboardBody extends StatelessWidget {
               value: money(data.todaySales),
               icon: Icons.today_outlined,
               color: AppColors.pink600,
-              subtitle: '${count(data.invoiceCount)} ${S.invoiceCount.toLowerCase()}',
+              subtitle:
+                  '${count(data.invoiceCount)} ${S.invoiceCount.toLowerCase()}',
             ),
-            StatCard(
-              title: S.monthSales,
-              value: money(data.monthSales),
-              icon: Icons.calendar_month_outlined,
-              color: AppColors.gold700,
-            ),
-            StatCard(
-              title: S.grossProfitToday,
-              value: money(data.grossProfitToday),
-              icon: Icons.trending_up_outlined,
-              color: AppColors.success,
-            ),
+            if (showFinance)
+              StatCard(
+                title: S.monthSales,
+                value: money(data.monthSales),
+                icon: Icons.calendar_month_outlined,
+                color: AppColors.gold700,
+              ),
+            if (showFinance)
+              StatCard(
+                title: S.grossProfitToday,
+                value: money(data.grossProfitToday),
+                icon: Icons.trending_up_outlined,
+                color: AppColors.success,
+              ),
             StatCard(
               title: S.openShifts,
               value: count(data.openShifts),
@@ -578,10 +695,11 @@ class _DashboardBody extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(S.last14Days,
+                      Text('${S.salesByDay} · ${range.label}',
                           style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 16),
-                      SizedBox(height: 200, child: _SalesChart(points: data.daily)),
+                      SizedBox(
+                          height: 200, child: _SalesChart(points: data.daily)),
                     ],
                   ),
                 ),
@@ -611,7 +729,8 @@ class _DashboardBody extends StatelessWidget {
                                 title: Text((row['name'] as String?) ?? '—'),
                                 trailing: Text(
                                   '${row['qty'] ?? '—'}',
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold),
                                 ),
                               ),
                             ),
@@ -635,9 +754,10 @@ class _DashboardBody extends StatelessWidget {
                           label: S.purchaseOrdersToReceive,
                           value: data.pendingOrders,
                           color: AppColors.gold700,
-                          onTap: can(role, Modules.purchaseOrders, PermAction.view)
-                              ? () => context.go('/purchasing/orders')
-                              : null),
+                          onTap:
+                              can(role, Modules.purchaseOrders, PermAction.view)
+                                  ? () => context.go('/purchasing/orders')
+                                  : null),
                       _AlertLine(
                           label: S.lowStock,
                           value: data.lowStock,
@@ -666,7 +786,7 @@ class _DashboardBody extends StatelessWidget {
           crossAxisAlignment: WrapCrossAlignment.start,
           children: [
             _Panel(
-              width: 420,
+              width: 520,
               child: Card(
                 child: Padding(
                   padding: const EdgeInsets.all(18),
@@ -679,82 +799,29 @@ class _DashboardBody extends StatelessWidget {
                             child: Text('${S.activity} · ${range.label}',
                                 style: Theme.of(context).textTheme.titleMedium),
                           ),
-                          TextButton(
-                            onPressed: () => context.go('/admin/audit'),
-                            child: const Text(S.view),
-                          ),
+                          if (can(role, Modules.audit, PermAction.view))
+                            TextButton(
+                              onPressed: () => context.go('/admin/audit'),
+                              child: const Text(S.view),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 10),
-                      Consumer(
-                        builder: (context, ref, _) {
-                          final async = ref.watch(activityProvider);
-                          return async.when(
-                            loading: () => const SizedBox(
-                                height: 80,
-                                child: Center(child: CircularProgressIndicator())),
-                            error: (e, _) => Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              child: Text(AppErrorMapper.from(e).message),
-                            ),
-                            data: (entries) {
-                              final shown = filterActivities(entries, range);
-                              if (shown.isEmpty) {
-                                return const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 20),
-                                  child: Center(child: Text(S.noData)),
-                                );
-                              }
-                              return Column(
-                                children: [
-                                  for (final entry in shown.take(6))
-                                    ListTile(
-                                      dense: true,
-                                      contentPadding: EdgeInsets.zero,
-                                      title: Text(entry.displayAction),
-                                      subtitle: Text(
-                                          '${entry.email} · ${entry.role}'),
-                                      trailing: Text(formatDateTime(
-                                          entry.createdAt.toUtc())),
-                                    ),
-                                ],
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            _Panel(
-              width: 420,
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(S.recentActivity,
-                          style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 10),
-                      if (data.recentActivity.isEmpty)
+                      if (data.recentActivityLog.isEmpty)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 20),
-                          child: Center(child: Text(S.noData)),
+                          child: Center(child: Text(S.noActivity)),
                         )
                       else
-                        ...data.recentActivity.take(5).map(
-                              (row) => ListTile(
+                        ...data.recentActivityLog.take(6).map(
+                              (entry) => ListTile(
                                 dense: true,
                                 contentPadding: EdgeInsets.zero,
-                                title: Text((row['action'] as String?) ?? '—'),
-                                subtitle: Text((row['table_name'] as String?) ?? ''),
-                                trailing: row['created_at'] == null
-                                    ? null
-                                    : Text(formatDateTime(
-                                        DateTime.parse(row['created_at'] as String))),
+                                title: Text(entry.displayAction),
+                                subtitle:
+                                    Text('${entry.email} · ${entry.role}'),
+                                trailing: Text(
+                                    formatDateTime(entry.createdAt.toUtc())),
                               ),
                             ),
                     ],
@@ -805,8 +872,7 @@ class _DashboardBody extends StatelessWidget {
                                 size: 20, color: AppColors.pink700),
                             const SizedBox(width: 8),
                             Text(S.teamActivity,
-                                style:
-                                    Theme.of(context).textTheme.titleMedium),
+                                style: Theme.of(context).textTheme.titleMedium),
                             const Spacer(),
                             TextButton.icon(
                               onPressed: () => context.go('/admin/users'),
@@ -833,7 +899,9 @@ class _DashboardBody extends StatelessWidget {
                                     .primaryContainer,
                                 child: Text(member.name.isEmpty
                                     ? '?'
-                                    : member.name.substring(0, 1).toUpperCase()),
+                                    : member.name
+                                        .substring(0, 1)
+                                        .toUpperCase()),
                               ),
                               title: Text(member.name),
                               subtitle: Text(
@@ -841,9 +909,7 @@ class _DashboardBody extends StatelessWidget {
                                   member.role.label,
                                   money(member.todaySales),
                                   '${member.todayInvoices} ${S.invoiceCount.toLowerCase()}',
-                                  member.hasOpenShift
-                                      ? S.shiftOpen
-                                      : S.noShift,
+                                  member.hasOpenShift ? S.shiftOpen : S.noShift,
                                   if (member.lastActive != null)
                                     '${S.lastActive}: ${formatDateTime(member.lastActive!)}',
                                 ].join(' · '),
@@ -903,8 +969,8 @@ class _SalesChart extends StatelessWidget {
     if (points.isEmpty) {
       return const Center(child: Text(S.noData));
     }
-    final maxValue = points.fold<double>(
-        0, (previous, point) => point.total > previous ? point.total : previous);
+    final maxValue = points.fold<double>(0,
+        (previous, point) => point.total > previous ? point.total : previous);
     return LineChart(
       LineChartData(
         minY: 0,
@@ -912,8 +978,10 @@ class _SalesChart extends StatelessWidget {
         gridData: const FlGridData(show: true, drawVerticalLine: false),
         borderData: FlBorderData(show: false),
         titlesData: FlTitlesData(
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,

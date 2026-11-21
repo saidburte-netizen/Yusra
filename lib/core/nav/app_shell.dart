@@ -13,7 +13,6 @@ import 'menu_items.dart';
 /// Branch selected in the top bar by a super_admin (null = all branches).
 final selectedBranchProvider = StateProvider<String?>((ref) => null);
 
-
 /// Branch a super admin should work on before making an explicit choice.
 /// Returns null when the user has already chosen, so we never overwrite them.
 String? initialBranchId(
@@ -133,7 +132,8 @@ class AppShell extends ConsumerWidget {
   int _selectedIndex(List<MenuItem> items, String location) {
     var best = 0;
     for (var i = 0; i < items.length; i++) {
-      if (location == items[i].path || location.startsWith('${items[i].path}/')) {
+      if (location == items[i].path ||
+          location.startsWith('${items[i].path}/')) {
         best = i;
       }
     }
@@ -179,8 +179,11 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
               child: profile == null
                   ? const Icon(Icons.person, size: 18)
                   : Text(
-                      profile.fullName.isEmpty ? '?' : profile.fullName[0].toUpperCase(),
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      profile.fullName.isEmpty
+                          ? '?'
+                          : profile.fullName[0].toUpperCase(),
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.bold),
                     ),
             ),
           ),

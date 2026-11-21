@@ -49,7 +49,8 @@ class ActivityEntry {
   final String? correctionReason;
   final DateTime? approvedAt;
 
-  String get displayAction => '${entityType.isNotEmpty ? entityType : 'record'} $action';
+  String get displayAction =>
+      '${entityType.isNotEmpty ? entityType : 'record'} $action';
 }
 
 final activityProvider =
@@ -70,12 +71,14 @@ final activityProvider =
 
   // Realtime: every change to the log refreshes the dashboard immediately.
   final channel = client.channel('yusra-activity-log');
-  channel.onPostgresChanges(
-    event: PostgresChangeEvent.all,
-    schema: 'public',
-    table: 'activity_log',
-    callback: (payload) => ref.invalidateSelf(),
-  ).subscribe();
+  channel
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'activity_log',
+        callback: (payload) => ref.invalidateSelf(),
+      )
+      .subscribe();
   ref.onDispose(() {
     client.removeChannel(channel);
   });
@@ -90,12 +93,15 @@ List<ActivityEntry> filterActivities(
 }) {
   final start = activityRangeStart(range, now: now);
   if (start == null) return entries;
-  return entries.where((entry) => !entry.createdAt.toUtc().isBefore(start)).toList();
+  return entries
+      .where((entry) => !entry.createdAt.toUtc().isBefore(start))
+      .toList();
 }
 
 Future<bool> requestActivityCorrection(String id, String reason) async {
-  final response = await SupabaseService.client
-      .rpc('request_activity_correction', params: {'p_log_id': id, 'p_reason': reason});
+  final response = await SupabaseService.client.rpc(
+      'request_activity_correction',
+      params: {'p_log_id': id, 'p_reason': reason});
   return response == true;
 }
 

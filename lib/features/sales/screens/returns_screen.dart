@@ -13,7 +13,8 @@ import '../../../core/errors/app_error.dart';
 class ReturnsScreen extends ConsumerWidget {
   const ReturnsScreen({super.key});
 
-  Future<void> _reprint(BuildContext context, WidgetRef ref, SaleReturn entry) async {
+  Future<void> _reprint(
+      BuildContext context, WidgetRef ref, SaleReturn entry) async {
     try {
       final settings = await ref.read(receiptSettingsProvider.future);
       await Receipts.printReturnNote(
@@ -26,7 +27,9 @@ class ReturnsScreen extends ConsumerWidget {
         settings: settings,
       );
     } catch (error) {
-      if (context.mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      if (context.mounted) {
+        AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      }
     }
   }
 
@@ -68,18 +71,25 @@ class ReturnsScreen extends ConsumerWidget {
                       icon: Icons.assignment_return_outlined,
                     );
                   }
-                  final total = rows.fold<double>(0, (sum, row) => sum + row.refundAmount);
+                  final total = rows.fold<double>(
+                      0, (sum, row) => sum + row.refundAmount);
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('${rows.length} returns  •  ${formatMoney(total)} refunded',
+                      Text(
+                          '${rows.length} returns  •  ${formatMoney(total)} refunded',
                           style: Theme.of(context).textTheme.labelLarge),
                       const SizedBox(height: 8),
                       Expanded(
                         child: SingleChildScrollView(
                           child: DataTablePlus(
                             columns: const [
-                              'Return no', 'Invoice', 'Date', 'Reason', 'Refund', 'Amount',
+                              'Return no',
+                              'Invoice',
+                              'Date',
+                              'Reason',
+                              'Refund',
+                              'Amount',
                             ],
                             rows: [
                               for (final entry in rows)
@@ -87,7 +97,9 @@ class ReturnsScreen extends ConsumerWidget {
                                   cells: [
                                     entry.returnNo,
                                     entry.invoiceNo ?? '—',
-                                    entry.createdAt == null ? '—' : formatDateTime(entry.createdAt!),
+                                    entry.createdAt == null
+                                        ? '—'
+                                        : formatDateTime(entry.createdAt!),
                                     entry.reason,
                                     entry.refundMethod.replaceAll('_', ' '),
                                     formatMoney(entry.refundAmount),
@@ -96,12 +108,15 @@ class ReturnsScreen extends ConsumerWidget {
                                     IconButton(
                                       tooltip: 'Reprint',
                                       icon: const Icon(Icons.print_outlined),
-                                      onPressed: () => _reprint(context, ref, entry),
+                                      onPressed: () =>
+                                          _reprint(context, ref, entry),
                                     ),
                                     IconButton(
                                       tooltip: 'View invoice',
-                                      icon: const Icon(Icons.receipt_long_outlined),
-                                      onPressed: () => context.go('/sales/${entry.saleId}'),
+                                      icon: const Icon(
+                                          Icons.receipt_long_outlined),
+                                      onPressed: () =>
+                                          context.go('/sales/${entry.saleId}'),
                                     ),
                                   ],
                                 ),

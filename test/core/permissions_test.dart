@@ -22,7 +22,8 @@ void main() {
       );
       expect(can(AppRole.admin, Modules.teamAccess, PermAction.view), isTrue);
       expect(can(AppRole.admin, Modules.teamAccess, PermAction.edit), isFalse);
-      expect(can(AppRole.cashier, Modules.teamAccess, PermAction.view), isFalse);
+      expect(
+          can(AppRole.cashier, Modules.teamAccess, PermAction.view), isFalse);
     });
 
     test('cashiers can use POS but not expenses or reports', () {
@@ -49,8 +50,10 @@ void main() {
 
     test('accountants view reports and edit expenses', () {
       expect(can(AppRole.accountant, Modules.reports, PermAction.view), isTrue);
-      expect(can(AppRole.accountant, Modules.reports, PermAction.edit), isFalse);
-      expect(can(AppRole.accountant, Modules.expenses, PermAction.edit), isTrue);
+      expect(
+          can(AppRole.accountant, Modules.reports, PermAction.edit), isFalse);
+      expect(
+          can(AppRole.accountant, Modules.expenses, PermAction.edit), isTrue);
     });
 
     test('only super admins and admins manage users', () {
@@ -61,7 +64,8 @@ void main() {
 
     test('unknown modules and roles deny access', () {
       expect(permissionFor(AppRole.superAdmin, 'does_not_exist'), Perm.none);
-      expect(can(AppRole.superAdmin, 'does_not_exist', PermAction.view), isFalse);
+      expect(
+          can(AppRole.superAdmin, 'does_not_exist', PermAction.view), isFalse);
     });
   });
 
@@ -94,7 +98,8 @@ void main() {
       final paths = allMenuItems.map((item) => item.path).toList();
       expect(paths.toSet().length, paths.length);
 
-      final cashier = menuFor(AppRole.cashier).map((item) => item.path).toList();
+      final cashier =
+          menuFor(AppRole.cashier).map((item) => item.path).toList();
       expect(cashier, contains('/pos'));
       expect(cashier, contains('/dashboard'));
       expect(cashier, isNot(contains('/expenses')));

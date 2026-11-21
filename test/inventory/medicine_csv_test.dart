@@ -13,7 +13,8 @@ void main() {
   });
 
   test('reports missing required columns', () {
-    final result = MedicineCsv.parse('name,category\nParacetamol,Pain and fever\n');
+    final result =
+        MedicineCsv.parse('name,category\nParacetamol,Pain and fever\n');
     expect(result.isValid, isFalse);
     expect(result.errors[1], contains('cost_price'));
   });

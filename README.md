@@ -34,13 +34,12 @@ lib/
     expenses/            expense capture and approval
     reports/             sales, stock, finance reports
 supabase/
-  migrations/            numbered SQL record of the owner's applied steps, plus
-                         proposed 0012–0015 hardening, RPC, report views
-                         and team access changes
-  checks/                schema_check.sql
+  migrations/            0001–0018 baseline plus new 0019 hardening migration
+  checks/                schema_check.sql (through 0019)
+  all_owner_sql.sql      full 0001–0019 bundle for fresh / recovery projects
   functions/             Edge Functions for admin user management
-tool/                    seed_demo.dart, smoke_test.dart
-docs/                    database.md, test-plan.md
+tool/                    seed_demo.dart, smoke_test.dart, db_test.sql, CI helpers
+docs/                    AUDIT.md, database.md, test-plan.md
 ```
 
 State management is Riverpod, navigation is go_router, and the backend is
@@ -65,27 +64,33 @@ settings with teammates exclusively through the proposed 0015 RPCs.
 
 1. Create a Supabase project and copy its **URL** and **anon key** from
    Project Settings → API.
-2. In the SQL Editor, run the migration files in `supabase/migrations/` in
-   filename order, one file per query. See `supabase/README.md` for the
-   details, the already-applied status and the change protocol.
-3. Replace `PUT-THE-EMAIL-HERE` in `0011_seed.sql` (or run the equivalent
-   `UPDATE profiles SET role = 'admin' WHERE email = ...` after the first
-   user signs up).
-4. Review and run `0012_rls_hardening.sql`, `0013_rpc_gaps.sql`,
-   `0014_report_views.sql` and `0015_team_management.sql`.
-5. Run `supabase/checks/schema_check.sql`. It must report no `MISSING` rows
-   once all four proposed scripts have been applied, then run the smoke test
-   below.
+2. **Existing project:** run only the new `supabase/migrations/0019_hardening_fixes.sql`
+   and then `supabase/checks/schema_check.sql`. Do **not** re-run `0001`–`0018`.
+   **Fresh project:** run `0001`–`0019` in filename order, or run the generated
+   `supabase/all_owner_sql.sql` once as a single query; it is re-runnable.
+3. `0019` makes `handle_new_user` default new users without role metadata to
+   `super_admin`; backfills missing profiles; hardens every SECURITY DEFINER
+   function; fixes PO/expense/audit authorization; and adds `customer_stats`,
+   `shift_expected_cash`, storage policies and report-view `date` columns.
+4. Run `supabase/checks/schema_check.sql`. Every row must be `PASS`; then run
+   `tool/db_test.sql` in CI (or locally against PostgreSQL 16) and the smoke
+   test below.
 
 ## 2. Create the first super admin
 
-Sign up the first user in the app (or via Supabase Auth), then run in the SQL
-Editor:
+After `0019`, the first user created without an `app_metadata.role` receives
+`super_admin` automatically. If that account already exists, confirm it with:
 
 ```sql
-update profiles
-set role = 'super_admin', is_active = true
-where email = 'you@example.com';
+select id, email, role, is_active from public.profiles where email = 'you@example.com';
+```
+
+If its role is not `super_admin`, promote it **before creating anyone else**
+using Admin → Users, or:
+
+```sql
+select public.set_user_access(user_id, 'super_admin', null, true)
+from public.profiles where email = 'you@example.com';
 ```
 
 Use that account in Admin → Users to create the remaining staff. Never commit
@@ -133,11 +138,15 @@ the app build** — it must never be shipped inside the APK or web bundle.
 
 `CI` runs on every push and pull request, on all branches, in this order:
 
-1. Java 17, Flutter stable (pinned to 3.24.5), Android SDK 34, build-tools
-   34.0.0, `flutter doctor -v`.
-2. `flutter pub get`, `flutter analyze`, `flutter test`.
-3. `flutter build apk --release` and `flutter build web --release`.
-4. Uploads both artifacts.
+1. Java 17, Flutter stable (pinned to 3.24.5), Dart 3, Android SDK 34,
+   build-tools 34.0.0, preinstalled platform-tools, Deno; versions are printed
+   and asserted.
+2. `flutter pub get`, `dart format --set-exit-if-changed .`, `flutter analyze`,
+   `flutter test`, `deno check`.
+3. `db-test` applies `all_owner_sql.sql` twice and the numbered migrations on
+   PostgreSQL 16, then runs `schema_check.sql` and `tool/db_test.sql`.
+4. `flutter build apk --release` and `flutter build web --release`; both
+   artifacts are uploaded.
 
 Open the Actions tab of a push or PR to see the result. Nothing merges to
 `main` unless the run is green.
@@ -196,5 +205,29 @@ flutter run \
 ```
 
 Do not commit real keys to `.env` files or source code. See
-`docs/test-plan.md` for the full manual test plan and `docs/database.md` for
-the schema and permission matrix.
+`docs/AUDIT.md` for the end-to-end wire-check, `docs/test-plan.md` for the
+full manual test plan and `docs/database.md` for the schema and permission
+matrix.
+
+## Owner manual actions (required after merge)
+
+1. **SQL:** If `0001`–`0018` are already applied, run only
+   `supabase/migrations/0019_hardening_fixes.sql`, then
+   `supabase/checks/schema_check.sql`. A fresh project can run
+   `supabase/all_owner_sql.sql` instead.
+2. **Auth:** Disable public Signup in Supabase Auth (the local
+   `supabase/config.toml` has `enable_signup = false`), configure the Auth
+   redirect URLs for the deployed web origin, and decide the email
+   confirmation policy.
+3. **Storage:** Verify the `prescriptions`, `receipts`, `branding`, `avatars`
+   and `medicine-images` buckets and the `0019` policies. Buckets holding
+   receipts/Rx images must stay private; only `branding` and
+   `medicine-images` are public.
+4. **Edge Functions:** Set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+   `SUPABASE_ANON_KEY` and `APP_ORIGIN` as Supabase Function secrets, then
+   deploy `admin-create-user` and `admin-reset-password`.
+5. **GitHub:** Set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, optional signing
+   secrets, optional deploy secrets and optional `SMOKE_*` secrets. Smoke
+   secrets are CI-only and opt-in.
+6. **Security:** Rotate any PAT that was previously pasted into chat. It must
+   not be reused or printed.

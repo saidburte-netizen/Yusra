@@ -27,9 +27,8 @@ class MedicineDetailScreen extends ConsumerWidget {
     ));
     final role = ref.watch(authProvider).profile?.role ?? AppRole.cashier;
     final canEdit = can(role, Modules.stock, PermAction.edit);
-    final medicine = medicineState.value
-        ?.where((item) => item.id == medicineId)
-        .firstOrNull;
+    final medicine =
+        medicineState.value?.where((item) => item.id == medicineId).firstOrNull;
 
     return Scaffold(
       body: Padding(
@@ -109,7 +108,8 @@ class MedicineDetailScreen extends ConsumerWidget {
                         ],
                       ),
                       const SizedBox(height: 18),
-                      Text('Batches', style: Theme.of(context).textTheme.titleMedium),
+                      Text('Batches',
+                          style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 8),
                       stockState(
                         batches,
@@ -130,7 +130,9 @@ class MedicineDetailScreen extends ConsumerWidget {
                                   formatDate(batch.expiryDate),
                                   '${batch.quantity}',
                                   formatMoney(batch.costPrice),
-                                  batch.daysLeft < 0 ? 'Expired' : '${batch.daysLeft} days',
+                                  batch.daysLeft < 0
+                                      ? 'Expired'
+                                      : '${batch.daysLeft} days',
                                   '',
                                 ],
                                 actions: [

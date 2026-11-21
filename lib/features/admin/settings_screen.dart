@@ -45,6 +45,26 @@ const List<String> _numberKeys = [
   'max_cashier_discount_pct',
 ];
 
+const _invalidNumber = 'Enter a valid number.';
+const _negativeNumber = 'Cannot be negative.';
+const _percentageRange = 'Enter a value between 0 and 100.';
+const _wholeNumber = 'Enter a whole number.';
+
+/// Pure validator shared by the settings form and its unit tests.
+/// Empty optional fields are accepted; saved values are always non-negative.
+String? validateSettingNumber(String key, String? value) {
+  final text = value?.trim() ?? '';
+  if (text.isEmpty) return null;
+  final parsed = double.tryParse(text);
+  if (parsed == null) return _invalidNumber;
+  if (parsed < 0) return _negativeNumber;
+  final isPercentage = key == 'vat_rate' || key == 'max_cashier_discount_pct';
+  if (isPercentage && parsed > 100) return _percentageRange;
+  final isWhole = key == 'low_stock_default' || key == 'expiry_alert_days';
+  if (isWhole && parsed != parsed.roundToDouble()) return _wholeNumber;
+  return null;
+}
+
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _formKey = GlobalKey<FormState>();
   final Map<String, TextEditingController> _controllers = {};
@@ -53,6 +73,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Uint8List? _logoBytes;
   bool _loading = true;
   bool _saving = false;
+  bool _publishing = false;
   String? _error;
 
   @override
@@ -106,9 +127,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  String _plainNumber(num value) => value % 1 == 0
-      ? value.toInt().toString()
-      : value.toString();
+  String _plainNumber(num value) =>
+      value % 1 == 0 ? value.toInt().toString() : value.toString();
 
   String _read(Map<String, dynamic>? row) {
     if (row == null) return '';
@@ -123,8 +143,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() => _saving = true);
     try {
       final client = SupabaseService.client;
+      // Currency is display-only: the money formatter is hard-coded to ETB,
+      // so never write it back to app_settings.
       final values = <String, dynamic>{
-        for (final key in _textKeys) key: _controllers[key]!.text.trim(),
+        for (final key in _textKeys.where((key) => key != 'currency'))
+          key: _controllers[key]!.text.trim(),
         for (final key in _numberKeys)
           key: num.tryParse(_controllers[key]!.text.trim()) ?? 0,
       };
@@ -137,16 +160,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       } else if (_logoUrl.isNotEmpty) {
         values['logo_url'] = _logoUrl;
       }
-      values.putIfAbsent('currency', () => Env.defaultCurrency);
       values.putIfAbsent('vat_rate', () => Env.defaultVatRate);
 
+      final failed = <String>[];
+      var saved = 0;
       for (final entry in values.entries) {
-        await client.from('app_settings').upsert({
-          'key': entry.key,
-          'value': entry.value,
-        });
+        try {
+          await client.from('app_settings').upsert({
+            'key': entry.key,
+            'value': entry.value,
+          });
+          saved++;
+        } catch (_) {
+          // Keep going: a single rejected key must not roll back every other
+          // setting or hide the rest of the save result from the user.
+          failed.add(entry.key);
+        }
       }
       if (!mounted) return;
+      if (failed.isNotEmpty) {
+        final message = saved == 0
+            ? '${S.somethingWrong} No settings were saved.'
+            : 'Some settings were saved, but these could not be updated: '
+                '${failed.join(', ')}. Please try again.';
+        AppSnackbar.error(context, message);
+        await _load();
+        return;
+      }
       // Settings are cached in these providers; drop both the provider state
       // and the underlying TTL cache so receipts/alerts pick up the changes.
       ref.invalidate(receiptSettingsProvider);
@@ -161,13 +201,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _publish() async {
+    setState(() => _publishing = true);
+    try {
+      if (!SupabaseService.isReady) throw const SupabaseNotConfigured();
+      await SupabaseService.client.rpc('publish_app_settings');
+      if (!mounted) return;
+      ref.invalidateCache(CacheTag.settings);
+      AppSnackbar.success(context, S.settingsPublished);
+    } catch (e) {
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
+    } finally {
+      if (mounted) setState(() => _publishing = false);
+    }
+  }
+
   Future<String> _uploadLogo() async {
     const bucket = 'branding';
     final path = 'logo-${DateTime.now().millisecondsSinceEpoch}.png';
-    await SupabaseService.client.storage
-        .from(bucket)
-        .uploadBinary(path, _logoBytes!,
-            fileOptions: const FileOptions(upsert: true, contentType: 'image/png'));
+    await SupabaseService.client.storage.from(bucket).uploadBinary(
+        path, _logoBytes!,
+        fileOptions: const FileOptions(upsert: true, contentType: 'image/png'));
     return SupabaseService.client.storage.from(bucket).getPublicUrl(path);
   }
 
@@ -202,7 +256,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             children: [
               PageHeader(
                 title: S.settings,
-                subtitle: canEdit ? null : '${S.view} ${S.settings.toLowerCase()}',
+                subtitle:
+                    canEdit ? null : '${S.view} ${S.settings.toLowerCase()}',
                 actions: [
                   if (canEdit)
                     Padding(
@@ -215,11 +270,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         width: 130,
                       ),
                     ),
+                  if (canEdit)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: PrimaryButton(
+                        label: S.publishSettings,
+                        icon: Icons.group_add_outlined,
+                        loading: _publishing,
+                        onPressed: _publish,
+                        width: 180,
+                      ),
+                    ),
                   IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
                 ],
               ),
               if (_loading)
-                const Expanded(child: Center(child: CircularProgressIndicator()))
+                const Expanded(
+                    child: Center(child: CircularProgressIndicator()))
               else if (_error != null)
                 ErrorState(message: _error!, onRetry: _load)
               else
@@ -237,7 +304,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(S.pharmacyName,
-                                        style: Theme.of(context).textTheme.titleMedium),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium),
                                     const SizedBox(height: 16),
                                     Row(
                                       children: [
@@ -249,9 +318,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                               : (_logoUrl.isNotEmpty
                                                   ? NetworkImage(_logoUrl)
                                                   : null) as ImageProvider?,
-                                          child: _logoBytes == null && _logoUrl.isEmpty
+                                          child: _logoBytes == null &&
+                                                  _logoUrl.isEmpty
                                               ? const Icon(Icons.local_pharmacy,
-                                                  size: 34, color: AppColors.pink600)
+                                                  size: 34,
+                                                  color: AppColors.pink600)
                                               : null,
                                         ),
                                         const SizedBox(width: 16),
@@ -265,7 +336,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       ],
                                     ),
                                     const SizedBox(height: 20),
-                                    _field(S.pharmacyName, 'pharmacy_name', canEdit),
+                                    _field(S.pharmacyName, 'pharmacy_name',
+                                        canEdit),
                                     const SizedBox(height: 14),
                                     _field(S.taglineLabel, 'tagline', canEdit),
                                     const SizedBox(height: 14),
@@ -290,7 +362,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(S.reports,
-                                        style: Theme.of(context).textTheme.titleMedium),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium),
                                     const SizedBox(height: 16),
                                     Wrap(
                                       spacing: 16,
@@ -298,14 +372,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       children: [
                                         SizedBox(
                                             width: 200,
-                                            child: _field(S.currency, 'currency', false,
-                                                hint: 'Display only; amounts use ETB')),
+                                            child: _field(
+                                                S.currency, 'currency', false,
+                                                hint:
+                                                    'Display only; amounts use ETB')),
                                         SizedBox(
                                             width: 200,
-                                            child: _field(S.vatRate, 'vat_rate', canEdit,
-                                                keyboard:
-                                                    const TextInputType.numberWithOptions(
-                                                        decimal: true),
+                                            child: _field(
+                                                S.vatRate, 'vat_rate', canEdit,
+                                                keyboard: const TextInputType
+                                                    .numberWithOptions(
+                                                    decimal: true),
                                                 number: true)),
                                         SizedBox(
                                             width: 200,
@@ -321,16 +398,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                                 number: true)),
                                         SizedBox(
                                             width: 200,
-                                            child: _field(S.maxDiscount,
-                                                'max_cashier_discount_pct', canEdit,
-                                                keyboard:
-                                                    const TextInputType.numberWithOptions(
-                                                        decimal: true),
+                                            child: _field(
+                                                S.maxDiscount,
+                                                'max_cashier_discount_pct',
+                                                canEdit,
+                                                keyboard: const TextInputType
+                                                    .numberWithOptions(
+                                                    decimal: true),
                                                 number: true)),
                                       ],
                                     ),
                                     const SizedBox(height: 14),
-                                    _field(S.receiptFooter, 'receipt_footer', canEdit,
+                                    _field(S.receiptFooter, 'receipt_footer',
+                                        canEdit,
                                         maxLines: 3),
                                   ],
                                 ),
@@ -365,13 +445,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       keyboardType: keyboard,
       maxLines: maxLines,
       hint: hint,
-      validator: !number
-          ? null
-          : (value) {
-              if (value == null || value.trim().isEmpty) return null;
-              if (double.tryParse(value.trim()) == null) return S.required;
-              return null;
-            },
+      validator: !number ? null : (value) => validateSettingNumber(key, value),
     );
   }
 }

@@ -88,29 +88,39 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
     if (saved != true || !mounted) return;
     try {
       await ref.read(customersRepositoryProvider).save(
-            {
-              'name': name.text,
-              'phone': phone.text,
-              'email': email.text,
-              'address': address.text,
-              'notes': notes.text,
-            },
-            id: customer?.id,
-          );
+        {
+          'name': name.text,
+          'phone': phone.text,
+          'email': email.text,
+          'address': address.text,
+          'notes': notes.text,
+        },
+        id: customer?.id,
+      );
       ref.invalidate(customersProvider);
       if (mounted) {
-        AppSnackbar.success(context, customer == null ? 'Customer added.' : 'Customer updated.');
+        AppSnackbar.success(context,
+            customer == null ? 'Customer added.' : 'Customer updated.');
       }
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      if (mounted) {
+        AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      }
     }
   }
 
   Future<void> _setActive(Customer customer) async {
+    final role = ref.read(authProvider).profile?.role ?? AppRole.cashier;
+    if (!can(role, Modules.customers, PermAction.edit)) {
+      AppSnackbar.error(context, 'Access denied.');
+      return;
+    }
     final confirmed = await showConfirmDialog(
       context,
-      title: customer.isActive ? 'Deactivate customer?' : 'Reactivate customer?',
-      message: '${customer.name} will ${customer.isActive ? 'no longer' : 'again'} '
+      title:
+          customer.isActive ? 'Deactivate customer?' : 'Reactivate customer?',
+      message:
+          '${customer.name} will ${customer.isActive ? 'no longer' : 'again'} '
           'be available for new sales.',
       confirmLabel: customer.isActive ? 'Deactivate' : 'Reactivate',
       danger: customer.isActive,
@@ -122,7 +132,9 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
           .setActive(customer.id, !customer.isActive);
       ref.invalidate(customersProvider);
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      if (mounted) {
+        AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      }
     }
   }
 
@@ -174,7 +186,9 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                 data: (rows) {
                   if (rows.isEmpty) {
                     return EmptyState(
-                      message: _query.isEmpty ? 'No customers yet.' : 'No match for "$_query".',
+                      message: _query.isEmpty
+                          ? 'No customers yet.'
+                          : 'No match for "$_query".',
                       icon: Icons.people_outline,
                       actionLabel: canEdit ? 'Add customer' : null,
                       onAction: canEdit ? () => _edit(null) : null,
@@ -182,7 +196,13 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                   }
                   return SingleChildScrollView(
                     child: DataTablePlus(
-                      columns: const ['Name', 'Phone', 'Email', 'Address', 'Status'],
+                      columns: const [
+                        'Name',
+                        'Phone',
+                        'Email',
+                        'Address',
+                        'Status'
+                      ],
                       rows: [
                         for (final customer in rows)
                           DataTablePlusRow(
@@ -197,7 +217,8 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                               IconButton(
                                 tooltip: 'View',
                                 icon: const Icon(Icons.visibility_outlined),
-                                onPressed: () => context.go('/customers/${customer.id}'),
+                                onPressed: () =>
+                                    context.go('/customers/${customer.id}'),
                               ),
                               if (canEdit) ...[
                                 IconButton(
@@ -206,7 +227,9 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                                   onPressed: () => _edit(customer),
                                 ),
                                 IconButton(
-                                  tooltip: customer.isActive ? 'Deactivate' : 'Reactivate',
+                                  tooltip: customer.isActive
+                                      ? 'Deactivate'
+                                      : 'Reactivate',
                                   icon: Icon(customer.isActive
                                       ? Icons.person_off_outlined
                                       : Icons.person_outline),
@@ -243,55 +266,59 @@ class CustomerDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final customer = ref.watch(customerProvider(id));
-    final sales = ref.watch(salesProvider(const (
+    final stats = ref.watch(customerStatsProvider(id));
+    const salesFilter = (
       from: null,
       to: null,
       cashierId: null,
       status: null,
       method: null,
       invoice: null,
-    )));
+    );
+    final sales = ref.watch(salesProvider(salesFilter));
 
     return Scaffold(
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: customer.when(
-          data: (value) {
-            final mine = sales.valueOrNull
-                    ?.where((sale) => sale.customerId == id)
-                    .toList() ??
-                const [];
-            final spend = mine.fold<double>(0, (sum, sale) => sum + sale.total);
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                PageHeader(
-                  title: value.name,
-                  subtitle: [
-                    if (value.phone != null) value.phone!,
-                    if (value.email != null) value.email!,
-                    if (value.address != null) value.address!,
-                  ].join('  •  '),
-                  actions: [
-                    IconButton(
-                      tooltip: 'Back',
-                      onPressed: () => context.go('/customers'),
-                      icon: const Icon(Icons.arrow_back),
-                    ),
-                  ],
-                ),
-                ResponsiveGrid(
+          data: (value) => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              PageHeader(
+                title: value.name,
+                subtitle: [
+                  if (value.phone != null) value.phone!,
+                  if (value.email != null) value.email!,
+                  if (value.address != null) value.address!,
+                ].join('  •  '),
+                actions: [
+                  IconButton(
+                    tooltip: 'Back',
+                    onPressed: () => context.go('/customers'),
+                    icon: const Icon(Icons.arrow_back),
+                  ),
+                ],
+              ),
+              stats.when(
+                data: (summary) => ResponsiveGrid(
                   minTileWidth: 200,
                   children: [
                     StatCard(
                       title: 'Lifetime spend',
-                      value: formatMoney(spend),
+                      value: formatMoney(summary.lifetimeSpend),
                       icon: Icons.payments,
                     ),
                     StatCard(
                       title: 'Purchases',
-                      value: '${mine.length}',
+                      value: '${summary.visits}',
                       icon: Icons.receipt_long,
+                    ),
+                    StatCard(
+                      title: 'Last purchase',
+                      value: summary.lastVisit == null
+                          ? '—'
+                          : formatDate(summary.lastVisit!),
+                      icon: Icons.calendar_today_outlined,
                     ),
                     StatCard(
                       title: 'Status',
@@ -300,32 +327,62 @@ class CustomerDetailScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 18),
-                Text('Recent purchases', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 10),
-                Expanded(
-                  child: mine.isEmpty
-                      ? const EmptyState(message: 'No purchases yet.', icon: Icons.receipt_long)
-                      : SingleChildScrollView(
-                          child: DataTablePlus(
-                            columns: const ['Invoice', 'Date', 'Total', 'Status'],
-                            rows: [
-                              for (final sale in mine.take(50))
-                                DataTablePlusRow(cells: [
-                                  sale.invoiceNo,
-                                  sale.createdAt == null ? '—' : formatDateTime(sale.createdAt!),
-                                  formatMoney(sale.total),
-                                  sale.status,
-                                ]),
-                            ],
-                          ),
-                        ),
+                loading: () => const LoadingSkeleton(lines: 2),
+                error: (error, _) => ErrorState(
+                  message: AppErrorMapper.from(error).message,
+                  onRetry: () => ref.invalidate(customerStatsProvider(id)),
                 ),
-              ],
-            );
-          },
+              ),
+              const SizedBox(height: 18),
+              Text('Recent purchases',
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 10),
+              Expanded(
+                child: sales.when(
+                  data: (rows) {
+                    final mine =
+                        rows.where((sale) => sale.customerId == id).toList();
+                    return mine.isEmpty
+                        ? const EmptyState(
+                            message: 'No purchases yet.',
+                            icon: Icons.receipt_long)
+                        : SingleChildScrollView(
+                            child: DataTablePlus(
+                              columns: const [
+                                'Invoice',
+                                'Date',
+                                'Total',
+                                'Status'
+                              ],
+                              rows: [
+                                for (final sale in mine.take(50))
+                                  DataTablePlusRow(cells: [
+                                    sale.invoiceNo,
+                                    sale.createdAt == null
+                                        ? '—'
+                                        : formatDateTime(sale.createdAt!),
+                                    formatMoney(sale.total),
+                                    sale.status,
+                                  ]),
+                              ],
+                            ),
+                          );
+                  },
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (error, _) => ErrorState(
+                    message: AppErrorMapper.from(error).message,
+                    onRetry: () => ref.invalidate(salesProvider(salesFilter)),
+                  ),
+                ),
+              ),
+            ],
+          ),
           loading: () => const LoadingSkeleton(lines: 4),
-          error: (error, _) => ErrorState(message: AppErrorMapper.from(error).message),
+          error: (error, _) => ErrorState(
+            message: AppErrorMapper.from(error).message,
+            onRetry: () => ref.invalidate(customerProvider(id)),
+          ),
         ),
       ),
     );

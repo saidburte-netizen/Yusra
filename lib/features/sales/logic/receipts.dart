@@ -27,13 +27,18 @@ abstract final class Receipts {
           _monoLogo,
           pw.SizedBox(height: 4),
           pw.Text(s.pharmacyName,
-              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+              style:
+                  pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
           pw.Text(s.tagline, style: const pw.TextStyle(fontSize: 8)),
-          if (s.address.isNotEmpty) pw.Text(s.address, style: const pw.TextStyle(fontSize: 7)),
-          if (s.phone.isNotEmpty) pw.Text('Tel: ${s.phone}', style: const pw.TextStyle(fontSize: 7)),
-          if (s.tin.isNotEmpty) pw.Text('TIN: ${s.tin}', style: const pw.TextStyle(fontSize: 7)),
+          if (s.address.isNotEmpty)
+            pw.Text(s.address, style: const pw.TextStyle(fontSize: 7)),
+          if (s.phone.isNotEmpty)
+            pw.Text('Tel: ${s.phone}', style: const pw.TextStyle(fontSize: 7)),
+          if (s.tin.isNotEmpty)
+            pw.Text('TIN: ${s.tin}', style: const pw.TextStyle(fontSize: 7)),
           if (s.licenseNo.isNotEmpty)
-            pw.Text('Licence: ${s.licenseNo}', style: const pw.TextStyle(fontSize: 7)),
+            pw.Text('Licence: ${s.licenseNo}',
+                style: const pw.TextStyle(fontSize: 7)),
           pw.SizedBox(height: 4),
           pw.Divider(color: PdfColors.black),
         ],
@@ -56,10 +61,13 @@ abstract final class Receipts {
           _shop(settings),
           pw.SizedBox(height: 4),
           pw.Text('INVOICE ${sale.invoiceNo}',
-              style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
-          pw.Text('${sale.createdAt == null ? '' : formatDateTime(sale.createdAt!)}   $cashierName',
+              style:
+                  pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+          pw.Text(
+              '${sale.createdAt == null ? '' : formatDateTime(sale.createdAt!)}   $cashierName',
               style: const pw.TextStyle(fontSize: 7)),
-          if (reprint) pw.Text('REPRINT', style: const pw.TextStyle(fontSize: 7)),
+          if (reprint)
+            pw.Text('REPRINT', style: const pw.TextStyle(fontSize: 7)),
           if (sale.status != 'completed')
             pw.Text('STATUS: ${sale.status.toUpperCase()}',
                 style: const pw.TextStyle(fontSize: 8)),
@@ -71,11 +79,12 @@ abstract final class Receipts {
                 [
                   item.medicineName,
                   '${item.quantity}',
-                  item.unitPrice.toStringAsFixed(2),
-                  item.lineTotal.toStringAsFixed(2),
+                  formatMoney(item.unitPrice),
+                  formatMoney(item.lineTotal),
                 ],
             ],
-            headerStyle: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold),
+            headerStyle:
+                pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold),
             cellStyle: const pw.TextStyle(fontSize: 7),
             cellAlignment: pw.Alignment.centerRight,
             columnWidths: {
@@ -100,7 +109,8 @@ abstract final class Receipts {
           _row('Change', sale.changeDue),
           pw.SizedBox(height: 8),
           pw.Text(settings.footer,
-              textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 7)),
+              textAlign: pw.TextAlign.center,
+              style: const pw.TextStyle(fontSize: 7)),
         ],
       ),
     );
@@ -129,10 +139,13 @@ abstract final class Receipts {
           pw.SizedBox(height: 6),
           pw.Center(
             child: pw.Text('RETURN NOTE $returnNo',
-                style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                style:
+                    pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
           ),
-          pw.Text('Original invoice: $invoiceNo', style: const pw.TextStyle(fontSize: 8)),
-          pw.Text(formatDateTime(createdAt), style: const pw.TextStyle(fontSize: 8)),
+          pw.Text('Original invoice: $invoiceNo',
+              style: const pw.TextStyle(fontSize: 8)),
+          pw.Text(formatDateTime(createdAt),
+              style: const pw.TextStyle(fontSize: 8)),
           pw.Text('Reason: $reason', style: const pw.TextStyle(fontSize: 8)),
           pw.Text('Refund: ${_methodLabel(refundMethod)}',
               style: const pw.TextStyle(fontSize: 8)),
@@ -140,11 +153,13 @@ abstract final class Receipts {
           _row('REFUND AMOUNT', amount, bold: true),
           pw.SizedBox(height: 10),
           pw.Text(settings.footer,
-              textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 7)),
+              textAlign: pw.TextAlign.center,
+              style: const pw.TextStyle(fontSize: 7)),
         ],
       ),
     );
-    await Printing.layoutPdf(onLayout: (_) => doc.save(), name: 'Yusra return $returnNo');
+    await Printing.layoutPdf(
+        onLayout: (_) => doc.save(), name: 'Yusra return $returnNo');
   }
 
   /// X report (during a shift) and Z report (at close).
@@ -170,11 +185,15 @@ abstract final class Receipts {
           pw.SizedBox(height: 6),
           pw.Center(
             child: pw.Text('$title REPORT',
-                style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                style:
+                    pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
           ),
-          pw.Text('Branch: $branchName', style: const pw.TextStyle(fontSize: 8)),
-          pw.Text('Cashier: $cashierName', style: const pw.TextStyle(fontSize: 8)),
-          pw.Text('Opened: ${shift.openedAt == null ? '' : formatDateTime(shift.openedAt!)}',
+          pw.Text('Branch: $branchName',
+              style: const pw.TextStyle(fontSize: 8)),
+          pw.Text('Cashier: $cashierName',
+              style: const pw.TextStyle(fontSize: 8)),
+          pw.Text(
+              'Opened: ${shift.openedAt == null ? '' : formatDateTime(shift.openedAt!)}',
               style: const pw.TextStyle(fontSize: 8)),
           if (shift.closedAt != null)
             pw.Text('Closed: ${formatDateTime(shift.closedAt!)}',
@@ -183,23 +202,29 @@ abstract final class Receipts {
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Text('Invoices: $saleCount', style: const pw.TextStyle(fontSize: 8)),
+              pw.Text('Invoices: $saleCount',
+                  style: const pw.TextStyle(fontSize: 8)),
               pw.Text('Opening cash ${formatMoney(shift.openingCash)}',
                   style: const pw.TextStyle(fontSize: 8)),
             ],
           ),
           pw.SizedBox(height: 4),
-          ...[for (final entry in byMethod.entries) _row(_methodLabel(entry.key), entry.value)],
+          ...[
+            for (final entry in byMethod.entries)
+              _row(_methodLabel(entry.key), entry.value)
+          ],
           pw.Divider(color: PdfColors.black),
           _row('Expected cash', expectedCash, bold: true),
           if (closingCash != null) _row('Counted cash', closingCash),
           if (difference != null) _row('Difference', difference, bold: true),
           pw.SizedBox(height: 10),
-          pw.Text('Certified by: ________________', style: const pw.TextStyle(fontSize: 8)),
+          pw.Text('Certified by: ________________',
+              style: const pw.TextStyle(fontSize: 8)),
         ],
       ),
     );
-    await Printing.layoutPdf(onLayout: (_) => doc.save(), name: 'Yusra $title report');
+    await Printing.layoutPdf(
+        onLayout: (_) => doc.save(), name: 'Yusra $title report');
   }
 
   static PdfPageFormat get _paper => const PdfPageFormat(
@@ -208,15 +233,20 @@ abstract final class Receipts {
         marginAll: 3 * PdfPageFormat.mm,
       );
 
-  static pw.Widget _row(String label, double value, {bool bold = false}) => pw.Row(
+  static pw.Widget _row(String label, double value, {bool bold = false}) =>
+      pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
           pw.Text(label,
               style: pw.TextStyle(
-                  fontSize: bold ? 9 : 8, fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal)),
+                  fontSize: bold ? 9 : 8,
+                  fontWeight:
+                      bold ? pw.FontWeight.bold : pw.FontWeight.normal)),
           pw.Text(formatMoney(value),
               style: pw.TextStyle(
-                  fontSize: bold ? 9 : 8, fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal)),
+                  fontSize: bold ? 9 : 8,
+                  fontWeight:
+                      bold ? pw.FontWeight.bold : pw.FontWeight.normal)),
         ],
       );
 

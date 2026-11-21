@@ -32,7 +32,8 @@ void main() {
       expect(cart.total(0.15), 28);
     });
 
-    test('discount is subtracted from the total and capped at the subtotal', () {
+    test('discount is subtracted from the total and capped at the subtotal',
+        () {
       final cart = Cart(lines: [line(quantity: 2, price: 10)]);
       expect(cart.withDiscount(5, 0.15).total(0.15), 15);
       expect(cart.withDiscount(999, 0.15).discount, 20);

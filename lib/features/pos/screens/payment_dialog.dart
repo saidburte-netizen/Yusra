@@ -27,9 +27,12 @@ Future<List<CartPayment>?> showPaymentDialog(
     builder: (context) => StatefulBuilder(
       builder: (context, setState) {
         final paid = paidTotal(rows.map((row) => row.toPayment()).toList());
-        final change = changeDue(total: total, payments: rows.map((row) => row.toPayment()).toList());
+        final change = changeDue(
+            total: total,
+            payments: rows.map((row) => row.toPayment()).toList());
         final hasCash = rows.any((row) => row.method == 'cash');
-        final canSubmit = rows.isNotEmpty && paid >= total && (paid == total || hasCash);
+        final canSubmit =
+            rows.isNotEmpty && paid >= total && (paid == total || hasCash);
 
         return AlertDialog(
           title: Text('Payment  •  ${formatMoney(total)}'),
@@ -40,7 +43,8 @@ Future<List<CartPayment>?> showPaymentDialog(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Quick cash', style: Theme.of(context).textTheme.labelLarge),
+                  Text('Quick cash',
+                      style: Theme.of(context).textTheme.labelLarge),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -92,7 +96,8 @@ Future<List<CartPayment>?> showPaymentDialog(
                                 label: 'Amount',
                                 controller: row.amountController,
                                 keyboardType:
-                                    const TextInputType.numberWithOptions(decimal: true),
+                                    const TextInputType.numberWithOptions(
+                                        decimal: true),
                                 onChanged: (_) => setState(() {}),
                               ),
                             ),

@@ -25,7 +25,8 @@ Widget expiryChip(StockBatch batch, int alertDays) => StatusBadge(
       batch.daysLeft < 0
           ? 'Expired ${formatDate(batch.expiryDate)}'
           : '${batch.daysLeft} days left',
-      tone: switch (StockRules.expiryTone(batch.daysLeft, alertDays: alertDays)) {
+      tone: switch (
+          StockRules.expiryTone(batch.daysLeft, alertDays: alertDays)) {
         ExpiryTone.danger => StatusTone.danger,
         ExpiryTone.warning => StatusTone.warning,
         ExpiryTone.gold => StatusTone.gold,
@@ -41,7 +42,8 @@ Widget stockState<T>(
 }) =>
     state.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => ErrorState(message: AppErrorMapper.from(error).message, onRetry: onRetry),
+      error: (error, _) => ErrorState(
+          message: AppErrorMapper.from(error).message, onRetry: onRetry),
       data: builder,
     );
 
@@ -87,7 +89,8 @@ Future<void> showAddStockDialog(BuildContext context, WidgetRef ref) async {
                   AppTextField(
                     label: 'Batch number',
                     controller: batchNo,
-                    validator: (value) => (value ?? '').trim().isEmpty ? 'Required' : null,
+                    validator: (value) =>
+                        (value ?? '').trim().isEmpty ? 'Required' : null,
                   ),
                   const SizedBox(height: 12),
                   DatePickerField(
@@ -105,7 +108,9 @@ Future<void> showAddStockDialog(BuildContext context, WidgetRef ref) async {
                           controller: quantity,
                           keyboardType: TextInputType.number,
                           validator: (value) =>
-                              (int.tryParse(value ?? '') ?? 0) > 0 ? null : 'Must be above zero',
+                              (int.tryParse(value ?? '') ?? 0) > 0
+                                  ? null
+                                  : 'Must be above zero',
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -113,7 +118,8 @@ Future<void> showAddStockDialog(BuildContext context, WidgetRef ref) async {
                         child: MoneyField(
                           label: 'Unit cost',
                           controller: cost,
-                          validator: (value) => (value ?? 0) >= 0 ? null : 'Invalid',
+                          validator: (value) =>
+                              (value ?? 0) >= 0 ? null : 'Invalid',
                         ),
                       ),
                     ],
@@ -125,9 +131,12 @@ Future<void> showAddStockDialog(BuildContext context, WidgetRef ref) async {
                       label: 'Supplier (optional)',
                       value: supplierId,
                       items: [
-                        const DropdownMenuItem(value: null, child: Text('None')),
-                        for (final supplier in snapshot.data ?? const <SupplierOption>[])
-                          DropdownMenuItem(value: supplier.id, child: Text(supplier.name)),
+                        const DropdownMenuItem(
+                            value: null, child: Text('None')),
+                        for (final supplier
+                            in snapshot.data ?? const <SupplierOption>[])
+                          DropdownMenuItem(
+                              value: supplier.id, child: Text(supplier.name)),
                       ],
                       onChanged: (value) => setState(() => supplierId = value),
                     ),
@@ -165,7 +174,9 @@ Future<void> showAddStockDialog(BuildContext context, WidgetRef ref) async {
                     );
                 if (context.mounted) Navigator.pop(context, true);
               } catch (e) {
-                if (context.mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
+                if (context.mounted) {
+                  AppSnackbar.error(context, AppErrorMapper.from(e).message);
+                }
               } finally {
                 if (context.mounted) setState(() => busy = false);
               }
@@ -193,7 +204,9 @@ class SupplierOption {
   static Future<List<SupplierOption>> load(WidgetRef ref) async {
     try {
       final rows = await ref.read(supplierRepositoryProvider).list();
-      return [for (final row in rows) SupplierOption(id: row.id, name: row.name)];
+      return [
+        for (final row in rows) SupplierOption(id: row.id, name: row.name)
+      ];
     } catch (_) {
       return const <SupplierOption>[];
     }
@@ -227,25 +240,33 @@ Future<void> showAdjustStockDialog(
                   label: 'Reason type',
                   value: type,
                   items: const [
-                    DropdownMenuItem(value: 'adjustment', child: Text('Count correction')),
-                    DropdownMenuItem(value: 'expired_writeoff', child: Text('Expired write-off')),
+                    DropdownMenuItem(
+                        value: 'adjustment', child: Text('Count correction')),
+                    DropdownMenuItem(
+                        value: 'expired_writeoff',
+                        child: Text('Expired write-off')),
                     DropdownMenuItem(value: 'damage', child: Text('Damage')),
                   ],
-                  onChanged: (value) => setState(() => type = value ?? 'adjustment'),
+                  onChanged: (value) =>
+                      setState(() => type = value ?? 'adjustment'),
                 ),
                 const SizedBox(height: 12),
                 AppTextField(
                   label: 'Change (negative to remove)',
                   controller: change,
-                  keyboardType: const TextInputType.numberWithOptions(signed: true),
-                  validator: (value) => (int.tryParse(value ?? '') ?? 0) != 0 ? null : 'Must not be zero',
+                  keyboardType:
+                      const TextInputType.numberWithOptions(signed: true),
+                  validator: (value) => (int.tryParse(value ?? '') ?? 0) != 0
+                      ? null
+                      : 'Must not be zero',
                 ),
                 const SizedBox(height: 12),
                 AppTextField(
                   label: 'Reason',
                   controller: reason,
                   maxLines: 2,
-                  validator: (value) => (value ?? '').trim().isEmpty ? 'Required' : null,
+                  validator: (value) =>
+                      (value ?? '').trim().isEmpty ? 'Required' : null,
                 ),
               ],
             ),
@@ -272,7 +293,9 @@ Future<void> showAdjustStockDialog(
                     );
                 if (context.mounted) Navigator.pop(context, true);
               } catch (e) {
-                if (context.mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
+                if (context.mounted) {
+                  AppSnackbar.error(context, AppErrorMapper.from(e).message);
+                }
               } finally {
                 if (context.mounted) setState(() => busy = false);
               }

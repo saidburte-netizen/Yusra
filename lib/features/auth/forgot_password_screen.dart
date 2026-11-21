@@ -10,7 +10,8 @@ class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
 
   @override
-  ConsumerState<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+  ConsumerState<ForgotPasswordScreen> createState() =>
+      _ForgotPasswordScreenState();
 }
 
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
@@ -31,7 +32,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       _sending = true;
       _message = null;
     });
-    final error = await ref.read(authProvider.notifier).requestPasswordReset(_email.text);
+    final error =
+        await ref.read(authProvider.notifier).requestPasswordReset(_email.text);
     if (!mounted) return;
     setState(() {
       _sending = false;
@@ -55,9 +57,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const YusraLogo(variant: YusraLogoVariant.full, size: 180),
+                      const YusraLogo(
+                          variant: YusraLogoVariant.full, size: 180),
                       const SizedBox(height: 24),
-                      Text(S.resetPassword, style: Theme.of(context).textTheme.titleLarge),
+                      Text(S.resetPassword,
+                          style: Theme.of(context).textTheme.titleLarge),
                       const SizedBox(height: 8),
                       Text(
                         'Enter your email and we will send a reset link.',
@@ -74,9 +78,10 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                         controller: _email,
                         keyboardType: TextInputType.emailAddress,
                         prefixIcon: const Icon(Icons.email_outlined, size: 20),
-                        validator: (value) => value == null || !value.contains('@')
-                            ? S.emailInvalid
-                            : null,
+                        validator: (value) =>
+                            value == null || !value.contains('@')
+                                ? S.emailInvalid
+                                : null,
                       ),
                       const SizedBox(height: 18),
                       PrimaryButton(

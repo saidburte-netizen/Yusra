@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/auth/auth_controller.dart';
+import '../../../core/dates.dart';
 import '../../../core/permissions.dart';
 import '../../../core/state/app_cache.dart';
 import '../../../core/supabase_client.dart';
@@ -72,7 +73,8 @@ class Shift {
     String? status,
     String? note,
     String? cashierName,
-  }) => Shift(
+  }) =>
+      Shift(
         id: id ?? this.id,
         branchId: branchId ?? this.branchId,
         cashierId: cashierId ?? this.cashierId,
@@ -96,9 +98,12 @@ class Shift {
       openedAt: _date(json['opened_at']),
       closedAt: _date(json['closed_at']),
       openingCash: _money(json['opening_cash']),
-      expectedCash: json['expected_cash'] == null ? null : _money(json['expected_cash']),
-      closingCash: json['closing_cash'] == null ? null : _money(json['closing_cash']),
-      difference: json['difference'] == null ? null : _money(json['difference']),
+      expectedCash:
+          json['expected_cash'] == null ? null : _money(json['expected_cash']),
+      closingCash:
+          json['closing_cash'] == null ? null : _money(json['closing_cash']),
+      difference:
+          json['difference'] == null ? null : _money(json['difference']),
       status: (json['status'] as String?) ?? 'open',
       note: _text(json['note']),
       cashierName: profile is Map ? _text(profile['full_name']) : null,
@@ -354,7 +359,8 @@ class SalesRepository {
         .eq('cashier_id', user.id)
         .eq('status', 'open');
     if (branchId != null) query = query.eq('branch_id', branchId);
-    final rows = await query.order('opened_at', ascending: false).limit(1) as List;
+    final rows =
+        await query.order('opened_at', ascending: false).limit(1) as List;
     if (rows.isEmpty) return null;
     return Shift.fromJson(Map<String, dynamic>.from(rows.first as Map));
   }
@@ -363,7 +369,8 @@ class SalesRepository {
     var query = _db.from('shifts').select('*, profiles(full_name)');
     if (branchId != null) query = query.eq('branch_id', branchId);
     if (openOnly) query = query.eq('status', 'open');
-    final rows = await query.order('opened_at', ascending: false).limit(200) as List;
+    final rows =
+        await query.order('opened_at', ascending: false).limit(200) as List;
     return rows
         .map((row) => Shift.fromJson(Map<String, dynamic>.from(row as Map)))
         .toList();
@@ -416,7 +423,8 @@ class SalesRepository {
     return raw.toString();
   }
 
-  Future<void> voidSale(String saleId, String reason) => _db.rpc('void_sale', params: {
+  Future<void> voidSale(String saleId, String reason) =>
+      _db.rpc('void_sale', params: {
         'p_sale': saleId,
         'p_reason': reason,
       });
@@ -437,15 +445,16 @@ class SalesRepository {
   }
 
   Future<List<Sale>> sales(SaleFilter filter, String? branchId) async {
-    var query = _db
-        .from('sales')
-        .select('*, profiles(full_name), customers(name)');
+    var query =
+        _db.from('sales').select('*, profiles(full_name), customers(name)');
     if (branchId != null) query = query.eq('branch_id', branchId);
     if (filter.from != null) {
-      query = query.gte('created_at', filter.from!.toUtc().toIso8601String());
+      query = query.gte(
+          'created_at', startOfAddisDayUtc(filter.from!).toIso8601String());
     }
     if (filter.to != null) {
-      query = query.lte('created_at', filter.to!.toUtc().toIso8601String());
+      query = query.lte(
+          'created_at', endOfAddisDayUtc(filter.to!).toIso8601String());
     }
     final cashierId = filter.cashierId;
     final status = filter.status;
@@ -455,7 +464,8 @@ class SalesRepository {
     if (invoice != null && invoice.isNotEmpty) {
       query = query.ilike('invoice_no', '%$invoice%');
     }
-    final rows = await query.order('created_at', ascending: false).limit(300) as List;
+    final rows =
+        await query.order('created_at', ascending: false).limit(300) as List;
     var result = rows
         .map((row) => Sale.fromJson(Map<String, dynamic>.from(row as Map)))
         .toList();
@@ -471,14 +481,15 @@ class SalesRepository {
         .from('sale_payments')
         .select('sale_id')
         .eq('method', method) as List;
-    return rows
-        .map((row) => (row as Map)['sale_id'] as String)
-        .toSet();
+    return rows.map((row) => (row as Map)['sale_id'] as String).toSet();
   }
 
   Future<Sale> sale(String id) async {
-    final row =
-        await _db.from('sales').select('*, profiles(full_name), customers(name)').eq('id', id).single();
+    final row = await _db
+        .from('sales')
+        .select('*, profiles(full_name), customers(name)')
+        .eq('id', id)
+        .single();
     return Sale.fromJson(Map<String, dynamic>.from(row));
   }
 
@@ -500,24 +511,35 @@ class SalesRepository {
         .eq('sale_id', saleId)
         .order('id') as List;
     return rows
-        .map((row) => SalePayment.fromJson(Map<String, dynamic>.from(row as Map)))
+        .map((row) =>
+            SalePayment.fromJson(Map<String, dynamic>.from(row as Map)))
         .toList();
   }
 
   Future<List<SaleReturn>> saleReturns({String? branchId}) async {
     var query = _db.from('sale_returns').select('*, sales(invoice_no)');
     if (branchId != null) query = query.eq('branch_id', branchId);
-    final rows = await query.order('created_at', ascending: false).limit(300) as List;
+    final rows =
+        await query.order('created_at', ascending: false).limit(300) as List;
     return rows
-        .map((row) => SaleReturn.fromJson(Map<String, dynamic>.from(row as Map)))
+        .map(
+            (row) => SaleReturn.fromJson(Map<String, dynamic>.from(row as Map)))
         .toList();
   }
 
   /// Settings needed by the receipt and the cart.
   Future<ReceiptSettings> receiptSettings() async {
     const keys = [
-      'pharmacy_name', 'tagline', 'address', 'phone', 'tin', 'license_no',
-      'receipt_footer', 'vat_rate', 'max_cashier_discount_pct', 'currency',
+      'pharmacy_name',
+      'tagline',
+      'address',
+      'phone',
+      'tin',
+      'license_no',
+      'receipt_footer',
+      'vat_rate',
+      'max_cashier_discount_pct',
+      'currency',
     ];
     final rows = await _db
         .from('app_settings')
@@ -580,7 +602,8 @@ class ReceiptSettings {
   final double maxCashierDiscountPct;
 }
 
-final salesRepositoryProvider = Provider<SalesRepository>((ref) => SalesRepository());
+final salesRepositoryProvider =
+    Provider<SalesRepository>((ref) => SalesRepository());
 
 final receiptSettingsProvider = FutureProvider<ReceiptSettings>((ref) async {
   const fallback = ReceiptSettings(
@@ -610,7 +633,9 @@ final receiptSettingsProvider = FutureProvider<ReceiptSettings>((ref) async {
 final myOpenShiftProvider = FutureProvider<Shift?>((ref) async {
   if (!SupabaseService.isReady) return null;
   final role = ref.watch(authProvider).profile?.role;
-  if (role == null || role == AppRole.accountant || role == AppRole.storeKeeper) {
+  if (role == null ||
+      role == AppRole.accountant ||
+      role == AppRole.storeKeeper) {
     return null;
   }
   return ref
@@ -618,14 +643,16 @@ final myOpenShiftProvider = FutureProvider<Shift?>((ref) async {
       .myOpenShift(branchId: ref.watch(branchScopeProvider));
 });
 
-final shiftsProvider = FutureProvider.family<List<Shift>, bool>((ref, openOnly) async {
+final shiftsProvider =
+    FutureProvider.family<List<Shift>, bool>((ref, openOnly) async {
   if (!SupabaseService.isReady) return const <Shift>[];
   return ref
       .read(salesRepositoryProvider)
       .shifts(branchId: ref.watch(branchScopeProvider), openOnly: openOnly);
 });
 
-final salesProvider = FutureProvider.family<List<Sale>, SaleFilter>((ref, filter) async {
+final salesProvider =
+    FutureProvider.family<List<Sale>, SaleFilter>((ref, filter) async {
   if (!SupabaseService.isReady) return const <Sale>[];
   return ref
       .read(salesRepositoryProvider)
@@ -633,10 +660,12 @@ final salesProvider = FutureProvider.family<List<Sale>, SaleFilter>((ref, filter
 });
 
 final saleProvider = FutureProvider.family<Sale, String>((ref, id) async {
+  if (!SupabaseService.isReady) throw const SupabaseNotConfigured();
   return ref.read(salesRepositoryProvider).sale(id);
 });
 
-final saleItemsProvider = FutureProvider.family<List<SaleItem>, String>((ref, saleId) async {
+final saleItemsProvider =
+    FutureProvider.family<List<SaleItem>, String>((ref, saleId) async {
   if (!SupabaseService.isReady) return const <SaleItem>[];
   return ref.read(salesRepositoryProvider).saleItems(saleId);
 });

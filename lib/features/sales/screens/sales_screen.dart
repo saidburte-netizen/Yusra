@@ -11,6 +11,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets.dart';
 import '../../../core/strings.dart';
 import '../data/sales.dart';
+import '../../inventory/data/inventory_providers.dart';
 import '../../../core/errors/app_error.dart';
 
 typedef SaleFilterArgs = ({
@@ -108,7 +109,9 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
       ref.invalidate(salesProvider);
       if (mounted) AppSnackbar.success(context, 'Sale voided.');
     } catch (error) {
-      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      if (mounted) {
+        AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      }
     }
   }
 
@@ -176,13 +179,16 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                   width: 170,
                   child: DropdownButtonFormField<String?>(
                     value: _filter.cashierId,
-                    decoration: const InputDecoration(labelText: 'Cashier', isDense: true),
+                    decoration: const InputDecoration(
+                        labelText: 'Cashier', isDense: true),
                     items: [
-                      const DropdownMenuItem(value: null, child: Text('All cashiers')),
+                      const DropdownMenuItem(
+                          value: null, child: Text('All cashiers')),
                       ...cashiers.valueOrNull?.map(
                             (row) => DropdownMenuItem(
                               value: row['id'] as String,
-                              child: Text(row['full_name'] as String? ?? 'Cashier'),
+                              child: Text(
+                                  row['full_name'] as String? ?? 'Cashier'),
                             ),
                           ) ??
                           const [],
@@ -203,13 +209,19 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                   width: 150,
                   child: DropdownButtonFormField<String?>(
                     value: _filter.status,
-                    decoration: const InputDecoration(labelText: 'Status', isDense: true),
+                    decoration: const InputDecoration(
+                        labelText: 'Status', isDense: true),
                     items: const [
-                      DropdownMenuItem(value: null, child: Text('All statuses')),
-                      DropdownMenuItem(value: 'completed', child: Text('Completed')),
+                      DropdownMenuItem(
+                          value: null, child: Text('All statuses')),
+                      DropdownMenuItem(
+                          value: 'completed', child: Text('Completed')),
                       DropdownMenuItem(value: 'voided', child: Text('Voided')),
-                      DropdownMenuItem(value: 'partially_returned', child: Text('Part returned')),
-                      DropdownMenuItem(value: 'returned', child: Text('Returned')),
+                      DropdownMenuItem(
+                          value: 'partially_returned',
+                          child: Text('Part returned')),
+                      DropdownMenuItem(
+                          value: 'returned', child: Text('Returned')),
                     ],
                     onChanged: (value) => setState(() {
                       _filter = (
@@ -227,13 +239,16 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                   width: 160,
                   child: DropdownButtonFormField<String?>(
                     value: _filter.method,
-                    decoration: const InputDecoration(labelText: 'Payment', isDense: true),
+                    decoration: const InputDecoration(
+                        labelText: 'Payment', isDense: true),
                     items: const [
                       DropdownMenuItem(value: null, child: Text('All methods')),
                       DropdownMenuItem(value: 'cash', child: Text('Cash')),
-                      DropdownMenuItem(value: 'mobile_money', child: Text('Mobile money')),
+                      DropdownMenuItem(
+                          value: 'mobile_money', child: Text('Mobile money')),
                       DropdownMenuItem(value: 'card', child: Text('Card')),
-                      DropdownMenuItem(value: 'bank_transfer', child: Text('Bank transfer')),
+                      DropdownMenuItem(
+                          value: 'bank_transfer', child: Text('Bank transfer')),
                     ],
                     onChanged: (value) => setState(() {
                       _filter = (
@@ -253,7 +268,8 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
             Expanded(
               child: sales.when(
                 data: (rows) {
-                  final total = rows.fold<double>(0, (sum, sale) => sum + sale.total);
+                  final total =
+                      rows.fold<double>(0, (sum, sale) => sum + sale.total);
                   if (rows.isEmpty) {
                     return const EmptyState(
                       message: 'No sales match these filters.',
@@ -263,22 +279,30 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('${rows.length} invoices  •  ${formatMoney(total)} total',
+                      Text(
+                          '${rows.length} invoices  •  ${formatMoney(total)} total',
                           style: Theme.of(context).textTheme.labelLarge),
                       const SizedBox(height: 8),
                       Expanded(
                         child: SingleChildScrollView(
                           child: DataTablePlus(
                             columns: const [
-                              'Invoice', 'Date', 'Cashier', 'Customer',
-                              'Total', 'Paid', 'Status',
+                              'Invoice',
+                              'Date',
+                              'Cashier',
+                              'Customer',
+                              'Total',
+                              'Paid',
+                              'Status',
                             ],
                             rows: [
                               for (final sale in rows)
                                 DataTablePlusRow(
                                   cells: [
                                     sale.invoiceNo,
-                                    sale.createdAt == null ? '—' : formatDateTime(sale.createdAt!),
+                                    sale.createdAt == null
+                                        ? '—'
+                                        : formatDateTime(sale.createdAt!),
                                     sale.cashierName ?? '—',
                                     sale.customerName ?? 'Walk-in',
                                     formatMoney(sale.total),
@@ -288,13 +312,16 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                                   actions: [
                                     IconButton(
                                       tooltip: 'View',
-                                      icon: const Icon(Icons.visibility_outlined),
-                                      onPressed: () => context.go('/sales/${sale.id}'),
+                                      icon:
+                                          const Icon(Icons.visibility_outlined),
+                                      onPressed: () =>
+                                          context.go('/sales/${sale.id}'),
                                     ),
                                     if (sale.status == 'completed' && showVoid)
                                       IconButton(
                                         tooltip: 'Void',
-                                        icon: const Icon(Icons.cancel_outlined, color: AppColors.danger),
+                                        icon: const Icon(Icons.cancel_outlined,
+                                            color: AppColors.danger),
                                         onPressed: () => _void(sale),
                                       ),
                                   ],
@@ -324,11 +351,14 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
 
 /// Cashier list for the filter. Kept separate so a failure here never blocks
 /// the sales table.
-final cashiersProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final cashiersProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
   if (!SupabaseService.isReady) return const [];
-  final rows = await SupabaseService.client
-      .from('profiles')
-      .select('id, full_name')
-      .order('full_name') as List;
+  var query = SupabaseService.client.from('profiles').select('id, full_name');
+  final branchId = ref.read(branchScopeProvider);
+  if (branchId != null) {
+    query = query.eq('branch_id', branchId);
+  }
+  final rows = await query.order('full_name') as List;
   return rows.map((row) => Map<String, dynamic>.from(row as Map)).toList();
 });

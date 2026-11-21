@@ -3,8 +3,10 @@ import 'package:yusra_pharmacy/core/dates.dart';
 
 void main() {
   test('Addis Ababa is UTC+3 with no DST', () {
-    expect(toAddisAbaba(DateTime.utc(2024, 1, 1, 21)), DateTime.utc(2024, 1, 2));
-    expect(toAddisAbaba(DateTime.utc(2024, 7, 1, 21)), DateTime.utc(2024, 7, 2));
+    expect(
+        toAddisAbaba(DateTime.utc(2024, 1, 1, 21)), DateTime.utc(2024, 1, 2));
+    expect(
+        toAddisAbaba(DateTime.utc(2024, 7, 1, 21)), DateTime.utc(2024, 7, 2));
   });
 
   test('day boundaries use Addis midnight, not UTC midnight', () {
@@ -17,11 +19,13 @@ void main() {
 
   test('isSameAddisDay groups times across the UTC boundary', () {
     expect(
-      isSameAddisDay(DateTime.utc(2024, 1, 1, 21), DateTime.utc(2024, 1, 2, 20)),
+      isSameAddisDay(
+          DateTime.utc(2024, 1, 1, 21), DateTime.utc(2024, 1, 2, 20)),
       isTrue,
     );
     expect(
-      isSameAddisDay(DateTime.utc(2024, 1, 1, 20), DateTime.utc(2024, 1, 1, 21)),
+      isSameAddisDay(
+          DateTime.utc(2024, 1, 1, 20), DateTime.utc(2024, 1, 1, 21)),
       isFalse,
     );
   });
