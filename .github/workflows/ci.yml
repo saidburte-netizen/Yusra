@@ -70,18 +70,76 @@ jobs:
           "$SDK/cmdline-tools/latest/bin/sdkmanager" --list_installed | \
             grep -E 'platforms;android-34|build-tools;34.0.0'
 
+      - name: Verify pinned platform-tools
+        run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          PIN="35.0.2"
+          PROPS="$SDK/platform-tools/source.properties"
+          CURRENT=""
+          if [ -f "$PROPS" ]; then
+            CURRENT="$(grep '^Pkg.Revision=' "$PROPS" | cut -d= -f2 | tr -d '[:space:]')"
+          fi
+          if [ "$CURRENT" != "$PIN" ]; then
+            yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" \
+              "platform-tools;$PIN"
+          fi
+          grep '^Pkg.Revision=' "$PROPS"
+          "$SDK/platform-tools/adb" version | head -1
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Print tool versions
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Set up PostgreSQL 16 client
         run: |
+          if ! psql --version | grep -q ' 16\.'; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client-16
+          fi
+          psql --version
+
+      - name: Print and verify all tool versions
+        run: |
+          echo "=== Flutter / Dart ==="
           flutter --version
           dart --version
+          echo "=== Java ==="
           java -version
+          echo "=== Gradle wrapper ==="
+          bash ./android/gradlew --version | tee /tmp/gradle-version.txt
+          echo "=== Deno ==="
+          deno --version
+          echo "=== PostgreSQL ==="
+          psql --version
+          echo "=== Android SDK ==="
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --list_installed | \
+            grep -E 'platforms;android-34|build-tools;34.0.0|platform-tools'
+          echo "=== Flutter doctor ==="
           flutter doctor -v
+
+          flutter --version | head -1 | grep -q '3.24.5'
+          dart --version 2>&1 | grep -q 'Dart SDK version: 3\.'
+          java -version 2>&1 | head -1 | grep -q '"17\.'
+          grep -q 'Gradle 8\.3' /tmp/gradle-version.txt
+          deno --version | head -1 | grep -q '^deno '
+          psql --version | grep -q ' 16\.'
+          echo "Toolchain assertions passed (Flutter 3.24.5, Gradle 8.3, Deno, PostgreSQL 16)."
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Verify Dart formatting
+        run: dart format --set-exit-if-changed .
+
+      - name: Analyze Edge Functions (Deno)
+        run: |
+          deno check --no-config supabase/functions/admin-create-user/index.ts
+          deno check --no-config supabase/functions/admin-reset-password/index.ts
 
       - name: Analyze
         run: flutter analyze
@@ -145,6 +203,106 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  db-test:
+    name: Postgres schema and migration checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # REQUIRED job: no `if`, no `continue-on-error`. A red db-test blocks the
+    # Edge Function deploy job below as well as the PR checks.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PostgreSQL 16 client
+        run: |
+          if ! psql --version | grep -q ' 16\.'; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client-16
+          fi
+          psql --version | grep -q ' 16\.'
+          pg_isready
+
+      - name: Create test databases
+        run: |
+          set -euo pipefail
+          psql -d postgres -v ON_ERROR_STOP=1 -q \
+            -c 'create database yusra_owner' \
+            -c 'create database yusra_migrations'
+
+      - name: Install Supabase-compatible stubs
+        run: |
+          set -euo pipefail
+          for db in yusra_owner yusra_migrations; do
+            echo "=== bootstrapping Supabase stubs in $db ==="
+            psql -d "$db" -v ON_ERROR_STOP=1 -q -f tool/supabase_stubs.sql
+          done
+
+      - name: Apply all_owner_sql.sql twice (idempotency)
+        run: |
+          set -euo pipefail
+          for pass in 1 2; do
+            echo "=== all_owner_sql.sql pass $pass ==="
+            if ! psql -d yusra_owner -v ON_ERROR_STOP=1 -q \
+                 -f supabase/all_owner_sql.sql > "/tmp/owner-pass-$pass.log" 2>&1; then
+              cat "/tmp/owner-pass-$pass.log"
+              echo "::error::all_owner_sql.sql failed on pass $pass"
+              exit 1
+            fi
+            echo "all_owner_sql.sql pass $pass: OK"
+          done
+
+      - name: Apply numbered migrations in order
+        run: |
+          set -euo pipefail
+          for file in supabase/migrations/*.sql; do
+            echo "=== $file ==="
+            psql -d yusra_migrations -v ON_ERROR_STOP=1 -q -f "$file"
+          done
+
+      - name: schema_check.sql (fail on any non-PASS row)
+        run: |
+          set -euo pipefail
+          echo "=== supabase/checks/schema_check.sql result table ==="
+          psql -d yusra_migrations -v ON_ERROR_STOP=1 -At -F '|' \
+            -f supabase/checks/schema_check.sql | tee /tmp/schema-check.txt
+          test -s /tmp/schema-check.txt
+          awk -F '|' '
+            NF >= 3 && $3 != "PASS" {
+              print "::error::schema_check row is not PASS: " $0
+              bad = 1
+            }
+            END { exit bad ? 1 : 0 }
+          ' /tmp/schema-check.txt
+
+      - name: Run tool/db_test.sql
+        run: |
+          set -euo pipefail
+          echo "=== tool/db_test.sql result table ==="
+          psql -d yusra_migrations -v ON_ERROR_STOP=1 -f tool/db_test.sql | tee /tmp/db-test.txt
+          test -s /tmp/db-test.txt
+
   smoke-test:
     name: Manual Supabase smoke test
     runs-on: ubuntu-latest
@@ -202,7 +360,7 @@ jobs:
   deploy-edge-functions:
     name: Deploy Supabase Edge Functions
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, db-test]
     # Only from main, and only when both deploy secrets exist (missing secrets
     # make this job a no-op rather than a failure).
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
