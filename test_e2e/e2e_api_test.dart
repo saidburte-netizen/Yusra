@@ -39,11 +39,10 @@ void main() {
     await PostgrestProxy.start();
     final http = HttpClient();
     try {
-      final request =
-          await http.getUrl(Uri.parse('${E2eEnv.postgrestUrl}/root'));
+      final request = await http.getUrl(Uri.parse('${E2eEnv.postgrestUrl}/'));
       final response = await request.close();
       expect(response.statusCode, 200,
-          reason: 'PostgREST must be reachable at ${E2eEnv.postgrestUrl}/root');
+          reason: 'PostgREST must be reachable at ${E2eEnv.postgrestUrl}/');
       await response.drain<void>();
     } finally {
       http.close();
