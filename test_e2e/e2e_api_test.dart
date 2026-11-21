@@ -226,6 +226,20 @@ void main() {
                   'expiry_date': _dateIn(60),
                 },
               ]));
+      expect(
+          (await api('partially received PO', () => purchase.order(poId)))
+              .status,
+          'partially_received');
+      await api(
+          'complete PO receipt',
+          () => purchase.receive(poId, [
+                {
+                  'po_item_id': rxLine.id,
+                  'quantity': 4,
+                  'batch_no': 'BR2-$runId',
+                  'expiry_date': _dateIn(120),
+                },
+              ]));
       expect((await api('received PO', () => purchase.order(poId))).status,
           'received');
       final stock =
@@ -233,6 +247,11 @@ void main() {
       expect(
           stock.firstWhere((row) => row.medicineId == normal.id).availableQty,
           20);
+      expect(
+          stock
+              .firstWhere((row) => row.medicineId == rxMedicine.id)
+              .availableQty,
+          10);
       final normalBatches = await api('batches',
           () => inventory.batches(branchId: branchId, medicineId: normal.id));
       final earliestBatch =
