@@ -63,6 +63,11 @@ void main() {
           role: 'super_admin', branchId: '', label: 'admin');
       useUser(adminId);
       final admin = SupabaseService.client;
+      final adminRole =
+          await api('admin role', () => admin.rpc<String>('my_role'));
+      stdout.writeln('[e2e] admin role=$adminRole');
+      expect(adminRole, 'super_admin',
+          reason: 'the seeded owner must resolve as super_admin via PostgREST');
 
       final branchRow = await api(
           'create branch',
