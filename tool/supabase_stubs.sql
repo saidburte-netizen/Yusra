@@ -57,16 +57,26 @@ create table if not exists auth.users (
   updated_at timestamptz not null default now()
 );
 
--- JWT-backed helpers. Tests can set request.jwt.* with set_config(); by
--- default uid() is NULL, exactly like an anonymous Supabase request.
+-- JWT-backed helpers. PostgREST 12 removed the per-claim request.jwt.claim.*
+-- GUCs and exposes the whole payload as request.jwt.claims JSON. Supabase's
+-- managed stack keeps the legacy names working, so the CI stub must accept
+-- both shapes or every auth.uid()-based policy would see NULL under bare
+-- PostgREST. By default uid() is NULL, exactly like an anonymous request.
 create or replace function auth.uid()
 returns uuid language sql stable as $$
-  select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+  select coalesce(
+    nullif(current_setting('request.jwt.claim.sub', true), ''),
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'
+  )::uuid
 $$;
 
 create or replace function auth.role()
 returns text language sql stable as $$
-  select coalesce(nullif(current_setting('request.jwt.claim.role', true), ''), 'anon')
+  select coalesce(
+    nullif(current_setting('request.jwt.claim.role', true), ''),
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role',
+    'anon'
+  )
 $$;
 
 create or replace function auth.jwt()
