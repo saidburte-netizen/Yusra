@@ -19,6 +19,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
+    # STEP 0 prints the exact PostgreSQL major used by the db-test job too, so
+    # a manual build on main records the full toolchain in one place.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -65,7 +82,20 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Print and verify tool versions
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Set up PostgreSQL 16 client
+        run: |
+          set -euo pipefail
+          chmod +x tool/ci_psql.sh
+          bash tool/ci_psql.sh --version | grep -q ' 16\.'
+          bash tool/ci_psql.sh -d postgres -Atc 'select version();'
+
+      # STEP 0 — install and print every version before any build work.
+      - name: STEP 0 — install and print toolchain versions
         run: |
           echo "=== Flutter / Dart ==="
           flutter --version
@@ -78,12 +108,20 @@ jobs:
           SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           "$SDK/cmdline-tools/latest/bin/sdkmanager" --list_installed | \
             grep -E 'platforms;android-34|build-tools;34.0.0|platform-tools'
+          echo "=== Deno ==="
+          deno --version
+          echo "=== PostgreSQL 16 ==="
+          bash tool/ci_psql.sh --version
+          bash tool/ci_psql.sh -d postgres -Atc 'select version();'
 
           flutter --version | head -1 | grep -q '3.24.5'
           dart --version 2>&1 | grep -q 'Dart SDK version: 3\.'
           java -version 2>&1 | head -1 | grep -q '"17\.'
           grep -q 'Gradle 8\.3' /tmp/gradle-version.txt
           grep -q '^Pkg.Revision=' "$SDK/platform-tools/source.properties"
+          deno --version | head -1 | grep -q '^deno '
+          bash tool/ci_psql.sh --version | grep -q ' 16\.'
+          echo "Toolchain assertions passed (Flutter 3.24.5, Dart 3, Java 17, Gradle 8.3, Android SDK 34/build-tools 34.0.0, Deno, PostgreSQL 16)."
 
       - name: Install dependencies
         run: flutter pub get
