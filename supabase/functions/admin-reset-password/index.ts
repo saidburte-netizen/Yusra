@@ -20,8 +20,11 @@ interface Profile {
   branch_id: string | null;
 }
 
-async function writeAudit(admin: AdminClient, entry: Record<string, unknown>) {
-  const { error } = await admin.from('audit_logs').insert(entry);
+async function writeAudit(admin: unknown, entry: Record<string, unknown>) {
+  // The Supabase client's generated table types differ between releases, so
+  // keep the audit helper generic and let the client validate at runtime.
+  const client = admin as AdminClient;
+  const { error } = await client.from('audit_logs').insert([entry] as never);
   if (error) {
     console.error('admin-reset-password: audit insert failed:', error.message);
   }
