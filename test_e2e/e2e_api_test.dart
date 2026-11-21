@@ -70,14 +70,15 @@ void main() {
         '-d',
         'postgres',
         '-Atc',
-        "select role || '|' || is_active from profiles where id = '$adminId';",
+        "select role || '|' || case when is_active then 'active' else 'inactive' end "
+            "from profiles where id = '$adminId';",
       ]);
       stdout.writeln('[e2e] auth uid=$authUid expected=$adminId');
       stdout.writeln('[e2e] admin profile=${profile.stdout.toString().trim()}');
       expect(authUid, adminId,
           reason: 'the signed JWT subject must reach auth.uid() via PostgREST');
       expect(profile.exitCode, 0, reason: '${profile.stderr}');
-      expect(profile.stdout.toString().trim(), 'super_admin|t',
+      expect(profile.stdout.toString().trim(), 'super_admin|active',
           reason: 'the trigger must seed an active super_admin profile');
       final adminRole =
           await api('admin role', () => admin.rpc<String>('my_role'));
