@@ -50,7 +50,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
     if (!url || !serviceKey || !anonKey) {
       console.error('admin-create-user: Supabase environment is not configured');
-      return errors.internal(req);
+      return errors.internal(
+        req,
+        'User creation is not configured on the server. Ask the administrator to set the Edge Function secrets.',
+      );
     }
 
     const authHeader = req.headers.get('Authorization');
