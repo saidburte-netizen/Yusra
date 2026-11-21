@@ -66,6 +66,23 @@ export function corsHeaders(req: Request): HeadersInit {
   };
 }
 
+/** Shared CORS preflight response. Returns null for non-OPTIONS requests. */
+export function preflight(req: Request): Response | null {
+  if (req.method !== 'OPTIONS') return null;
+  return new Response(null, { status: 204, headers: corsHeaders(req) });
+}
+
+/**
+ * Names of required environment settings that are unset or blank.
+ * Only names are returned/logged — never the values (which may be secrets).
+ */
+export function missingSecrets(names: readonly string[]): string[] {
+  return names.filter((name) => {
+    const value = Deno.env.get(name);
+    return value === undefined || value.trim().length === 0;
+  });
+}
+
 export function json(req: Request, body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,

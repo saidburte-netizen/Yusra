@@ -52,38 +52,47 @@ class YusraLogo extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            SizedBox(
-                width: markSize, height: markSize, child: _mark(mono: mono)),
-            SizedBox(width: markSize * 0.12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        SizedBox(
+          width: size,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  'Yusra',
-                  style: GoogleFonts.playfairDisplay(
-                    fontSize: markSize * 0.62,
-                    fontWeight: FontWeight.w700,
-                    color: color,
-                    height: 1.05,
-                  ),
-                ),
-                Text(
-                  'PHARMACY',
-                  style: GoogleFonts.inter(
-                    fontSize: markSize * 0.17,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: markSize * 0.055,
-                    color: mono ? AppColors.ink : AppColors.gold700,
-                  ),
+                SizedBox(
+                    width: markSize,
+                    height: markSize,
+                    child: _mark(mono: mono)),
+                SizedBox(width: markSize * 0.12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Yusra',
+                      style: GoogleFonts.playfairDisplay(
+                        fontSize: markSize * 0.62,
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                        height: 1.05,
+                      ),
+                    ),
+                    Text(
+                      'PHARMACY',
+                      style: GoogleFonts.inter(
+                        fontSize: markSize * 0.17,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: markSize * 0.055,
+                        color: mono ? AppColors.ink : AppColors.gold700,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
         if (showTagline) ...[
           const SizedBox(height: 8),

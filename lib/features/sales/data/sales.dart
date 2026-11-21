@@ -90,7 +90,7 @@ class Shift {
       );
 
   factory Shift.fromJson(Map<String, dynamic> json) {
-    final profile = json['profiles'];
+    final profile = json['cashier'] ?? json['profiles'];
     return Shift(
       id: (json['id'] as String?) ?? '',
       branchId: (json['branch_id'] as String?) ?? '',
@@ -181,8 +181,8 @@ class Sale {
   final String? customerName;
 
   factory Sale.fromJson(Map<String, dynamic> json) {
-    final cashier = json['profiles'];
-    final customer = json['customers'];
+    final cashier = json['cashier'] ?? json['profiles'];
+    final customer = json['customer'] ?? json['customers'];
     return Sale(
       id: (json['id'] as String?) ?? '',
       invoiceNo: (json['invoice_no'] as String?) ?? '',
@@ -302,7 +302,7 @@ class SaleReturn {
   final String? invoiceNo;
 
   factory SaleReturn.fromJson(Map<String, dynamic> json) {
-    final sale = json['sales'];
+    final sale = json['sale'] ?? json['sales'];
     return SaleReturn(
       id: (json['id'] as String?) ?? '',
       returnNo: (json['return_no'] as String?) ?? '',
@@ -344,7 +344,7 @@ class SalesRepository {
   Future<Shift> shift(String id) async {
     final row = await _db
         .from('shifts')
-        .select('*, profiles(full_name)')
+        .select('*, cashier:profiles!shifts_cashier_id_fkey(full_name)')
         .eq('id', id)
         .single();
     return Shift.fromJson(Map<String, dynamic>.from(row));
@@ -355,7 +355,7 @@ class SalesRepository {
     if (user == null) return null;
     var query = _db
         .from('shifts')
-        .select('*, profiles(full_name)')
+        .select('*, cashier:profiles!shifts_cashier_id_fkey(full_name)')
         .eq('cashier_id', user.id)
         .eq('status', 'open');
     if (branchId != null) query = query.eq('branch_id', branchId);
@@ -366,7 +366,9 @@ class SalesRepository {
   }
 
   Future<List<Shift>> shifts({String? branchId, bool openOnly = false}) async {
-    var query = _db.from('shifts').select('*, profiles(full_name)');
+    var query = _db
+        .from('shifts')
+        .select('*, cashier:profiles!shifts_cashier_id_fkey(full_name)');
     if (branchId != null) query = query.eq('branch_id', branchId);
     if (openOnly) query = query.eq('status', 'open');
     final rows =
@@ -445,8 +447,8 @@ class SalesRepository {
   }
 
   Future<List<Sale>> sales(SaleFilter filter, String? branchId) async {
-    var query =
-        _db.from('sales').select('*, profiles(full_name), customers(name)');
+    var query = _db.from('sales').select(
+        '*, cashier:profiles!sales_cashier_id_fkey(full_name), customer:customers!sales_customer_id_fkey(name)');
     if (branchId != null) query = query.eq('branch_id', branchId);
     if (filter.from != null) {
       query = query.gte(
@@ -487,7 +489,8 @@ class SalesRepository {
   Future<Sale> sale(String id) async {
     final row = await _db
         .from('sales')
-        .select('*, profiles(full_name), customers(name)')
+        .select(
+            '*, cashier:profiles!sales_cashier_id_fkey(full_name), customer:customers!sales_customer_id_fkey(name)')
         .eq('id', id)
         .single();
     return Sale.fromJson(Map<String, dynamic>.from(row));
@@ -517,7 +520,9 @@ class SalesRepository {
   }
 
   Future<List<SaleReturn>> saleReturns({String? branchId}) async {
-    var query = _db.from('sale_returns').select('*, sales(invoice_no)');
+    var query = _db
+        .from('sale_returns')
+        .select('*, sale:sales!sale_returns_sale_id_fkey(invoice_no)');
     if (branchId != null) query = query.eq('branch_id', branchId);
     final rows =
         await query.order('created_at', ascending: false).limit(300) as List;

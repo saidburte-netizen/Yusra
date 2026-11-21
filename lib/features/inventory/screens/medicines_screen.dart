@@ -17,6 +17,7 @@ import '../data/inventory_providers.dart';
 import '../logic/medicine_csv.dart';
 import '../widgets/stock_widgets.dart';
 import '../../../core/errors/app_error.dart';
+import '../widgets/responsive_ui.dart';
 
 class MedicinesScreen extends ConsumerStatefulWidget {
   const MedicinesScreen({super.key});
@@ -63,20 +64,18 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
                 if (canEdit)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: PrimaryButton(
+                    child: ResponsivePrimaryButton(
                       label: 'New medicine',
                       icon: Icons.add,
-                      width: 160,
                       onPressed: () => _edit(null),
                     ),
                   ),
                 if (canEdit)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: SecondaryButton(
+                    child: ResponsiveSecondaryButton(
                       label: 'Import CSV',
                       icon: Icons.file_upload_outlined,
-                      width: 140,
                       onPressed: _importCsv,
                     ),
                   ),
@@ -168,7 +167,7 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
                   return true;
                 }).toList();
                 return Expanded(
-                  child: DataTablePlus(
+                  child: ResponsiveDataTablePlus(
                     columns: [
                       'Name',
                       'SKU / barcode',
@@ -288,9 +287,14 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Medicine CSV template'),
-        content: SizedBox(
-          width: 520,
-          child: SelectableText(MedicineCsv.template),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: dialogContentWidth(context, maxWidth: 520),
+            maxHeight: MediaQuery.sizeOf(context).height * 0.6,
+          ),
+          child: SingleChildScrollView(
+            child: SelectableText(MedicineCsv.template),
+          ),
         ),
         actions: [
           TextButton(
@@ -331,9 +335,11 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Import preview'),
-        content: SizedBox(
-          width: 480,
-          height: 420,
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: dialogContentWidth(context, maxWidth: 480),
+            maxHeight: MediaQuery.sizeOf(context).height * 0.7,
+          ),
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -360,9 +366,8 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          PrimaryButton(
+          ResponsivePrimaryButton(
             label: 'Import ${parsed.rows.length}',
-            width: 150,
             onPressed:
                 parsed.rows.isEmpty ? null : () => Navigator.pop(context, true),
           ),
@@ -492,15 +497,34 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
     }
   }
 
+  /// Two side-by-side fields on wide dialogs, stacked on a phone.
+  Widget _pair(Widget left, Widget right) => LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 420) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [left, const SizedBox(height: 10), right],
+            );
+          }
+          return Row(children: [
+            Expanded(child: left),
+            const SizedBox(width: 10),
+            Expanded(child: right),
+          ]);
+        },
+      );
+
   @override
   Widget build(BuildContext context) {
     final categories =
         ref.watch(categoriesProvider).value ?? const <Category>[];
     return AlertDialog(
       title: Text(widget.initial == null ? 'New medicine' : 'Edit medicine'),
-      content: SizedBox(
-        width: 560,
-        height: 620,
+      content: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: dialogContentWidth(context, maxWidth: 560),
+          maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+        ),
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
@@ -516,18 +540,26 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
                 const SizedBox(height: 10),
                 AppTextField(label: 'Generic name', controller: _generic),
                 const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
+                LayoutBuilder(
+                  builder: (context, constraints) => Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: constraints.maxWidth < 420
+                            ? constraints.maxWidth
+                            : constraints.maxWidth - 52,
                         child: AppTextField(
-                            label: 'Barcode', controller: _barcode)),
-                    const SizedBox(width: 8),
-                    BarcodeScanButton(
-                      compact: true,
-                      onDetected: (code) =>
-                          setState(() => _barcode.text = code),
-                    ),
-                  ],
+                            label: 'Barcode', controller: _barcode),
+                      ),
+                      BarcodeScanButton(
+                        compact: true,
+                        onDetected: (code) =>
+                            setState(() => _barcode.text = code),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 10),
                 AppDropdown<String?>(
@@ -542,50 +574,28 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
                   onChanged: (value) => setState(() => _categoryId = value),
                 ),
                 const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                        child: AppTextField(
-                            label: 'Dosage form', controller: _form)),
-                    const SizedBox(width: 10),
-                    Expanded(
-                        child: AppTextField(
-                            label: 'Strength', controller: _strength)),
-                  ],
+                _pair(
+                  AppTextField(label: 'Dosage form', controller: _form),
+                  AppTextField(label: 'Strength', controller: _strength),
                 ),
                 const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                        child: AppTextField(label: 'Unit', controller: _unit)),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: AppTextField(
-                          label: 'Manufacturer', controller: _manufacturer),
-                    ),
-                  ],
+                _pair(
+                  AppTextField(label: 'Unit', controller: _unit),
+                  AppTextField(
+                      label: 'Manufacturer', controller: _manufacturer),
                 ),
                 const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: MoneyField(
-                        label: 'Cost price',
-                        controller: _cost,
-                        validator: (value) =>
-                            (value ?? 0) >= 0 ? null : 'Invalid',
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: MoneyField(
-                        label: 'Selling price',
-                        controller: _price,
-                        validator: (value) =>
-                            (value ?? 0) >= 0 ? null : 'Invalid',
-                      ),
-                    ),
-                  ],
+                _pair(
+                  MoneyField(
+                    label: 'Cost price',
+                    controller: _cost,
+                    validator: (value) => (value ?? 0) >= 0 ? null : 'Invalid',
+                  ),
+                  MoneyField(
+                    label: 'Selling price',
+                    controller: _price,
+                    validator: (value) => (value ?? 0) >= 0 ? null : 'Invalid',
+                  ),
                 ),
                 const SizedBox(height: 10),
                 AppTextField(
@@ -636,9 +646,8 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
-        PrimaryButton(
+        ResponsivePrimaryButton(
           label: 'Save',
-          width: 120,
           loading: _busy,
           onPressed: () {
             if (!_formKey.currentState!.validate()) return;

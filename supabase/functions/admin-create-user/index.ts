@@ -1,9 +1,11 @@
 // Creates an auth user and its profile. The service-role key is read from the
 // Edge Function environment only; it is never bundled into the Flutter app.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, errors, json } from '../_shared/http.ts';
+import { errors, json, missingSecrets, preflight } from '../_shared/http.ts';
 import {
+  isAdminRole,
   isEmail,
+  jwtAppRole,
   optionalUuid,
   readJsonObject,
   requiredString,
@@ -39,22 +41,31 @@ async function writeAudit(admin: unknown, entry: Record<string, unknown>) {
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeaders(req) });
-  }
+  const preflightResponse = preflight(req);
+  if (preflightResponse) return preflightResponse;
   if (req.method !== 'POST') return errors.methodNotAllowed(req);
 
   try {
-    const url = Deno.env.get('SUPABASE_URL');
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
-    if (!url || !serviceKey || !anonKey) {
-      console.error('admin-create-user: Supabase environment is not configured');
+    const missing = missingSecrets([
+      'SUPABASE_URL',
+      'SUPABASE_SERVICE_ROLE_KEY',
+      'SUPABASE_ANON_KEY',
+    ]);
+    if (missing.length > 0) {
+      // Names only: the values (which may be secrets) are never logged/echoed.
+      console.error(
+        'admin-create-user: missing Edge Function configuration:',
+        missing.join(', '),
+      );
       return errors.internal(
         req,
-        'User creation is not configured on the server. Ask the administrator to set the Edge Function secrets.',
+        `User creation is not configured on the server. Missing secrets: ${missing.join(', ')}. Ask the administrator to set them.`,
       );
     }
+    // Checked above; the non-null assertions document that invariant.
+    const url = Deno.env.get('SUPABASE_URL')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader || !/^Bearer\s+\S+$/i.test(authHeader)) {
@@ -69,8 +80,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const { data: identity, error: identityError } = await caller.auth.getUser();
     if (identityError || !identity?.user) return errors.unauthenticated(req);
 
-    // Role is always re-read from profiles through the service role: JWT
-    // metadata is client-supplied and must never be trusted for authorization.
+    // The JWT was verified against the Auth server by getUser(); its
+    // app_metadata role is server-issued, not caller-controlled. Reject tokens
+    // that explicitly carry a non-admin role even before the profile lookup.
+    const tokenRole = jwtAppRole(identity.user);
+    if (tokenRole !== null && !isAdminRole(tokenRole)) {
+      return errors.forbidden(req);
+    }
+
+    // The profiles row remains the authoritative role source; it is re-read
+    // through the service role so stale/edited client metadata cannot grant
+    // access on its own.
     const admin = createClient(url, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
@@ -90,7 +110,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (!actor.is_active) {
       return errors.forbidden(req, 'This account is inactive.');
     }
-    if (actor.role !== 'super_admin' && actor.role !== 'admin') {
+    if (!isAdminRole(actor.role)) {
       return errors.forbidden(req);
     }
 
@@ -131,6 +151,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
       (!actor.branch_id || branchId !== actor.branch_id)
     ) {
       return errors.forbidden(req, 'You can only create users in your own branch.');
+    }
+
+    // Fail with a typed validation error instead of an opaque 500 from the
+    // profiles FK if the requested branch does not exist.
+    if (branchId) {
+      const { data: branch, error: branchError } = await admin
+        .from('branches')
+        .select('id')
+        .eq('id', branchId)
+        .maybeSingle();
+      if (branchError) {
+        console.error('admin-create-user: branch lookup failed:', branchError.message);
+        return errors.internal(req);
+      }
+      if (!branch) {
+        return errors.validation(req, 'The selected branch does not exist.');
+      }
     }
 
     const password = temporaryPassword();

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/nav/menu_items.dart';
 import '../../core/strings.dart';
 import '../../core/widgets.dart';
 import '../../core/auth/auth_controller.dart';
@@ -38,7 +39,10 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
     setState(() => _saving = false);
     if (error == null) {
       AppSnackbar.success(context, S.saved);
-      context.go('/dashboard');
+      // Recovery must land on the role home, never a hard-coded dashboard that
+      // a cashier/store keeper is not allowed to view.
+      final profile = ref.read(authProvider).profile;
+      context.go(homeFor(profile?.role));
     } else {
       AppSnackbar.error(context, error);
     }

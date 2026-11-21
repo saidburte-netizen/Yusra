@@ -6,6 +6,9 @@ import '../../../core/widgets.dart';
 import '../../../core/strings.dart';
 import '../../sales/logic/cart.dart';
 
+double _paymentDialogWidth(BuildContext context) =>
+    (MediaQuery.sizeOf(context).width - 48).clamp(240.0, 520.0).toDouble();
+
 const _methods = [
   ('cash', 'Cash', Icons.money),
   ('mobile_money', 'Mobile money', Icons.phone_android),
@@ -37,7 +40,7 @@ Future<List<CartPayment>?> showPaymentDialog(
         return AlertDialog(
           title: Text('Payment  •  ${formatMoney(total)}'),
           content: SizedBox(
-            width: 520,
+            width: _paymentDialogWidth(context),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -69,44 +72,47 @@ Future<List<CartPayment>?> showPaymentDialog(
                     return Card(
                       child: Padding(
                         padding: const EdgeInsets.all(10),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Expanded(
-                              flex: 3,
-                              child: DropdownButtonFormField<String>(
-                                value: row.method,
-                                isDense: true,
-                                decoration: const InputDecoration(
-                                    labelText: 'Method', isDense: true),
-                                items: [
-                                  for (final method in _methods)
-                                    DropdownMenuItem(
-                                      value: method.$1,
-                                      child: Text(method.$2),
-                                    ),
-                                ],
-                                onChanged: (value) => setState(
-                                    () => row.method = value ?? 'cash'),
-                              ),
+                            DropdownButtonFormField<String>(
+                              value: row.method,
+                              isDense: true,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                  labelText: 'Method', isDense: true),
+                              items: [
+                                for (final method in _methods)
+                                  DropdownMenuItem(
+                                    value: method.$1,
+                                    child: Text(method.$2),
+                                  ),
+                              ],
+                              onChanged: (value) =>
+                                  setState(() => row.method = value ?? 'cash'),
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              flex: 2,
-                              child: AppTextField(
-                                label: 'Amount',
-                                controller: row.amountController,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                        decimal: true),
-                                onChanged: (_) => setState(() {}),
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: 'Remove',
-                              icon: const Icon(Icons.delete_outline),
-                              onPressed: rows.length == 1
-                                  ? null
-                                  : () => setState(() => rows.removeAt(index)),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: AppTextField(
+                                    label: 'Amount',
+                                    controller: row.amountController,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    onChanged: (_) => setState(() {}),
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Remove',
+                                  icon: const Icon(Icons.delete_outline),
+                                  onPressed: rows.length == 1
+                                      ? null
+                                      : () =>
+                                          setState(() => rows.removeAt(index)),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -166,7 +172,7 @@ Future<List<CartPayment>?> showPaymentDialog(
                         rows.map((row) => row.toPayment()).toList(),
                       )
                   : null,
-              child: Text('Confirm  ${formatMoney(total)}'),
+              child: Text('Confirm ${formatMoney(total)}'),
             ),
           ],
         );

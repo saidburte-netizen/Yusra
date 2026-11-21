@@ -48,7 +48,9 @@ class AppShell extends ConsumerWidget {
     final items = menuFor(role);
     final location = GoRouterState.of(context).uri.path;
     final title = titleForLocation(location);
-    final wide = MediaQuery.sizeOf(context).width >= 1100;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final wide = screenWidth >= 1100;
+    final narrowTopBar = screenWidth < 800;
 
     if (wide) {
       return Scaffold(
@@ -74,7 +76,7 @@ class AppShell extends ConsumerWidget {
             Expanded(
               child: Column(
                 children: [
-                  TopBar(title: title),
+                  TopBar(title: title, narrow: narrowTopBar),
                   const Divider(height: 1),
                   Expanded(child: child),
                 ],
@@ -87,7 +89,7 @@ class AppShell extends ConsumerWidget {
 
     final bottom = bottomNavItems(role);
     return Scaffold(
-      appBar: TopBar(title: title),
+      appBar: TopBar(title: title, narrow: narrowTopBar),
       body: child,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex(bottom, location),
@@ -142,12 +144,16 @@ class AppShell extends ConsumerWidget {
 }
 
 class TopBar extends ConsumerWidget implements PreferredSizeWidget {
-  const TopBar({super.key, required this.title});
+  const TopBar({super.key, required this.title, this.narrow = false});
 
   final String title;
 
+  /// Set by [AppShell] from MediaQuery. The parent decides it so [preferredSize]
+  /// (read before this widget builds) always matches the rendered height.
+  final bool narrow;
+
   @override
-  Size get preferredSize => const Size.fromHeight(64);
+  Size get preferredSize => Size.fromHeight(narrow ? 132 : 64);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -155,39 +161,63 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
     final profile = auth.profile;
     final isSuperAdmin = profile?.role == AppRole.superAdmin;
 
+    final actions = <Widget>[
+      if (isSuperAdmin) const _BranchSwitcher(),
+      const _NotificationBell(),
+      PopupMenuButton<String>(
+        tooltip: profile?.fullName ?? S.profile,
+        onSelected: (value) {
+          if (value == 'profile') context.go('/profile');
+          if (value == 'signout') ref.read(authProvider.notifier).signOut();
+        },
+        itemBuilder: (_) => const [
+          PopupMenuItem(value: 'profile', child: Text(S.profile)),
+          PopupMenuItem(value: 'signout', child: Text(S.signOut)),
+        ],
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: CircleAvatar(
+            radius: 18,
+            backgroundColor: AppColors.pink50,
+            foregroundColor: AppColors.pink600,
+            child: profile == null
+                ? const Icon(Icons.person, size: 18)
+                : Text(
+                    profile.fullName.isEmpty
+                        ? '?'
+                        : profile.fullName[0].toUpperCase(),
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+          ),
+        ),
+      ),
+    ];
+
+    if (narrow) {
+      return AppBar(
+        toolbarHeight: 132,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: actions,
+            ),
+          ],
+        ),
+      );
+    }
+
     return AppBar(
       title: Text(title),
       actions: [
-        if (isSuperAdmin) const _BranchSwitcher(),
-        const _NotificationBell(),
-        PopupMenuButton<String>(
-          tooltip: profile?.fullName ?? S.profile,
-          onSelected: (value) {
-            if (value == 'profile') context.go('/profile');
-            if (value == 'signout') ref.read(authProvider.notifier).signOut();
-          },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'profile', child: Text(S.profile)),
-            PopupMenuItem(value: 'signout', child: Text(S.signOut)),
-          ],
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: AppColors.pink50,
-              foregroundColor: AppColors.pink600,
-              child: profile == null
-                  ? const Icon(Icons.person, size: 18)
-                  : Text(
-                      profile.fullName.isEmpty
-                          ? '?'
-                          : profile.fullName[0].toUpperCase(),
-                      style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.bold),
-                    ),
-            ),
-          ),
-        ),
+        ...actions,
         const SizedBox(width: 8),
       ],
     );
@@ -250,8 +280,10 @@ class _BranchSwitcherState extends ConsumerState<_BranchSwitcher> {
             onPressed: () => context.go('/admin/branches'),
           );
         }
-        return SizedBox(
-          width: 180,
+        // A max width (not a fixed width) keeps the switcher usable when the
+        // top bar wraps into several rows on a phone.
+        return ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 180),
           child: DropdownButton<String?>(
             value: _selected,
             isExpanded: true,

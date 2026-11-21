@@ -8,6 +8,7 @@ import '../data/inventory_models.dart';
 import '../data/inventory_providers.dart';
 import '../widgets/stock_widgets.dart';
 import '../../../core/errors/app_error.dart';
+import '../widgets/responsive_ui.dart';
 
 class CategoriesScreen extends ConsumerWidget {
   const CategoriesScreen({super.key});
@@ -29,10 +30,9 @@ class CategoriesScreen extends ConsumerWidget {
               subtitle: 'Group medicines for faster browsing',
               actions: [
                 if (canEdit)
-                  PrimaryButton(
+                  ResponsivePrimaryButton(
                     label: 'New category',
                     icon: Icons.add,
-                    width: 160,
                     onPressed: () => _edit(context, ref, null),
                   ),
               ],
@@ -41,7 +41,7 @@ class CategoriesScreen extends ConsumerWidget {
               state,
               onRetry: () => ref.invalidate(categoriesProvider),
               builder: (items) => Expanded(
-                child: DataTablePlus(
+                child: ResponsiveDataTablePlus(
                   columns: const ['Name', 'Description', 'Status', ''],
                   rows: [
                     for (final item in items)
@@ -93,8 +93,8 @@ class CategoriesScreen extends ConsumerWidget {
       context: context,
       builder: (_) => AlertDialog(
         title: Text(item == null ? 'New category' : 'Edit category'),
-        content: SizedBox(
-          width: 400,
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
           child: Form(
             key: formKey,
             child: Column(
@@ -117,9 +117,8 @@ class CategoriesScreen extends ConsumerWidget {
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          PrimaryButton(
+          ResponsivePrimaryButton(
             label: 'Save',
-            width: 110,
             onPressed: () {
               if (formKey.currentState!.validate()) {
                 Navigator.pop(context, true);
@@ -164,6 +163,10 @@ class CategoriesScreen extends ConsumerWidget {
           .setCategoryActive(item.id, !item.isActive);
       if (!context.mounted) return;
       ref.invalidate(categoriesProvider);
+      AppSnackbar.success(
+        context,
+        item.isActive ? 'Category deactivated.' : 'Category reactivated.',
+      );
     } catch (e) {
       if (context.mounted) {
         AppSnackbar.error(context, AppErrorMapper.from(e).message);

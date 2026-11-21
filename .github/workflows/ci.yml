@@ -30,10 +30,113 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # STEP 0 — this job is the gate for everything else. It installs and prints
+  # every pinned version, including the Docker/PostgREST image used by e2e-api.
+  toolchain:
+    name: STEP 0 — install and print toolchain versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      POSTGREST_IMAGE: postgrest/postgrest:v12.2.3
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter 3.24.5
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.24.5'
+          cache: true
+
+      - name: Set up Android SDK (platform 34, build-tools 34.0.0)
+        run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          if [ ! -d "$SDK/platforms/android-34" ] || [ ! -d "$SDK/build-tools/34.0.0" ]; then
+            yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" \
+              "platforms;android-34" "build-tools;34.0.0"
+          fi
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: STEP 0 — print every pinned version
+        run: |
+          set -euo pipefail
+          chmod +x tool/ci_psql.sh
+          echo "=== Flutter / Dart ==="
+          flutter --version
+          dart --version
+          echo "=== Java ==="
+          java -version
+          echo "=== Gradle wrapper ==="
+          bash ./android/gradlew --version | tee /tmp/gradle-version.txt
+          echo "=== Android SDK ==="
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --list_installed | \
+            grep -E 'platforms;android-34|build-tools;34.0.0|platform-tools'
+          echo "=== Deno ==="
+          deno --version
+          echo "=== PostgreSQL 16 ==="
+          bash tool/ci_psql.sh --version
+          bash tool/ci_psql.sh -d postgres -Atc 'select version();'
+          echo "=== Docker ==="
+          docker --version
+          docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
+          echo "=== PostgREST image ==="
+          docker pull "$POSTGREST_IMAGE"
+          docker image inspect "$POSTGREST_IMAGE" \
+            --format 'image={{index .RepoTags 0}} id={{.Id}}'
+
+          flutter --version | head -1 | grep -q '3.24.5'
+          dart --version 2>&1 | grep -q 'Dart SDK version: 3\.'
+          java -version 2>&1 | head -1 | grep -q '"17\.'
+          grep -q 'Gradle 8\.3' /tmp/gradle-version.txt
+          deno --version | head -1 | grep -q '^deno '
+          bash tool/ci_psql.sh --version | grep -q ' 16\.'
+          docker version --format '{{.Server.Version}}' | grep -q '.'
+          echo "STEP 0 PASSED: Flutter 3.24.5, Dart 3, Java 17, Gradle 8.3, Android SDK 34/34.0.0, Deno, PostgreSQL 16, Docker, $POSTGREST_IMAGE."
+
   build:
     name: Analyze, test, build APK and web
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    needs: toolchain
 
     steps:
       - name: Checkout
@@ -143,7 +246,10 @@ jobs:
         run: flutter analyze
 
       - name: Test
-        run: flutter test
+        # The PostgREST-backed suite lives in test_e2e and is tagged e2e-api.
+        # It is exercised by its own job with real services; here it must not
+        # run against the untagged unit-test environment.
+        run: flutter test --exclude-tags e2e-api
 
       # Optional release signing. When the four secrets are absent the build
       # falls back to the debug key, so a fresh repository is green out of the box.
@@ -205,6 +311,7 @@ jobs:
     name: Postgres schema and migration checks
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    needs: toolchain
 
     # REQUIRED job: no `if`, no `continue-on-error`. A red db-test blocks the
     # Edge Function deploy job below as well as the PR checks.
@@ -318,6 +425,7 @@ jobs:
     name: Manual Supabase smoke test
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    needs: toolchain
     # Opt-in manual check only. It must never turn a successful APK build into
     # a failed workflow just because demo credentials are not configured.
     if: github.event_name == 'workflow_dispatch' && inputs.run_smoke
@@ -368,10 +476,95 @@ jobs:
           SMOKE_CONFIRM: ${{ inputs.confirm_prod && '1' || '0' }}
         run: dart run tool/smoke_test.dart
 
+  e2e-api:
+    name: End-to-end API tests (PostgreSQL 16 + PostgREST)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [toolchain, db-test]
+
+    # Real HTTP against real repositories. No app operation is replayed as
+    # hand-written SQL: SQL is only used for CI stubs, the schema bundle and
+    # creating an auth user (the admin-create-user Edge Function equivalent).
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      E2E_POSTGREST_URL: http://127.0.0.1:3000
+      POSTGREST_IMAGE: postgrest/postgrest:v12.2.3
+      # Fixed test-only HS256 secret, shared with the Dart JWT signer.
+      PGRST_JWT_SECRET: e2e-only-hs256-secret-at-least-32-chars-long
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter 3.24.5
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.24.5'
+          cache: true
+
+      - name: Print toolchain versions
+        run: |
+          set -euo pipefail
+          flutter --version
+          dart --version
+          bash tool/ci_psql.sh --version | grep -q ' 16\.'
+          docker --version
+          docker pull "$POSTGREST_IMAGE"
+
+      - name: Install Supabase stubs and full schema
+        run: |
+          set -euo pipefail
+          chmod +x tool/ci_psql.sh tool/e2e_postgrest.sh
+          bash tool/ci_psql.sh -d postgres -v ON_ERROR_STOP=1 -q -f tool/supabase_stubs.sql
+          bash tool/ci_psql.sh -d postgres -v ON_ERROR_STOP=1 -q -f supabase/all_owner_sql.sql
+
+      - name: Start PostgREST v12.2.3
+        run: |
+          set -euo pipefail
+          docker run -d --name e2e-postgrest --network host \
+            -e PGRST_DB_URI="postgres://e2e_authenticator:e2e_authenticator@127.0.0.1:5432/postgres" \
+            -e PGRST_DB_SCHEMA=public \
+            -e PGRST_DB_ANON_ROLE=anon \
+            -e PGRST_JWT_SECRET="$PGRST_JWT_SECRET" \
+            -e PGRST_SERVER_PORT=3000 \
+            -e PGRST_DB_MAX_ROWS=1000 \
+            "$POSTGREST_IMAGE"
+          bash tool/e2e_postgrest.sh wait
+          curl -fsS "$E2E_POSTGREST_URL/"
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run e2e-api suite
+        run: flutter test test_e2e/e2e_api_test.dart -r expanded
+
+      - name: PostgREST logs (diagnostics)
+        if: always()
+        run: docker logs e2e-postgrest || true
+
   deploy-edge-functions:
     name: Deploy Supabase Edge Functions
     runs-on: ubuntu-latest
-    needs: [build, db-test]
+    needs: [toolchain, build, db-test, e2e-api]
     # Only from main, and only when both deploy secrets exist (missing secrets
     # make this job a no-op rather than a failure).
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

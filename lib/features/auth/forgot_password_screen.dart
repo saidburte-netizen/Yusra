@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/strings.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/widgets.dart';
 import '../../core/auth/auth_controller.dart';
 
@@ -19,6 +20,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final _email = TextEditingController();
   bool _sending = false;
   String? _message;
+  String? _error;
 
   @override
   void dispose() {
@@ -31,13 +33,19 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     setState(() {
       _sending = true;
       _message = null;
+      _error = null;
     });
     final error =
         await ref.read(authProvider.notifier).requestPasswordReset(_email.text);
     if (!mounted) return;
     setState(() {
       _sending = false;
-      _message = error ?? S.resetLinkSent;
+      if (error == null) {
+        _message = S.resetLinkSent;
+      } else {
+        // A failure must never reuse the green success styling.
+        _error = error;
+      }
     });
   }
 
@@ -57,8 +65,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const YusraLogo(
-                          variant: YusraLogoVariant.full, size: 180),
+                      const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: YusraLogo(
+                            variant: YusraLogoVariant.full, size: 180),
+                      ),
                       const SizedBox(height: 24),
                       Text(S.resetPassword,
                           style: Theme.of(context).textTheme.titleLarge),
@@ -71,6 +82,10 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                       const SizedBox(height: 20),
                       if (_message != null) ...[
                         AppSnackbarLikeMessage(message: _message!),
+                        const SizedBox(height: 12),
+                      ],
+                      if (_error != null) ...[
+                        AppSnackbarLikeMessage(message: _error!, isError: true),
                         const SizedBox(height: 12),
                       ],
                       AppTextField(
@@ -107,19 +122,42 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
 }
 
 class AppSnackbarLikeMessage extends StatelessWidget {
-  const AppSnackbarLikeMessage({super.key, required this.message});
+  const AppSnackbarLikeMessage({
+    super.key,
+    required this.message,
+    this.isError = false,
+  });
 
   final String message;
+  final bool isError;
 
   @override
   Widget build(BuildContext context) {
+    final color = isError ? AppColors.danger : AppColors.success;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF2E9E6B).withOpacity(0.12),
+        color: color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.5)),
       ),
-      child: Text(message, textAlign: TextAlign.center),
+      child: Row(
+        children: [
+          Icon(
+            isError ? Icons.error_outline : Icons.check_circle_outline,
+            color: color,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: color),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

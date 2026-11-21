@@ -14,7 +14,15 @@ import '../../core/widgets.dart';
 /// Pharmacy branches. Only a super_admin may edit; admins get a read-only view
 /// (see the permission matrix).
 class BranchesScreen extends ConsumerStatefulWidget {
-  const BranchesScreen({super.key});
+  const BranchesScreen({
+    super.key,
+    this.initialBranches,
+    this.initialError,
+  });
+
+  /// Optional preloaded data keeps this screen pumpable in widget tests.
+  final List<Map<String, dynamic>>? initialBranches;
+  final String? initialError;
 
   @override
   ConsumerState<BranchesScreen> createState() => _BranchesScreenState();
@@ -29,7 +37,13 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    if (widget.initialBranches != null || widget.initialError != null) {
+      _branches = widget.initialBranches ?? const [];
+      _error = widget.initialError;
+      _loading = false;
+    } else {
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -100,7 +114,8 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
       }
       _invalidateBranchData();
       if (!mounted) return;
-      AppSnackbar.success(context, S.saved);
+      AppSnackbar.success(
+          context, branch == null ? 'Branch created.' : 'Branch updated.');
       await _load();
     } catch (e) {
       if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
@@ -121,7 +136,8 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
           .update({'is_active': active}).eq('id', branch['id']);
       _invalidateBranchData();
       if (!mounted) return;
-      AppSnackbar.success(context, S.saved);
+      AppSnackbar.success(
+          context, active ? 'Branch reactivated.' : 'Branch deactivated.');
       await _load();
     } catch (e) {
       if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
@@ -160,7 +176,6 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
                     padding: const EdgeInsets.only(right: 8),
                     child: PrimaryButton(
                       label: S.add,
-                      icon: Icons.add_business_outlined,
                       width: 120,
                       onPressed: () => _edit(null),
                     ),
@@ -183,65 +198,91 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
               )
             else
               Expanded(
-                child: DataTablePlus(
-                  columns: const [
-                    S.pharmacyName,
-                    'Code',
-                    S.address,
-                    S.phone,
-                    S.status,
-                    'Created',
-                    S.actionLabel,
-                  ],
-                  filterChips: const [S.active, S.inactive],
-                  selectedFilter: _statusFilter,
-                  onFilterChanged: (value) =>
-                      setState(() => _statusFilter = value),
-                  rows: [
-                    for (final branch in _filtered)
-                      DataTablePlusRow(
-                        cells: [
-                          "${selectedBranchId == branch['id'] ? '✓ ' : ''}"
-                              "${(branch['name'] as String?) ?? '—'}",
-                          (branch['code'] as String?) ?? '—',
-                          (branch['address'] as String?) ?? '—',
-                          (branch['phone'] as String?) ?? '—',
-                          branch['is_active'] == true ? S.active : S.inactive,
-                          branch['created_at'] == null
-                              ? '—'
-                              : formatDate(DateTime.parse(
-                                  branch['created_at'] as String)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: SizedBox(
+                        width: 220,
+                        child: AppDropdown<String>(
+                          label: S.status,
+                          value: _statusFilter ?? 'All',
+                          items: const [
+                            DropdownMenuItem(value: 'All', child: Text('All')),
+                            DropdownMenuItem(
+                                value: S.active, child: Text(S.active)),
+                            DropdownMenuItem(
+                                value: S.inactive, child: Text(S.inactive)),
+                          ],
+                          onChanged: (value) => setState(() =>
+                              _statusFilter = value == 'All' ? null : value),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: DataTablePlus(
+                        columns: const [
+                          S.pharmacyName,
+                          'Code',
+                          S.address,
+                          S.phone,
+                          S.status,
+                          'Created',
                         ],
-                        actions: [
-                          if (canEdit && selectedBranchId != branch['id'])
-                            IconButton(
-                              tooltip: 'Select branch',
-                              icon: const Icon(Icons.check_circle_outline,
-                                  size: 18),
-                              onPressed: () => _select(branch),
-                            ),
-                          if (canEdit)
-                            IconButton(
-                              tooltip: S.edit,
-                              icon: const Icon(Icons.edit_outlined, size: 18),
-                              onPressed: () => _edit(branch),
-                            ),
-                          if (canEdit)
-                            IconButton(
-                              tooltip: branch['is_active'] == true
-                                  ? S.deactivate
-                                  : S.reactivate,
-                              icon: Icon(
+                        rows: [
+                          for (final branch in _filtered)
+                            DataTablePlusRow(
+                              cells: [
+                                "${selectedBranchId == branch['id'] ? '✓ ' : ''}"
+                                    "${(branch['name'] as String?) ?? '—'}",
+                                (branch['code'] as String?) ?? '—',
+                                (branch['address'] as String?) ?? '—',
+                                (branch['phone'] as String?) ?? '—',
                                 branch['is_active'] == true
-                                    ? Icons.person_off_outlined
-                                    : Icons.person_outline,
-                                size: 18,
-                              ),
-                              onPressed: () => _setActive(
-                                  branch, branch['is_active'] != true),
+                                    ? S.active
+                                    : S.inactive,
+                                branch['created_at'] == null
+                                    ? '—'
+                                    : formatDate(DateTime.parse(
+                                        branch['created_at'] as String)),
+                              ],
+                              actions: [
+                                // Delete: n/a by design — deactivate instead.
+                                // Historical sales and stock reference branch ids.
+                                if (canEdit && selectedBranchId != branch['id'])
+                                  IconButton(
+                                    tooltip: 'Select branch',
+                                    icon: const Icon(Icons.check_circle_outline,
+                                        size: 18),
+                                    onPressed: () => _select(branch),
+                                  ),
+                                if (canEdit)
+                                  IconButton(
+                                    tooltip: S.edit,
+                                    icon: const Icon(Icons.edit_outlined,
+                                        size: 18),
+                                    onPressed: () => _edit(branch),
+                                  ),
+                                if (canEdit)
+                                  IconButton(
+                                    tooltip: branch['is_active'] == true
+                                        ? S.deactivate
+                                        : S.reactivate,
+                                    icon: Icon(
+                                      branch['is_active'] == true
+                                          ? Icons.person_off_outlined
+                                          : Icons.person_outline,
+                                      size: 18,
+                                    ),
+                                    onPressed: () => _setActive(
+                                        branch, branch['is_active'] != true),
+                                  ),
+                              ],
                             ),
                         ],
                       ),
+                    ),
                   ],
                 ),
               ),

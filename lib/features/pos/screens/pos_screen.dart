@@ -51,6 +51,13 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         _cart = _heldStore!.loadDraft();
       });
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Route state is an inherited dependency, so read it here rather than in
+    // initState (where GoRouterState.of would register too early).
     final rxId = GoRouterState.of(context).uri.queryParameters['prescription'];
     if (rxId != null) _prescriptionId = rxId;
   }
@@ -340,6 +347,129 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     if (chosen != null) setState(() => _customerId = chosen.id);
   }
 
+  /// Opens a shift from inside POS, using the same `open_shift` RPC as the
+  /// Shifts screen. No navigation: the banner unlocks the sale immediately.
+  Future<void> _openShift() async {
+    final branchId = ref.read(branchScopeProvider);
+    if (branchId == null) {
+      AppSnackbar.error(context, S.chooseBranchFirst);
+      return;
+    }
+    final controller = TextEditingController(text: '0');
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Start shift'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+                'Enter the cash in the drawer when you open your shift.'),
+            const SizedBox(height: 12),
+            AppTextField(
+              label: 'Opening cash (ETB)',
+              controller: controller,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(S.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Start shift'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final amount = double.tryParse(controller.text.replaceAll(',', '')) ?? 0;
+    setState(() => _busy = true);
+    try {
+      await ref.read(salesRepositoryProvider).openShift(branchId, amount);
+      ref.invalidate(myOpenShiftProvider);
+      ref.invalidate(shiftsProvider(true));
+      if (mounted) AppSnackbar.success(context, 'Shift started.');
+    } catch (error) {
+      if (mounted) {
+        AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _closeShift(Shift shift) async {
+    final countedController = TextEditingController();
+    final noteController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Close shift'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Opened ${formatDateTime(shift.openedAt ?? DateTime.now())}'),
+            const SizedBox(height: 8),
+            Text('Opening cash ${formatMoney(shift.openingCash)}'),
+            const SizedBox(height: 12),
+            AppTextField(
+              label: 'Counted cash (ETB)',
+              controller: countedController,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              autofocus: true,
+            ),
+            const SizedBox(height: 12),
+            AppTextField(label: 'Note (optional)', controller: noteController),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(S.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Close shift'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final counted = double.tryParse(countedController.text.replaceAll(',', ''));
+    if (counted == null) {
+      AppSnackbar.error(context, 'Enter the counted cash.');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await ref.read(salesRepositoryProvider).closeShift(
+            shift.id,
+            counted,
+            noteController.text.trim().isEmpty
+                ? null
+                : noteController.text.trim(),
+          );
+      ref.invalidate(myOpenShiftProvider);
+      ref.invalidate(shiftsProvider(true));
+      if (mounted) AppSnackbar.success(context, 'Shift closed.');
+    } catch (error) {
+      if (mounted) {
+        AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final shiftState = ref.watch(myOpenShiftProvider);
@@ -405,6 +535,16 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                       onPressed: () => setState(() => _showCart = true),
                     ),
                   ),
+                if (shift != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: SecondaryButton(
+                      label: 'Close shift',
+                      icon: Icons.lock_outline,
+                      width: 110,
+                      onPressed: () => _closeShift(shift),
+                    ),
+                  ),
                 IconButton(
                   tooltip: S.refresh,
                   onPressed: () {
@@ -428,17 +568,24 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                 color: AppColors.pink50,
                 child: Padding(
                   padding: const EdgeInsets.all(14),
-                  child: Row(
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       const Icon(Icons.info_outline, color: AppColors.warning),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child:
-                            Text('You need an open cash shift to make a sale.'),
+                      SizedBox(
+                        width: (MediaQuery.sizeOf(context).width - 130)
+                            .clamp(170.0, 360.0)
+                            .toDouble(),
+                        child: const Text(
+                          'You need an open cash shift to make a sale.',
+                        ),
                       ),
-                      ElevatedButton(
-                        onPressed: () => context.go('/shifts'),
-                        child: const Text('Open shift'),
+                      ElevatedButton.icon(
+                        onPressed: _openShift,
+                        icon: const Icon(Icons.play_arrow),
+                        label: const Text('Open shift'),
                       ),
                     ],
                   ),
@@ -637,9 +784,10 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                                             fontWeight: FontWeight.bold,
                                             color: AppColors.pink600,
                                           )),
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
+                                      Wrap(
+                                        alignment: WrapAlignment.spaceBetween,
+                                        crossAxisAlignment:
+                                            WrapCrossAlignment.center,
                                         children: [
                                           Text(
                                             available < 1

@@ -138,14 +138,16 @@ class InventoryRepository {
     String? medicineId,
     bool includeInactive = false,
   }) async {
-    var query = _db.from('stock_batches').select('*, medicines(name)');
+    var query = _db
+        .from('stock_batches')
+        .select('*, medicine:medicines!stock_batches_medicine_id_fkey(name)');
     if (branchId != null) query = query.eq('branch_id', branchId);
     if (medicineId != null) query = query.eq('medicine_id', medicineId);
     if (!includeInactive) query = query.eq('is_active', true);
     final rows = await query.order('expiry_date') as List;
     return rows.map((row) {
       final map = Map<String, dynamic>.from(row as Map);
-      final joined = map['medicines'];
+      final joined = map['medicine'] ?? map['medicines'];
       if (joined is Map) map['name'] = joined['name'];
       return StockBatch.fromJson(map);
     }).toList();
@@ -158,7 +160,9 @@ class InventoryRepository {
     DateTime? from,
     DateTime? to,
   }) async {
-    var query = _db.from('stock_movements').select('*, medicines(name)');
+    var query = _db
+        .from('stock_movements')
+        .select('*, medicine:medicines!stock_movements_medicine_id_fkey(name)');
     if (branchId != null) query = query.eq('branch_id', branchId);
     if (medicineId != null) query = query.eq('medicine_id', medicineId);
     if (type != null) query = query.eq('movement_type', type);
@@ -168,7 +172,7 @@ class InventoryRepository {
         await query.order('created_at', ascending: false).limit(500) as List;
     return rows.map((row) {
       final map = Map<String, dynamic>.from(row as Map);
-      final joined = map['medicines'];
+      final joined = map['medicine'] ?? map['medicines'];
       if (joined is Map) map['name'] = joined['name'];
       return StockMovement.fromJson(map);
     }).toList();

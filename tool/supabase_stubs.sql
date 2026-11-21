@@ -33,6 +33,20 @@ end $$;
 grant usage on schema public, auth, storage, extensions
   to anon, authenticated, service_role;
 
+-- PostgREST connects as a real login role and switches to the JWT's `role`
+-- claim. On Supabase that login is `authenticator`; on a plain server we create
+-- an equivalent here. It must NOT bypass RLS: membership lets PostgREST SET
+-- ROLE to anon/authenticated, and the RLS policies then do the real work.
+do $$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'e2e_authenticator') then
+    create role e2e_authenticator nologin;
+  end if;
+  alter role e2e_authenticator with login password 'e2e_authenticator';
+end $$;
+grant anon, authenticated, service_role to e2e_authenticator;
+grant usage on schema public, auth, storage, extensions to e2e_authenticator;
+
 -- Supabase's auth.users: only the columns referenced by the migrations.
 create table if not exists auth.users (
   id uuid primary key default gen_random_uuid(),
@@ -43,16 +57,26 @@ create table if not exists auth.users (
   updated_at timestamptz not null default now()
 );
 
--- JWT-backed helpers. Tests can set request.jwt.* with set_config(); by
--- default uid() is NULL, exactly like an anonymous Supabase request.
+-- JWT-backed helpers. PostgREST 12 removed the per-claim request.jwt.claim.*
+-- GUCs and exposes the whole payload as request.jwt.claims JSON. Supabase's
+-- managed stack keeps the legacy names working, so the CI stub must accept
+-- both shapes or every auth.uid()-based policy would see NULL under bare
+-- PostgREST. By default uid() is NULL, exactly like an anonymous request.
 create or replace function auth.uid()
 returns uuid language sql stable as $$
-  select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+  select coalesce(
+    nullif(current_setting('request.jwt.claim.sub', true), ''),
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'
+  )::uuid
 $$;
 
 create or replace function auth.role()
 returns text language sql stable as $$
-  select coalesce(nullif(current_setting('request.jwt.claim.role', true), ''), 'anon')
+  select coalesce(
+    nullif(current_setting('request.jwt.claim.role', true), ''),
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role',
+    'anon'
+  )
 $$;
 
 create or replace function auth.jwt()
@@ -63,6 +87,15 @@ $$;
 comment on function auth.uid() is 'CI stub: reads request.jwt.claim.sub';
 comment on function auth.role() is 'CI stub: reads request.jwt.claim.role';
 comment on function auth.jwt() is 'CI stub: reads request.jwt.claims';
+
+-- Test-only expose of auth.uid() so the e2e suite can assert that the signed
+-- JWT subject reaches database helpers through PostgREST. Not part of owner SQL.
+create or replace function public.e2e_auth_uid()
+returns text language sql stable as $$
+  select auth.uid()::text
+$$;
+revoke all on function public.e2e_auth_uid() from public;
+grant execute on function public.e2e_auth_uid() to authenticated;
 
 -- Storage scaffolding used by 0012_rls_hardening.sql and schema_check.sql.
 create table if not exists storage.buckets (

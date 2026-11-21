@@ -9,6 +9,16 @@ import '../data/inventory_providers.dart';
 import '../logic/stock_rules.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/strings.dart';
+import 'responsive_ui.dart';
+
+/// Dialog content width that never exceeds a phone viewport. A fixed 480/520
+/// pixel dialog overflows at 360x640, so every stock dialog sizes from the
+/// available screen width instead.
+double dialogContentWidth(BuildContext context, {double maxWidth = 520}) {
+  final available = MediaQuery.sizeOf(context).width - 48;
+  if (available < 240) return 240;
+  return available > maxWidth ? maxWidth : available;
+}
 
 Widget statusChip(StockStatus status) => StatusBadge(
       StockRules.label(status),
@@ -151,9 +161,8 @@ Future<void> showAddStockDialog(BuildContext context, WidgetRef ref) async {
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          PrimaryButton(
+          ResponsivePrimaryButton(
             label: 'Add stock',
-            width: 140,
             loading: busy,
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
@@ -277,9 +286,8 @@ Future<void> showAdjustStockDialog(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          PrimaryButton(
+          ResponsivePrimaryButton(
             label: 'Apply',
-            width: 120,
             loading: busy,
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;

@@ -8,7 +8,11 @@ import '../../../core/permissions.dart';
 import '../../../core/widgets.dart';
 import '../data/inventory_providers.dart';
 import '../widgets/stock_widgets.dart';
+import '../widgets/responsive_ui.dart';
 
+/// Batch rows are immutable stock history: deleting one would break the
+/// movement ledger and stock valuation. There is deliberately no delete (and
+/// no deactivate) action here — use the Adjust action to correct a count.
 class BatchesScreen extends ConsumerStatefulWidget {
   const BatchesScreen({super.key});
 
@@ -38,10 +42,9 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
               subtitle: 'Expiry and quantity per batch',
               actions: [
                 if (canEdit)
-                  PrimaryButton(
+                  ResponsivePrimaryButton(
                     label: 'Add stock',
                     icon: Icons.add,
-                    width: 130,
                     onPressed: () => showAddStockDialog(context, ref),
                   ),
               ],
@@ -61,7 +64,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                   };
                 }).toList();
                 return Expanded(
-                  child: DataTablePlus(
+                  child: ResponsiveDataTablePlus(
                     columns: [
                       'Medicine',
                       'Batch',

@@ -119,12 +119,18 @@ class DashboardSnapshot {
       if (result is List) {
         return List<Map<String, dynamic>>.from(result);
       }
-      if (label != null) failures?.add(label);
+      if (label != null) {
+        failures?.add('$label (Error code: UNKNOWN)');
+      }
       return null;
-    } catch (_) {
+    } catch (error) {
       // Individual cards must not take down the whole dashboard; record the
-      // failed section so the screen can show a partial-data banner.
-      if (label != null) failures?.add(label);
+      // failed section AND its mapped code so the partial-data banner tells
+      // the user what actually broke instead of a generic sentence.
+      if (label != null) {
+        final mapped = AppErrorMapper.from(error);
+        failures?.add('$label (${mapped.codeLine ?? 'Error code: UNKNOWN'})');
+      }
       return null;
     }
   }
@@ -149,15 +155,21 @@ class DashboardSnapshot {
     List<String>? failures,
   }) =>
       _rows(() {
+        // Both FKs are spelled out: `sale_items` also has a batch_id FK, so
+        // letting PostgREST guess the relationship makes the embed ambiguous
+        // (PGRST200/201). Filters use the `sale:` alias declared in select.
         var query = SupabaseService.client
             .from('sale_items')
-            .select('medicine_id, medicine_name, quantity, cost_price, '
-                'line_total, medicines(name), sales!inner(created_at)')
-            .gte('sales.created_at', from)
-            .lt('sales.created_at', to);
-        if (branchId != null) query = query.eq('sales.branch_id', branchId);
+            .select(
+              'medicine_id, medicine_name, quantity, cost_price, line_total, '
+              'medicine:medicines!sale_items_medicine_id_fkey(name), '
+              'sale:sales!sale_items_sale_id_fkey!inner(created_at)',
+            )
+            .gte('sale.created_at', from)
+            .lt('sale.created_at', to);
+        if (branchId != null) query = query.eq('sale.branch_id', branchId);
         if (ownOnly && userId != null) {
-          query = query.eq('sales.cashier_id', userId);
+          query = query.eq('sale.cashier_id', userId);
         }
         return query;
       }, failures: failures, label: 'Sales detail');
@@ -385,7 +397,16 @@ class DashboardSnapshot {
 }
 
 class DashboardScreen extends ConsumerStatefulWidget {
-  const DashboardScreen({super.key});
+  const DashboardScreen({
+    super.key,
+    this.initialSnapshot,
+    this.initialError,
+  });
+
+  /// Optional test seam: widget tests inject dummy data instead of Supabase.
+  /// Production navigation uses the plain constructor and loads normally.
+  final DashboardSnapshot? initialSnapshot;
+  final String? initialError;
 
   @override
   ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
@@ -403,7 +424,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   void initState() {
     super.initState();
     _branchId = ref.read(branchScopeProvider);
-    _load();
+    if (widget.initialSnapshot != null || widget.initialError != null) {
+      _data = widget.initialSnapshot;
+      _error = widget.initialError;
+      _loading = false;
+    } else {
+      _load();
+    }
     _subscribeToChanges();
   }
 
@@ -455,6 +482,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
   }
 
+  /// Friendly message plus a copyable code line, even for unmapped errors.
+  static String _errorText(Object error) {
+    final mapped = AppErrorMapper.from(error);
+    final codeLine = mapped.codeLine;
+    if (codeLine != null) {
+      return mapped.message.contains(codeLine)
+          ? mapped.message
+          : '${mapped.message}\n$codeLine';
+    }
+    return '${mapped.message}\nError code: UNKNOWN';
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -476,7 +515,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = AppErrorMapper.from(e).message;
+        _error = _errorText(e);
         _loading = false;
       });
     }
@@ -498,82 +537,93 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     });
     final role = auth.profile?.role ?? AppRole.cashier;
     final ownOnly = isOwnOnly(role, Modules.sales);
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    // Phones get a full-width range filter; desktop keeps the compact size.
+    final rangeWidth = screenWidth < 600 ? screenWidth - 40 : 180.0;
 
     return Scaffold(
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            PageHeader(
-              title: ownOnly ? S.backToDashboard : S.dashboard,
-              subtitle: '${formatDate(nowAddisAbaba())} · ${S.appName}',
-              actions: [
-                SizedBox(
-                  width: 180,
-                  child: AppDropdown<ActivityRange>(
-                    label: S.timeRange,
-                    value: _range,
-                    items: [
-                      for (final r in ActivityRange.values)
-                        DropdownMenuItem(value: r, child: Text(r.label)),
-                    ],
-                    onChanged: (v) {
-                      setState(() => _range = v ?? ActivityRange.all);
-                      _load();
-                    },
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              PageHeader(
+                title: ownOnly ? S.backToDashboard : S.dashboard,
+                subtitle: '${formatDate(nowAddisAbaba())} · ${S.appName}',
+                actions: [
+                  SizedBox(
+                    width: rangeWidth,
+                    child: AppDropdown<ActivityRange>(
+                      label: S.timeRange,
+                      value: _range,
+                      items: [
+                        for (final r in ActivityRange.values)
+                          DropdownMenuItem(value: r, child: Text(r.label)),
+                      ],
+                      onChanged: (v) {
+                        setState(() => _range = v ?? ActivityRange.all);
+                        _load();
+                      },
+                    ),
                   ),
-                ),
-                IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
-              ],
-            ),
-            if (!_loading &&
-                _error == null &&
-                _data?.failedSections.isNotEmpty == true)
-              Container(
-                margin: const EdgeInsets.only(top: 12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.warning.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline,
-                        size: 18, color: AppColors.warning),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Some dashboard sections could not be loaded: '
-                        '${_data!.failedSections.join(', ')}. '
-                        'The numbers shown may be incomplete.',
+                  IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
+                ],
+              ),
+              if (!_loading &&
+                  _error == null &&
+                  _data?.failedSections.isNotEmpty == true)
+                Container(
+                  margin: const EdgeInsets.only(top: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.warning.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.info_outline,
+                          size: 18, color: AppColors.warning),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Some sections could not be loaded:'),
+                            const SizedBox(height: 4),
+                            SelectableText(
+                              _data!.failedSections
+                                  .map((section) => '• $section')
+                                  .join('\n'),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text('The numbers shown may be incomplete.'),
+                          ],
+                        ),
                       ),
-                    ),
-                    TextButton(
-                      onPressed: _load,
-                      child: const Text(S.retry),
-                    ),
-                  ],
-                ),
-              ),
-            if (_loading)
-              const Expanded(child: Center(child: CircularProgressIndicator()))
-            else if (_error != null)
-              ErrorState(message: _error!, onRetry: _load)
-            else
-              Expanded(
-                child: SingleChildScrollView(
-                  child: _DashboardBody(
-                    data: _data!,
-                    role: role,
-                    ownOnly: ownOnly,
-                    money: _moneyOrDash,
-                    count: _countOrDash,
-                    range: _range,
+                      TextButton(
+                        onPressed: _load,
+                        child: const Text(S.retry),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-          ],
+              if (_loading)
+                const Center(child: CircularProgressIndicator())
+              else if (_error != null)
+                ErrorState(message: _error!, onRetry: _load)
+              else
+                _DashboardBody(
+                  data: _data!,
+                  role: role,
+                  ownOnly: ownOnly,
+                  money: _moneyOrDash,
+                  count: _countOrDash,
+                  range: _range,
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -866,14 +916,15 @@ class _DashboardBody extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          runSpacing: 4,
                           children: [
                             const Icon(Icons.groups_outlined,
                                 size: 20, color: AppColors.pink700),
-                            const SizedBox(width: 8),
                             Text(S.teamActivity,
                                 style: Theme.of(context).textTheme.titleMedium),
-                            const Spacer(),
                             TextButton.icon(
                               onPressed: () => context.go('/admin/users'),
                               icon: const Icon(Icons.manage_accounts_outlined,

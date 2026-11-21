@@ -14,6 +14,7 @@ import '../../../core/widgets.dart';
 import '../../inventory/data/inventory_ids.dart';
 import '../../inventory/data/inventory_providers.dart';
 import '../data/prescriptions.dart';
+import '../../inventory/widgets/responsive_ui.dart';
 
 class _Draft {
   const _Draft({
@@ -37,6 +38,10 @@ class _Draft {
   final XFile? image;
 }
 
+/// "Dispense" is not a separate status update here: a pending Rx is dispensed
+/// by starting a sale with `/pos?prescription=<id>`. POS owns that flow and
+/// links the created sale back to the prescription, so this screen only routes
+/// into it rather than duplicating stock deduction logic.
 class PrescriptionsScreen extends ConsumerStatefulWidget {
   const PrescriptionsScreen({super.key});
 
@@ -339,10 +344,9 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
                 if (canEdit)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: PrimaryButton(
+                    child: ResponsivePrimaryButton(
                       label: _busy ? 'Working…' : 'Register',
                       icon: Icons.add,
-                      width: 140,
                       loading: _busy,
                       onPressed: _busy ? null : _add,
                     ),
@@ -382,59 +386,57 @@ class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
                       onAction: canEdit ? _add : null,
                     );
                   }
-                  return SingleChildScrollView(
-                    child: DataTablePlus(
-                      columns: const [
-                        'Rx no',
-                        'Patient',
-                        'Prescriber',
-                        'Date',
-                        'Status',
-                      ],
-                      rows: [
-                        for (final rx in list)
-                          DataTablePlusRow(
-                            cells: [
-                              rx.rxNo,
-                              rx.patientName,
-                              rx.prescriberName,
-                              rx.rxDate == null ? '—' : formatDate(rx.rxDate!),
-                              rx.status.toUpperCase(),
-                            ],
-                            actions: [
-                              if (rx.imagePath != null)
-                                IconButton(
-                                  tooltip: 'View image',
-                                  icon: const Icon(Icons.image_outlined),
-                                  onPressed: () => _viewImage(rx),
+                  return ResponsiveDataTablePlus(
+                    columns: const [
+                      'Rx no',
+                      'Patient',
+                      'Prescriber',
+                      'Date',
+                      'Status',
+                    ],
+                    rows: [
+                      for (final rx in list)
+                        DataTablePlusRow(
+                          cells: [
+                            rx.rxNo,
+                            rx.patientName,
+                            rx.prescriberName,
+                            rx.rxDate == null ? '—' : formatDate(rx.rxDate!),
+                            rx.status.toUpperCase(),
+                          ],
+                          actions: [
+                            if (rx.imagePath != null)
+                              IconButton(
+                                tooltip: 'View image',
+                                icon: const Icon(Icons.image_outlined),
+                                onPressed: () => _viewImage(rx),
+                              ),
+                            if (canAttachToSale && rx.status == 'pending')
+                              Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: ElevatedButton.icon(
+                                  icon:
+                                      const Icon(Icons.point_of_sale, size: 16),
+                                  label: const Text('New sale'),
+                                  onPressed: () =>
+                                      context.go('/pos?prescription=${rx.id}'),
                                 ),
-                              if (canAttachToSale && rx.status == 'pending')
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 6),
-                                  child: ElevatedButton.icon(
-                                    icon: const Icon(Icons.point_of_sale,
-                                        size: 16),
-                                    label: const Text('New sale'),
-                                    onPressed: () => context
-                                        .go('/pos?prescription=${rx.id}'),
-                                  ),
-                                ),
-                              if (canEdit && rx.status == 'pending')
-                                IconButton(
-                                  tooltip: 'Cancel',
-                                  icon: const Icon(Icons.cancel_outlined,
-                                      color: AppColors.danger),
-                                  onPressed: () => _cancel(rx),
-                                ),
-                            ],
-                          ),
-                      ],
-                      searchHint: 'Search prescriptions…',
-                      exportFileName: 'yusra-prescriptions.csv',
-                    ),
+                              ),
+                            if (canEdit && rx.status == 'pending')
+                              IconButton(
+                                tooltip: 'Cancel',
+                                icon: const Icon(Icons.cancel_outlined,
+                                    color: AppColors.danger),
+                                onPressed: () => _cancel(rx),
+                              ),
+                          ],
+                        ),
+                    ],
+                    searchHint: 'Search prescriptions…',
+                    exportFileName: 'yusra-prescriptions.csv',
                   );
                 },
-                loading: () => const LoadingSkeleton(lines: 4),
+                loading: () => const ResponsiveLoadingSkeleton(lines: 4),
                 error: (error, _) => ErrorState(
                   message: AppErrorMapper.from(error).message,
                   onRetry: () => ref.invalidate(prescriptionsProvider),

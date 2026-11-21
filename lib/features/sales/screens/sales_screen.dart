@@ -11,8 +11,10 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets.dart';
 import '../../../core/strings.dart';
 import '../data/sales.dart';
+import '../logic/receipts.dart';
 import '../../inventory/data/inventory_providers.dart';
 import '../../../core/errors/app_error.dart';
+import '../../inventory/widgets/responsive_ui.dart';
 
 typedef SaleFilterArgs = ({
   DateTime? from,
@@ -66,6 +68,29 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
     });
   }
 
+  /// Reprint from history uses the same receipt data as the invoice detail
+  /// screen; providers are read directly so the row's full data is available.
+  Future<void> _reprint(Sale sale) async {
+    try {
+      final items = await ref.read(saleItemsProvider(sale.id).future);
+      final payments = await ref.read(salePaymentsProvider(sale.id).future);
+      final settings = await ref.read(receiptSettingsProvider.future);
+      await Receipts.printSale(
+        sale: sale,
+        items: items,
+        payments: payments,
+        settings: settings,
+        cashierName: sale.cashierName ?? 'Cashier',
+        reprint: true,
+      );
+      if (mounted) AppSnackbar.success(context, 'Receipt sent to print.');
+    } catch (error) {
+      if (mounted) {
+        AppSnackbar.error(context, AppErrorMapper.from(error).message);
+      }
+    }
+  }
+
   Future<void> _void(Sale sale) async {
     final role = ref.read(authProvider).profile?.role ?? AppRole.cashier;
     if (!can(role, Modules.saleReturns, PermAction.edit)) {
@@ -117,10 +142,25 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final role = ref.watch(authProvider).profile?.role ?? AppRole.cashier;
-    final sales = ref.watch(salesProvider(_filter));
+    final profile = ref.watch(authProvider).profile;
+    final role = profile?.role ?? AppRole.cashier;
+    final ownOnly = isOwnOnly(role, Modules.sales);
+    // Cashiers own only their invoices; they cannot widen the query by
+    // choosing another cashier in the filter.
+    final effectiveFilter = ownOnly
+        ? (
+            from: _filter.from,
+            to: _filter.to,
+            cashierId: profile?.id,
+            status: _filter.status,
+            method: _filter.method,
+            invoice: _filter.invoice,
+          )
+        : _filter;
+    final sales = ref.watch(salesProvider(effectiveFilter));
     final cashiers = ref.watch(cashiersProvider);
     final showVoid = can(role, Modules.saleReturns, PermAction.edit);
+    final narrow = MediaQuery.sizeOf(context).width < 600;
 
     return Scaffold(
       body: Padding(
@@ -134,10 +174,9 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
               actions: [
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
-                  child: SecondaryButton(
+                  child: ResponsiveSecondaryButton(
                     label: 'Returns',
                     icon: Icons.assignment_return_outlined,
-                    width: 110,
                     onPressed: () => context.go('/sales/returns'),
                   ),
                 ),
@@ -175,38 +214,39 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                       );
                     }),
                   ),
-                SizedBox(
-                  width: 170,
-                  child: DropdownButtonFormField<String?>(
-                    value: _filter.cashierId,
-                    decoration: const InputDecoration(
-                        labelText: 'Cashier', isDense: true),
-                    items: [
-                      const DropdownMenuItem(
-                          value: null, child: Text('All cashiers')),
-                      ...cashiers.valueOrNull?.map(
-                            (row) => DropdownMenuItem(
-                              value: row['id'] as String,
-                              child: Text(
-                                  row['full_name'] as String? ?? 'Cashier'),
-                            ),
-                          ) ??
-                          const [],
-                    ],
-                    onChanged: (value) => setState(() {
-                      _filter = (
-                        from: _filter.from,
-                        to: _filter.to,
-                        cashierId: value,
-                        status: _filter.status,
-                        method: _filter.method,
-                        invoice: _filter.invoice,
-                      );
-                    }),
+                if (!ownOnly)
+                  SizedBox(
+                    width: narrow ? double.infinity : 170,
+                    child: DropdownButtonFormField<String?>(
+                      value: _filter.cashierId,
+                      decoration: const InputDecoration(
+                          labelText: 'Cashier', isDense: true),
+                      items: [
+                        const DropdownMenuItem(
+                            value: null, child: Text('All cashiers')),
+                        ...cashiers.valueOrNull?.map(
+                              (row) => DropdownMenuItem(
+                                value: row['id'] as String,
+                                child: Text(
+                                    row['full_name'] as String? ?? 'Cashier'),
+                              ),
+                            ) ??
+                            const [],
+                      ],
+                      onChanged: (value) => setState(() {
+                        _filter = (
+                          from: _filter.from,
+                          to: _filter.to,
+                          cashierId: value,
+                          status: _filter.status,
+                          method: _filter.method,
+                          invoice: _filter.invoice,
+                        );
+                      }),
+                    ),
                   ),
-                ),
                 SizedBox(
-                  width: 150,
+                  width: narrow ? double.infinity : 150,
                   child: DropdownButtonFormField<String?>(
                     value: _filter.status,
                     decoration: const InputDecoration(
@@ -236,7 +276,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                   ),
                 ),
                 SizedBox(
-                  width: 160,
+                  width: narrow ? double.infinity : 160,
                   child: DropdownButtonFormField<String?>(
                     value: _filter.method,
                     decoration: const InputDecoration(
@@ -284,58 +324,60 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                           style: Theme.of(context).textTheme.labelLarge),
                       const SizedBox(height: 8),
                       Expanded(
-                        child: SingleChildScrollView(
-                          child: DataTablePlus(
-                            columns: const [
-                              'Invoice',
-                              'Date',
-                              'Cashier',
-                              'Customer',
-                              'Total',
-                              'Paid',
-                              'Status',
-                            ],
-                            rows: [
-                              for (final sale in rows)
-                                DataTablePlusRow(
-                                  cells: [
-                                    sale.invoiceNo,
-                                    sale.createdAt == null
-                                        ? '—'
-                                        : formatDateTime(sale.createdAt!),
-                                    sale.cashierName ?? '—',
-                                    sale.customerName ?? 'Walk-in',
-                                    formatMoney(sale.total),
-                                    formatMoney(sale.paid),
-                                    sale.status.toUpperCase(),
-                                  ],
-                                  actions: [
+                        child: ResponsiveDataTablePlus(
+                          columns: [
+                            'Invoice',
+                            'Date',
+                            if (!ownOnly) 'Cashier',
+                            'Customer',
+                            'Total',
+                            'Paid',
+                            'Status',
+                          ],
+                          rows: [
+                            for (final sale in rows)
+                              DataTablePlusRow(
+                                cells: [
+                                  sale.invoiceNo,
+                                  sale.createdAt == null
+                                      ? '—'
+                                      : formatDateTime(sale.createdAt!),
+                                  if (!ownOnly) sale.cashierName ?? '—',
+                                  sale.customerName ?? 'Walk-in',
+                                  formatMoney(sale.total),
+                                  formatMoney(sale.paid),
+                                  sale.status.toUpperCase(),
+                                ],
+                                actions: [
+                                  IconButton(
+                                    tooltip: 'Reprint',
+                                    icon: const Icon(Icons.print_outlined),
+                                    onPressed: () => _reprint(sale),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'View',
+                                    icon: const Icon(Icons.visibility_outlined),
+                                    onPressed: () =>
+                                        context.go('/sales/${sale.id}'),
+                                  ),
+                                  if (sale.status == 'completed' && showVoid)
                                     IconButton(
-                                      tooltip: 'View',
-                                      icon:
-                                          const Icon(Icons.visibility_outlined),
-                                      onPressed: () =>
-                                          context.go('/sales/${sale.id}'),
+                                      tooltip: 'Void',
+                                      icon: const Icon(Icons.cancel_outlined,
+                                          color: AppColors.danger),
+                                      onPressed: () => _void(sale),
                                     ),
-                                    if (sale.status == 'completed' && showVoid)
-                                      IconButton(
-                                        tooltip: 'Void',
-                                        icon: const Icon(Icons.cancel_outlined,
-                                            color: AppColors.danger),
-                                        onPressed: () => _void(sale),
-                                      ),
-                                  ],
-                                ),
-                            ],
-                            searchHint: 'Search invoice or customer…',
-                            exportFileName: 'yusra-sales.csv',
-                          ),
+                                ],
+                              ),
+                          ],
+                          searchHint: 'Search invoice or customer…',
+                          exportFileName: 'yusra-sales.csv',
                         ),
                       ),
                     ],
                   );
                 },
-                loading: () => const LoadingSkeleton(lines: 5),
+                loading: () => const ResponsiveLoadingSkeleton(lines: 5),
                 error: (error, _) => ErrorState(
                   message: AppErrorMapper.from(error).message,
                   onRetry: () => ref.invalidate(salesProvider),

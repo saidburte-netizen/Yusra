@@ -9,6 +9,7 @@ import '../../../core/permissions.dart';
 import '../../../core/widgets.dart';
 import '../data/purchasing.dart';
 import '../../../core/errors/app_error.dart';
+import '../../inventory/widgets/responsive_ui.dart';
 
 class PurchaseOrdersScreen extends ConsumerStatefulWidget {
   const PurchaseOrdersScreen({super.key});
@@ -46,10 +47,9 @@ class _PurchaseOrdersScreenState extends ConsumerState<PurchaseOrdersScreen> {
               subtitle: 'Drafts, approvals and goods receiving',
               actions: [
                 if (canEdit)
-                  PrimaryButton(
+                  ResponsivePrimaryButton(
                     label: 'New order',
                     icon: Icons.add,
-                    width: 140,
                     onPressed: () => context.go('/purchasing/orders/new'),
                   ),
               ],
@@ -83,7 +83,7 @@ class _PurchaseOrdersScreenState extends ConsumerState<PurchaseOrdersScreen> {
                       .where(
                           (order) => _status == null || order.status == _status)
                       .toList();
-                  return DataTablePlus(
+                  return ResponsiveDataTablePlus(
                     columns: const [
                       'PO number',
                       'Supplier',
@@ -98,10 +98,11 @@ class _PurchaseOrdersScreenState extends ConsumerState<PurchaseOrdersScreen> {
                         DataTablePlusRow(
                           cells: [
                             order.poNo,
-                            order.supplierId.substring(
-                              0,
-                              order.supplierId.length.clamp(0, 8),
-                            ),
+                            order.supplierName ??
+                                order.supplierId.substring(
+                                  0,
+                                  order.supplierId.length.clamp(0, 8),
+                                ),
                             order.orderDate == null
                                 ? '—'
                                 : formatDate(order.orderDate!),

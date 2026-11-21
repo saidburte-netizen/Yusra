@@ -1,8 +1,10 @@
 // Issues a new temporary password for a user. Uses the service-role key only
 // inside this Edge Function; the Flutter app never holds it.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, errors, json } from '../_shared/http.ts';
+import { errors, json, missingSecrets, preflight } from '../_shared/http.ts';
 import {
+  isAdminRole,
+  jwtAppRole,
   readJsonObject,
   requiredString,
   requiredUuid,
@@ -31,19 +33,31 @@ async function writeAudit(admin: unknown, entry: Record<string, unknown>) {
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeaders(req) });
-  }
+  const preflightResponse = preflight(req);
+  if (preflightResponse) return preflightResponse;
   if (req.method !== 'POST') return errors.methodNotAllowed(req);
 
   try {
-    const url = Deno.env.get('SUPABASE_URL');
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
-    if (!url || !serviceKey || !anonKey) {
-      console.error('admin-reset-password: Supabase environment is not configured');
-      return errors.internal(req);
+    const missing = missingSecrets([
+      'SUPABASE_URL',
+      'SUPABASE_SERVICE_ROLE_KEY',
+      'SUPABASE_ANON_KEY',
+    ]);
+    if (missing.length > 0) {
+      // Names only: the values (which may be secrets) are never logged/echoed.
+      console.error(
+        'admin-reset-password: missing Edge Function configuration:',
+        missing.join(', '),
+      );
+      return errors.internal(
+        req,
+        `Password reset is not configured on the server. Missing secrets: ${missing.join(', ')}. Ask the administrator to set them.`,
+      );
     }
+    // Checked above; the non-null assertions document that invariant.
+    const url = Deno.env.get('SUPABASE_URL')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader || !/^Bearer\s+\S+$/i.test(authHeader)) {
@@ -57,7 +71,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const { data: identity, error: identityError } = await caller.auth.getUser();
     if (identityError || !identity?.user) return errors.unauthenticated(req);
 
-    // Role is re-read from profiles through the service role on every call.
+    // The JWT was verified against the Auth server by getUser(); its
+    // app_metadata role is server-issued, not caller-controlled. Reject tokens
+    // that explicitly carry a non-admin role even before the profile lookup.
+    const tokenRole = jwtAppRole(identity.user);
+    if (tokenRole !== null && !isAdminRole(tokenRole)) {
+      return errors.forbidden(req);
+    }
+
+    // The profiles row remains the authoritative role source; it is re-read
+    // through the service role so stale/edited client metadata cannot grant
+    // access on its own.
     const admin = createClient(url, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
@@ -77,7 +101,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (!actor.is_active) {
       return errors.forbidden(req, 'This account is inactive.');
     }
-    if (actor.role !== 'super_admin' && actor.role !== 'admin') {
+    if (!isAdminRole(actor.role)) {
       return errors.forbidden(req);
     }
 

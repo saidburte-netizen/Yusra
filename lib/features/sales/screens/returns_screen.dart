@@ -9,7 +9,12 @@ import '../../../core/strings.dart';
 import '../data/sales.dart';
 import '../logic/receipts.dart';
 import '../../../core/errors/app_error.dart';
+import '../../inventory/widgets/responsive_ui.dart';
 
+/// Return creation is n/a by design here: a return always belongs to an
+/// existing invoice and is created from `SaleDetailScreen`, where the sold
+/// lines and returnable quantities are known. This screen is the read-only
+/// history plus reprint/view actions for returns that already exist.
 class ReturnsScreen extends ConsumerWidget {
   const ReturnsScreen({super.key});
 
@@ -48,10 +53,9 @@ class ReturnsScreen extends ConsumerWidget {
               actions: [
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
-                  child: SecondaryButton(
+                  child: ResponsiveSecondaryButton(
                     label: 'Sales',
                     icon: Icons.arrow_back,
-                    width: 100,
                     onPressed: () => context.go('/sales'),
                   ),
                 ),
@@ -82,7 +86,7 @@ class ReturnsScreen extends ConsumerWidget {
                       const SizedBox(height: 8),
                       Expanded(
                         child: SingleChildScrollView(
-                          child: DataTablePlus(
+                          child: ResponsiveDataTablePlus(
                             columns: const [
                               'Return no',
                               'Invoice',
@@ -129,7 +133,7 @@ class ReturnsScreen extends ConsumerWidget {
                     ],
                   );
                 },
-                loading: () => const LoadingSkeleton(lines: 4),
+                loading: () => const ResponsiveLoadingSkeleton(lines: 4),
                 error: (error, _) => ErrorState(
                   message: AppErrorMapper.from(error).message,
                   onRetry: () => ref.invalidate(saleReturnsProvider),

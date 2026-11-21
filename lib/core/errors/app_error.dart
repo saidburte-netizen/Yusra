@@ -33,12 +33,20 @@ class AppError implements Exception {
     this.kind = AppErrorKind.unknown,
     this.retryable = false,
     this.cause,
+    this.code,
   });
 
   final String message;
   final AppErrorKind kind;
   final bool retryable;
   final Object? cause;
+
+  /// A short, copyable machine code (for example `42501` or `PGRST200`).
+  /// Never contains SQL text: the mapper whitelists code-shaped values only.
+  final String? code;
+
+  /// The line shown underneath the friendly message in error banners.
+  String? get codeLine => code == null ? null : 'Error code: $code';
 
   @override
   String toString() => message;
@@ -68,11 +76,13 @@ class AppErrorMapper {
     }
 
     if (error is PostgrestException) {
+      final code = _cleanCode(error.code);
       return AppError(
-        _postgrestMessage(error),
+        _withCode(_postgrestMessage(error), code),
         kind: _postgrestKind(error),
         retryable: _postgrestRetryable(error),
         cause: error,
+        code: code,
       );
     }
 
@@ -95,11 +105,16 @@ class AppErrorMapper {
     }
 
     if (error is SocketException || error is TimeoutException) {
+      final code = error is SocketException ? 'NETWORK' : 'TIMEOUT';
       return AppError(
-        'No connection to the server. Check your internet and try again.',
+        _withCode(
+          'No connection to the server. Check your internet and try again.',
+          code,
+        ),
         kind: AppErrorKind.network,
         retryable: true,
         cause: error,
+        code: code,
       );
     }
 
@@ -112,6 +127,21 @@ class AppErrorMapper {
     }
 
     return AppError(S.somethingWrong, cause: error);
+  }
+
+  /// Only a short machine code is ever shown. A malformed/verbose `code`
+  /// coming from a server must not become a back-door for raw SQL text.
+  static String? _cleanCode(String? raw) {
+    if (raw == null) return null;
+    final code = raw.trim().toUpperCase();
+    if (!RegExp(r'^[A-Z0-9]{3,24}$').hasMatch(code)) return null;
+    return code;
+  }
+
+  static String _withCode(String message, String? code) {
+    final clean = _cleanCode(code);
+    if (clean == null) return message;
+    return '$message\nError code: $clean';
   }
 
   static String _authMessage(String raw) {
@@ -141,7 +171,9 @@ class AppErrorMapper {
   static AppErrorKind _postgrestKind(PostgrestException error) {
     final code = error.code ?? '';
     if (code == '42501' || code == 'PGRST301') return AppErrorKind.permission;
-    if (code == 'PGRST116') return AppErrorKind.notFound;
+    if (code == 'PGRST116' || code == 'PGRST204' || code == 'P0002') {
+      return AppErrorKind.notFound;
+    }
     if (code.startsWith('22') || code.startsWith('23')) {
       return AppErrorKind.validation;
     }
@@ -160,7 +192,18 @@ class AppErrorMapper {
       case '42501':
       case 'PGRST301':
         return 'You do not have permission to do that.';
+      case 'PGRST200':
+        return 'The server could not find the requested link between records.';
+      case 'PGRST201':
+        return 'The server found several matches and could not choose one.';
+      case 'PGRST204':
+        return 'No data was returned for this request.';
+      case '42P01':
+        return 'A required table is missing on the server.';
+      case '42703':
+        return 'A required column is missing on the server.';
       case 'PGRST116':
+      case 'P0002':
         return 'The requested record was not found.';
       case '23505':
         return 'That value is already used by another record.';
@@ -168,6 +211,12 @@ class AppErrorMapper {
         return 'A linked record is missing or is no longer available.';
       case '23514':
         return 'One of the values is not allowed.';
+      case 'P0001':
+        final raw = error.message.toLowerCase();
+        if (raw.contains('stock') || raw.contains('quantity')) {
+          return 'There is not enough stock to complete this operation.';
+        }
+        return 'The server could not complete the operation. Check the entered values and try again.';
       case '22003':
       case '22007':
         return 'One of the numbers or dates is not valid.';

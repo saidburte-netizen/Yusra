@@ -58,7 +58,12 @@ class _ExpenseFormResult {
 }
 
 class ExpensesScreen extends ConsumerStatefulWidget {
-  const ExpensesScreen({super.key});
+  const ExpensesScreen({super.key, this.initialRows, this.initialError});
+
+  /// Optional preloaded data keeps this screen pumpable in widget tests without
+  /// a live Supabase client. Production routes use the plain constructor.
+  final List<Map<String, dynamic>>? initialRows;
+  final String? initialError;
 
   @override
   ConsumerState<ExpensesScreen> createState() => _ExpensesScreenState();
@@ -74,7 +79,13 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    if (widget.initialRows != null || widget.initialError != null) {
+      _rows = widget.initialRows ?? const [];
+      _error = widget.initialError;
+      _loading = false;
+    } else {
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -200,7 +211,8 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       }
 
       if (!mounted) return;
-      AppSnackbar.success(context, S.saved);
+      AppSnackbar.success(
+          context, isNew ? 'Expense created.' : 'Expense updated.');
       await _load();
     } catch (e) {
       if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
@@ -220,7 +232,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
           .delete()
           .eq('id', expense['id']);
       if (!mounted) return;
-      AppSnackbar.success(context, S.saved);
+      AppSnackbar.success(context, 'Expense deleted.');
       await _load();
     } catch (e) {
       if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
@@ -308,7 +320,6 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                     padding: const EdgeInsets.only(right: 8),
                     child: PrimaryButton(
                       label: S.add,
-                      icon: Icons.add,
                       width: 110,
                       onPressed: () => _edit(null),
                     ),
@@ -322,66 +333,89 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
               ErrorState(message: _error!, onRetry: _load)
             else
               Expanded(
-                child: Column(
-                  children: [
-                    ResponsiveGrid(
-                      minTileWidth: 220,
-                      children: [
-                        StatCard(
-                          title: S.monthlyTotal,
-                          value: formatMoneyWhole(_monthlyTotal),
-                          icon: Icons.account_balance_wallet_outlined,
-                          color: AppColors.gold700,
-                        ),
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(18),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(S.byCategory,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium),
-                                const SizedBox(height: 12),
-                                if (_byCategory.isEmpty)
-                                  const Text(S.noData)
-                                else
-                                  ..._byCategory.entries.map((entry) => Padding(
-                                        padding:
-                                            const EdgeInsets.only(bottom: 8),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment
-                                                      .spaceBetween,
-                                              children: [
-                                                Text(entry.key),
-                                                MoneyText(entry.value),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 4),
-                                            LinearProgressIndicator(
-                                              value: _monthlyTotal == 0
-                                                  ? 0
-                                                  : entry.value / _monthlyTotal,
-                                              minHeight: 5,
-                                            ),
-                                          ],
-                                        ),
-                                      )),
-                              ],
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ResponsiveGrid(
+                        minTileWidth: 220,
+                        children: [
+                          StatCard(
+                            title: S.monthlyTotal,
+                            value: formatMoneyWhole(_monthlyTotal),
+                            icon: Icons.account_balance_wallet_outlined,
+                            color: AppColors.gold700,
+                          ),
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(18),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(S.byCategory,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium),
+                                  const SizedBox(height: 12),
+                                  if (_byCategory.isEmpty)
+                                    const Text(S.noData)
+                                  else
+                                    ..._byCategory.entries
+                                        .map((entry) => Padding(
+                                              padding: const EdgeInsets.only(
+                                                  bottom: 8),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .spaceBetween,
+                                                    children: [
+                                                      Text(entry.key),
+                                                      MoneyText(entry.value),
+                                                    ],
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  LinearProgressIndicator(
+                                                    value: _monthlyTotal == 0
+                                                        ? 0
+                                                        : entry.value /
+                                                            _monthlyTotal,
+                                                    minHeight: 5,
+                                                  ),
+                                                ],
+                                              ),
+                                            )),
+                                ],
+                              ),
                             ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: SizedBox(
+                          width: 220,
+                          child: AppDropdown<String>(
+                            label: S.category,
+                            value: _categoryFilter ?? 'All',
+                            items: [
+                              const DropdownMenuItem(
+                                  value: 'All', child: Text('All')),
+                              for (final category in expenseCategories)
+                                DropdownMenuItem(
+                                    value: category, child: Text(category)),
+                            ],
+                            onChanged: (value) => setState(() =>
+                                _categoryFilter =
+                                    value == 'All' ? null : value),
+                          ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: _filtered.isEmpty
+                      ),
+                      _filtered.isEmpty
                           ? const EmptyState(
                               message: 'No expenses for this month.',
                               icon: Icons.account_balance_wallet_outlined)
@@ -393,12 +427,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                 S.paymentMethod,
                                 'Status',
                                 'Description',
-                                S.actionLabel,
                               ],
-                              filterChips: expenseCategories,
-                              selectedFilter: _categoryFilter,
-                              onFilterChanged: (value) =>
-                                  setState(() => _categoryFilter = value),
                               exportFileName: 'yusra-expenses.csv',
                               rows: [
                                 for (final expense in _filtered)
@@ -417,7 +446,6 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                           'approved',
                                       (expense['description'] as String?) ??
                                           '—',
-                                      '',
                                     ],
                                     actions: [
                                       if (expense['receipt_path'] != null)
@@ -470,8 +498,8 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                   ),
                               ],
                             ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
           ],

@@ -6,6 +6,9 @@ import '../device_permissions.dart';
 import '../strings.dart';
 import '../theme/app_colors.dart';
 
+double _scannerDialogWidth(BuildContext context) =>
+    (MediaQuery.sizeOf(context).width - 48).clamp(240.0, 460.0).toDouble();
+
 /// Camera barcode scanner with a keyboard-wedge fallback for desktop cashiers.
 class BarcodeScanButton extends StatelessWidget {
   const BarcodeScanButton({
@@ -93,10 +96,12 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog>
 
   @override
   Widget build(BuildContext context) {
+    final height =
+        (MediaQuery.sizeOf(context).height - 96).clamp(280.0, 520.0).toDouble();
     return Dialog(
       child: SizedBox(
-        width: 460,
-        height: 520,
+        width: _scannerDialogWidth(context),
+        height: height,
         child: Column(
           children: [
             TabBar(

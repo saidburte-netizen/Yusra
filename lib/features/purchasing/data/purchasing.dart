@@ -24,6 +24,7 @@ class PurchaseOrder {
     this.tax = 0,
     this.total = 0,
     this.createdAt,
+    this.supplierName,
   });
 
   final String id;
@@ -38,6 +39,9 @@ class PurchaseOrder {
   final double tax;
   final double total;
   final DateTime? createdAt;
+
+  /// Populated from the `supplier:suppliers!(...)` join in `orders()`.
+  final String? supplierName;
 
   factory PurchaseOrder.fromJson(Map<String, dynamic> json) => PurchaseOrder(
         id: (json['id'] as String?) ?? '',
@@ -58,6 +62,10 @@ class PurchaseOrder {
         createdAt: json['created_at'] == null
             ? null
             : DateTime.tryParse(json['created_at'] as String),
+        supplierName: switch (json['supplier']) {
+          final Map supplier => supplier['name'] as String?,
+          _ => json['supplier_name'] as String?,
+        },
       );
 }
 
@@ -84,7 +92,7 @@ class PurchaseOrderItem {
   double get lineTotal => quantityOrdered * unitCost;
 
   factory PurchaseOrderItem.fromJson(Map<String, dynamic> json) {
-    final joined = json['medicines'];
+    final joined = json['medicine'] ?? json['medicines'];
     return PurchaseOrderItem(
       id: (json['id'] as String?) ?? '',
       poId: (json['po_id'] as String?) ?? '',
@@ -103,7 +111,9 @@ class PurchaseRepository {
   SupabaseClient get _db => SupabaseService.client;
 
   Future<List<PurchaseOrder>> orders(String? branchId) async {
-    var query = _db.from('purchase_orders').select('*, suppliers(name)');
+    var query = _db
+        .from('purchase_orders')
+        .select('*, supplier:suppliers!purchase_orders_supplier_id_fkey(name)');
     if (branchId != null) query = query.eq('branch_id', branchId);
     final rows = await query.order('created_at', ascending: false) as List;
     return rows.map((row) {
@@ -121,7 +131,8 @@ class PurchaseRepository {
   Future<List<PurchaseOrderItem>> items(String poId) async {
     final rows = await _db
         .from('purchase_order_items')
-        .select('*, medicines(name)')
+        .select(
+            '*, medicine:medicines!purchase_order_items_medicine_id_fkey(name)')
         .eq('po_id', poId)
         .order('id') as List;
     return rows

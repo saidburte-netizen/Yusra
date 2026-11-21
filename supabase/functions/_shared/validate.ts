@@ -20,16 +20,43 @@ export function isEmail(value: string): boolean {
   return value.length <= 254 && EMAIL_RE.test(value);
 }
 
+/** Only these two roles may call the privileged admin Edge Functions. */
+export const ADMIN_ROLES = ['super_admin', 'admin'] as const;
+
+export function isAdminRole(value: unknown): value is string {
+  return typeof value === 'string' &&
+    (ADMIN_ROLES as readonly string[]).includes(value);
+}
+
+/**
+ * Role carried in the caller's verified JWT app_metadata. A missing role is
+ * reported as null so callers can fall back to the authoritative profiles row.
+ */
+export function jwtAppRole(
+  user: { app_metadata?: Record<string, unknown> | null } | null | undefined,
+): string | null {
+  const role = user?.app_metadata?.role;
+  return typeof role === 'string' && role.length > 0 ? role : null;
+}
+
 /** Parse a bounded JSON object and reject arrays, scalars and unknown keys. */
 export async function readJsonObject(
   req: Request,
   allowedKeys: readonly string[],
 ): Promise<Record<string, unknown>> {
+  // Reject oversized bodies before buffering when the client declares one.
+  const declaredLength = Number(req.headers.get('content-length') ?? 0);
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+    throw new ValidationError('The request body is too large.');
+  }
+
   const raw = await req.text();
   if (raw.trim().length === 0) {
     throw new ValidationError('A JSON body is required.');
   }
-  if (raw.length > MAX_BODY_BYTES) {
+  // Count UTF-8 bytes, not UTF-16 code units, so multibyte names cannot slip
+  // past the limit.
+  if (new TextEncoder().encode(raw).length > MAX_BODY_BYTES) {
     throw new ValidationError('The request body is too large.');
   }
 
