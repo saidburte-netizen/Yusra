@@ -6,6 +6,7 @@ import 'app.dart';
 import 'core/auth/auth_controller.dart';
 import 'core/errors/error_reporter.dart';
 import 'core/permissions.dart';
+import 'core/state/app_cache.dart';
 import 'core/state/cache_policy.dart';
 import 'core/state/connectivity.dart';
 import 'core/state/invalidation.dart';

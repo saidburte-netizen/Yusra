@@ -19,7 +19,6 @@ import '../../../core/state/invalidation.dart';
 import '../../../core/strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets.dart';
-import '../../purchasing/data/purchasing.dart';
 import '../data/inventory_providers.dart';
 import '../data/reorder_models.dart';
 import '../widgets/responsive_ui.dart';

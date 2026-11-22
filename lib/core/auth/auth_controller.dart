@@ -207,8 +207,9 @@ class AuthController extends StateNotifier<AuthState> {
   /// Called by repository boundaries that receive a 401 / PGRST301 /
   /// "JWT expired" response. Idempotent: repeated calls keep one state.
   void markSessionExpired() {
-    if (state.sessionExpired && state.status == AuthStatus.unauthenticated)
+    if (state.sessionExpired && state.status == AuthStatus.unauthenticated) {
       return;
+    }
     state = AuthState.expired;
     _bump();
   }

@@ -8,7 +8,6 @@ import '../../features/sales/data/sales.dart';
 import '../../features/sales/screens/sales_screen.dart' show cashiersProvider;
 import '../../features/suppliers/data/suppliers.dart';
 import '../activity/activity.dart';
-import '../auth/auth_controller.dart';
 import '../nav/app_shell.dart';
 import 'app_cache.dart';
 import 'cache_policy.dart';

@@ -321,43 +321,35 @@ class _FakeStore implements CacheSnapshotStore {
 Override? _safeOverride(
     ProviderOrFamily provider, Map<ProviderOrFamily, int> counters) {
   void bump() => counters[provider] = (counters[provider] ?? 0) + 1;
+  if (_isFamily(provider)) return null;
   try {
-    if (_isFamily(provider)) return null;
-    if (provider is FutureProvider) {
-      return (provider as dynamic).overrideWith(
-        ((dynamic ref) {
-          bump();
-          return _defaultValue(provider);
-        }) as dynamic,
-      ) as Override;
+    if (provider is FutureProvider<dynamic>) {
+      return provider.overrideWith((ref) {
+        bump();
+        return _defaultValue(provider);
+      });
     }
-    if (provider is Provider) {
-      return (provider as dynamic).overrideWith(
-        ((dynamic ref) {
-          bump();
-          return _defaultValue(provider);
-        }) as dynamic,
-      ) as Override;
+    if (provider is Provider<dynamic>) {
+      return provider.overrideWith((ref) {
+        bump();
+        return _defaultValue(provider);
+      });
     }
-    if (provider is StreamProvider) {
-      return (provider as dynamic).overrideWith(
-        ((dynamic ref) {
-          bump();
-          return const Stream<Never>.empty();
-        }) as dynamic,
-      ) as Override;
+    if (provider is StreamProvider<dynamic>) {
+      return provider.overrideWith((ref) {
+        bump();
+        final value = _defaultValue(provider);
+        if (value is List) return Stream.value(value);
+        return const Stream<Never>.empty();
+      });
     }
-    if (provider is StateProvider) {
-      return (provider as dynamic).overrideWith(
-        ((dynamic ref) {
-          bump();
-          return _defaultValue(provider);
-        }) as dynamic,
-      ) as Override;
+    if (provider is StateProvider<dynamic>) {
+      return provider.overrideWith((ref) {
+        bump();
+        return _defaultValue(provider);
+      });
     }
-  } catch (e) {
-    // ignore: avoid_print
-    print('override failed for $provider: $e');
+  } catch (_) {
     return null;
   }
   return null;
@@ -371,7 +363,7 @@ bool _isFamily(ProviderOrFamily provider) {
 Object? _defaultValue(ProviderOrFamily provider) {
   final t = provider.runtimeType.toString();
   if (t.contains('ReceiptSettings')) {
-    return ReceiptSettings(
+    return const ReceiptSettings(
       pharmacyName: 'Y',
       tagline: '',
       address: '',

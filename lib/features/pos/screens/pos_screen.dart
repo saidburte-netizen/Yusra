@@ -19,7 +19,6 @@ import '../../../core/widgets.dart';
 import '../../../core/strings.dart';
 import '../../../core/state/async_state_view.dart';
 import '../../customers/data/customers.dart';
-import '../../prescriptions/data/prescriptions.dart';
 import '../../inventory/data/inventory_models.dart';
 import '../../inventory/data/inventory_providers.dart';
 import '../../sales/data/sales.dart';
