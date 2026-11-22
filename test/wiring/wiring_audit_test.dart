@@ -39,8 +39,6 @@ void main() {
         'backward/route_reachable|/inventory/adjustments',
         'backward/route_reachable|/inventory/movements',
         'backward/route_reachable|/inventory/stocktake',
-        'backward/schema_check_coverage|write_activity_log',
-        'backward/schema_check_coverage|rls_activity_read',
         'backward/dashboard_tile_reconciliation|grossProfitToday',
       ]),
     );
