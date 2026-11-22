@@ -23,20 +23,20 @@ Router gates routes through `moduleForLocation()` + `can(role, module, view)` (l
 
 | Route | Screen | Module (router) | Router allows | Bottom nav | Drawer | Dashboard quick actions | Code |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `/login` | LoginScreen | — | any authenticated | — | — | — | lib/core/router.dart:77 |
-| `/forgot-password` | ForgotPasswordScreen | — | any authenticated | — | — | — | lib/core/router.dart:81 |
-| `/reset-password` | ResetPasswordScreen | — | any authenticated | — | — | — | lib/core/router.dart:85 |
-| `/forbidden` | ForbiddenScreen | — | any authenticated | — | — | — | lib/core/router.dart:89 |
-| `/profile_error` | ProfileErrorScreen | — | any authenticated | — | — | — | lib/core/router.dart:93 |
-| `/dashboard` | DashboardScreen | dashboard | all 6 | all 6 | all 6 | — | lib/core/router.dart:100 |
-| `/profile` | ProfileScreen | — | any authenticated | — | — | — | lib/core/router.dart:104 |
-| `/expenses` | ExpensesScreen | expenses | super_admin, admin, accountant | — | super_admin, admin, accountant | — | lib/core/router.dart:108 |
-| `/reports` | ReportsScreen | reports | super_admin, admin, accountant | — | super_admin, admin, accountant | — | lib/core/router.dart:112 |
-| `/admin/users` | UsersScreen | users | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:116 |
-| `/admin/team` | TeamAccessScreen | teamAccess | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:120 |
-| `/admin/branches` | BranchesScreen | branches | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:124 |
-| `/admin/settings` | SettingsScreen | settings | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:128 |
-| `/admin/audit` | AuditScreen | audit | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:132 |
+| `/login` | LoginScreen | — | any authenticated | — | — | — | lib/core/router.dart:139 |
+| `/forgot-password` | ForgotPasswordScreen | — | any authenticated | — | — | — | lib/core/router.dart:143 |
+| `/reset-password` | ResetPasswordScreen | — | any authenticated | — | — | — | lib/core/router.dart:147 |
+| `/forbidden` | ForbiddenScreen | — | any authenticated | — | — | — | lib/core/router.dart:151 |
+| `/profile_error` | ProfileErrorScreen | — | any authenticated | — | — | — | lib/core/router.dart:155 |
+| `/dashboard` | DashboardScreen | dashboard | all 6 | all 6 | all 6 | — | lib/core/router.dart:162 |
+| `/profile` | ProfileScreen | — | any authenticated | — | — | — | lib/core/router.dart:166 |
+| `/expenses` | ExpensesScreen | expenses | super_admin, admin, accountant | — | super_admin, admin, accountant | — | lib/core/router.dart:170 |
+| `/reports` | ReportsScreen | reports | super_admin, admin, accountant | — | super_admin, admin, accountant | — | lib/core/router.dart:174 |
+| `/admin/users` | UsersScreen | users | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:178 |
+| `/admin/team` | TeamAccessScreen | teamAccess | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:182 |
+| `/admin/branches` | BranchesScreen | branches | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:186 |
+| `/admin/settings` | SettingsScreen | settings | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:190 |
+| `/admin/audit` | AuditScreen | audit | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:194 |
 | `/customers` | CustomersScreen | customers | super_admin, admin, pharmacist, cashier, accountant | — | super_admin, admin, pharmacist, cashier, accountant | — | lib/features/customers/customers_routes.dart:7 |
 | `/customers/:id` | CustomerDetailScreen | customers | super_admin, admin, pharmacist, cashier, accountant | — | — | — | lib/features/customers/customers_routes.dart:11 |
 | `/inventory` | StockOverviewScreen | medicines | all 6 | all 6 | all 6 | all 6 | lib/features/inventory/inventory_routes.dart:18 |
@@ -52,10 +52,10 @@ Router gates routes through `moduleForLocation()` + `can(role, module, view)` (l
 | `/inventory/stocktake` | StocktakeScreen | medicines | all 6 | — | — | — | lib/features/inventory/inventory_routes.dart:60 |
 | `/pos` | PosScreen | pos | super_admin, admin, pharmacist, cashier | super_admin, admin, pharmacist, cashier | super_admin, admin, pharmacist, cashier | super_admin, admin, pharmacist, cashier | lib/features/pos/pos_routes.dart:7 |
 | `/prescriptions` | PrescriptionsScreen | prescriptions | super_admin, admin, pharmacist, cashier | — | super_admin, admin, pharmacist, cashier | — | lib/features/prescriptions/prescriptions_routes.dart:7 |
-| `/purchasing/orders` | PurchaseOrdersScreen | purchaseOrders | super_admin, admin, pharmacist, store_keeper, accountant | store_keeper, accountant | super_admin, admin, pharmacist, store_keeper, accountant | super_admin, admin, pharmacist, store_keeper, accountant | lib/features/purchasing/purchasing_routes.dart:9 |
+| `/purchasing/orders` | PurchaseOrdersScreen | purchaseOrders | super_admin, admin, pharmacist, store_keeper, accountant | super_admin, admin, pharmacist, store_keeper, accountant | super_admin, admin, pharmacist, store_keeper, accountant | super_admin, admin, pharmacist, store_keeper, accountant | lib/features/purchasing/purchasing_routes.dart:9 |
 | `/purchasing/orders/new` | PurchaseOrderScreen | purchaseOrders | super_admin, admin, pharmacist, store_keeper, accountant | — | — | — | lib/features/purchasing/purchasing_routes.dart:13 |
 | `/purchasing/orders/:id` | PurchaseOrderScreen | purchaseOrders | super_admin, admin, pharmacist, store_keeper, accountant | — | — | — | lib/features/purchasing/purchasing_routes.dart:17 |
-| `/sales` | SalesScreen | sales | super_admin, admin, pharmacist, cashier, accountant | super_admin, admin, pharmacist, cashier, accountant | super_admin, admin, pharmacist, cashier, accountant | super_admin, admin, pharmacist, cashier, accountant | lib/features/sales/sales_routes.dart:9 |
+| `/sales` | SalesScreen | sales | super_admin, admin, pharmacist, cashier, accountant | cashier, accountant | super_admin, admin, pharmacist, cashier, accountant | super_admin, admin, pharmacist, cashier, accountant | lib/features/sales/sales_routes.dart:9 |
 | `/sales/returns` | ReturnsScreen | saleReturns | super_admin, admin, pharmacist | — | — | — | lib/features/sales/sales_routes.dart:15 |
 | `/sales/:id` | SaleDetailScreen | sales | super_admin, admin, pharmacist, cashier, accountant | — | — | — | lib/features/sales/sales_routes.dart:19 |
 | `/shifts` | ShiftsScreen | shifts | super_admin, admin, pharmacist, cashier, accountant | — | super_admin, admin, pharmacist, cashier, accountant | cashier, accountant | lib/features/shifts/shifts_routes.dart:7 |
@@ -74,9 +74,9 @@ Screen-level gates add a second check on some routes: `/inventory/opening-stock`
 | `/inventory/opening-stock` | Opening stock — Save all | create | `can(stock,edit)` — lib/features/inventory/screens/opening_stock_screen.dart:471 | `rpc.add_opening_stock` — supabase/migrations/0022_opening_stock_reorder.sql:143 | ALLOWED | ALLOWED | ALLOWED | HIDDEN | ALLOWED | HIDDEN |  |
 | `/inventory/opening-stock` | Opening stock — Import CSV | create | `can(stock,edit)` — lib/features/inventory/screens/opening_stock_screen.dart:442 | `rpc.add_opening_stock` — supabase/migrations/0022_opening_stock_reorder.sql:143 | ALLOWED | ALLOWED | ALLOWED | HIDDEN | ALLOWED | HIDDEN |  |
 | `/inventory` | Needs ordering (entry button) | navigate | `can(stock,edit)&&can(purchaseOrders,edit)` — lib/features/inventory/screens/stock_overview_screen.dart:70 | `rpc.create_draft_purchase_orders` — supabase/migrations/0022_opening_stock_reorder.sql:323 | ALLOWED | ALLOWED | ALLOWED | HIDDEN | ALLOWED | HIDDEN | extra purchaseOrders(edit) gate is stricter than the RPC |
-| `/inventory/needs-ordering` | Needs ordering — Create purchase order(s) | create | `can(stock,edit)` — lib/features/inventory/screens/needs_ordering_screen.dart:579 | `rpc.create_draft_purchase_orders` — supabase/migrations/0022_opening_stock_reorder.sql:323 | ALLOWED | ALLOWED | ALLOWED | HIDDEN | ALLOWED | HIDDEN |  |
-| `/inventory/needs-ordering` | Needs ordering — Export / share CSV | export | `can(stock,edit)` — lib/features/inventory/screens/needs_ordering_screen.dart:590 | `views.reorder` — supabase/migrations/0022_opening_stock_reorder.sql:263 | ALLOWED | ALLOWED | ALLOWED | HIDDEN† | ALLOWED | HIDDEN† |  |
-| `/inventory/needs-ordering` | Needs ordering — Export / share PDF | export | `can(stock,edit)` — lib/features/inventory/screens/needs_ordering_screen.dart:598 | `views.reorder` — supabase/migrations/0022_opening_stock_reorder.sql:263 | ALLOWED | ALLOWED | ALLOWED | HIDDEN† | ALLOWED | HIDDEN† |  |
+| `/inventory/needs-ordering` | Needs ordering — Create purchase order(s) | create | `can(stock,edit)` — lib/features/inventory/screens/needs_ordering_screen.dart:581 | `rpc.create_draft_purchase_orders` — supabase/migrations/0022_opening_stock_reorder.sql:323 | ALLOWED | ALLOWED | ALLOWED | HIDDEN | ALLOWED | HIDDEN |  |
+| `/inventory/needs-ordering` | Needs ordering — Export / share CSV | export | `can(stock,edit)` — lib/features/inventory/screens/needs_ordering_screen.dart:592 | `views.reorder` — supabase/migrations/0022_opening_stock_reorder.sql:263 | ALLOWED | ALLOWED | ALLOWED | HIDDEN† | ALLOWED | HIDDEN† |  |
+| `/inventory/needs-ordering` | Needs ordering — Export / share PDF | export | `can(stock,edit)` — lib/features/inventory/screens/needs_ordering_screen.dart:600 | `views.reorder` — supabase/migrations/0022_opening_stock_reorder.sql:263 | ALLOWED | ALLOWED | ALLOWED | HIDDEN† | ALLOWED | HIDDEN† |  |
 | `/inventory/medicines` | New medicine | create | `can(medicines,edit)` — lib/features/inventory/screens/medicines_screen.dart:68 | `rls.medicines.write` — supabase/migrations/0012_rls_hardening.sql:130 | ALLOWED | ALLOWED | ALLOWED | HIDDEN | HIDDEN | HIDDEN |  |
 | `/inventory/medicines` | Edit medicine | edit | `can(medicines,edit)` — lib/features/inventory/screens/medicines_screen.dart:205 | `rls.medicines.write` — supabase/migrations/0012_rls_hardening.sql:130 | ALLOWED | ALLOWED | ALLOWED | HIDDEN | HIDDEN | HIDDEN |  |
 | `/inventory/medicines` | Deactivate / reactivate medicine | deactivate | `can(medicines,edit)` — lib/features/inventory/screens/medicines_screen.dart:212 | `rls.medicines.write` — supabase/migrations/0012_rls_hardening.sql:130 | ALLOWED | ALLOWED | ALLOWED | HIDDEN | HIDDEN | HIDDEN |  |
@@ -98,7 +98,7 @@ Screen-level gates add a second check on some routes: `/inventory/opening-stock`
 | `/purchasing/orders/:id` | Print PO / GRN | print | `can(purchaseOrders,view)` — lib/features/purchasing/screens/purchase_order_screen.dart:401 | `rls.purchaseOrders.read` — supabase/migrations/0012_rls_hardening.sql:71 | ALLOWED | ALLOWED | ALLOWED | HIDDEN† | ALLOWED | ALLOWED |  |
 | `/pos` | Create sale / charge cart | create | `can(pos,edit)` — lib/features/pos/screens/pos_screen.dart:484 | `rpc.create_sale` — supabase/migrations/0007_functions.sql:189 | ALLOWED | ALLOWED | ALLOWED | ALLOWED | HIDDEN | HIDDEN |  |
 | `/shifts` | Start / close shift | create | `can(pos,edit)` — lib/features/shifts/screens/shifts_screen.dart:256 | `rpc.open_shift` — supabase/migrations/0007_functions.sql:129 | ALLOWED | ALLOWED | ALLOWED | ALLOWED | HIDDEN | HIDDEN |  |
-| `/shifts` | X report / Z report (print) | print | `can(pos,edit)` — lib/features/shifts/screens/shifts_screen.dart:308 | `rpc.shift_expected_cash` — supabase/migrations/0019_hardening_fixes.sql:536 | ALLOWED | ALLOWED | ALLOWED | ALLOWED | HIDDEN† | HIDDEN† |  |
+| `/shifts` | X report / Z report (print) | print | `can(pos,edit)` — lib/features/shifts/screens/shifts_screen.dart:310 | `rpc.shift_expected_cash` — supabase/migrations/0019_hardening_fixes.sql:536 | ALLOWED | ALLOWED | ALLOWED | ALLOWED | HIDDEN† | HIDDEN† |  |
 | `/sales` | Reprint receipt | print | `can(sales,view)` — lib/features/sales/screens/sales_screen.dart:353 | `rls.sales.read` — supabase/migrations/0012_rls_hardening.sql:95 | ALLOWED | ALLOWED | ALLOWED | ALLOWED | HIDDEN | ALLOWED |  |
 | `/sales` | Void sale | deactivate | `can(saleReturns,edit)` — lib/features/sales/screens/sales_screen.dart:124 | `rpc.void_sale` — supabase/migrations/0013_rpc_gaps.sql:11 | ALLOWED | ALLOWED | ALLOWED | HIDDEN | HIDDEN | HIDDEN |  |
 | `/sales/:id` | Process partial return | create | `can(saleReturns,edit)` — lib/features/sales/screens/sale_detail_screen.dart:240 | `rpc.process_sale_return` — supabase/migrations/0013_rpc_gaps.sql:49 | ALLOWED | ALLOWED | ALLOWED | HIDDEN | HIDDEN | HIDDEN |  |
@@ -112,14 +112,14 @@ Screen-level gates add a second check on some routes: `/inventory/opening-stock`
 | `/expenses` | Edit / delete expense | edit | `can(expenses,edit)` — lib/features/expenses/expenses_screen.dart:485 | `rls.expenses.write` — supabase/migrations/0012_rls_hardening.sql:165 | ALLOWED | ALLOWED | HIDDEN | HIDDEN | HIDDEN | ALLOWED |  |
 | `/expenses` | Approve / reject expense | approve | `role(super_admin,admin,accountant)` — lib/features/expenses/expenses_screen.dart:465 | `rpc.set_expense_status` — supabase/migrations/0019_hardening_fixes.sql:467 | ALLOWED | ALLOWED | HIDDEN | HIDDEN | HIDDEN | ALLOWED |  |
 | `/expenses` | Upload expense receipt | create | `can(expenses,edit)` — lib/features/expenses/expenses_screen.dart:632 | `storage.receipts.write` — supabase/migrations/0019_hardening_fixes.sql:577 | ALLOWED | ALLOWED | HIDDEN | HIDDEN† | HIDDEN | ALLOWED |  |
-| `/reports` | Export report PDF / CSV | export | `can(reports,view)` — lib/features/reports/reports_screen.dart:559 | `views.reports` — supabase/migrations/0014_report_views.sql:15 | ALLOWED | ALLOWED | HIDDEN† | HIDDEN† | HIDDEN† | ALLOWED |  |
+| `/reports` | Export report PDF / CSV | export | `can(reports,view)` — lib/features/reports/reports_screen.dart:565 | `views.reports` — supabase/migrations/0014_report_views.sql:15 | ALLOWED | ALLOWED | HIDDEN† | HIDDEN† | HIDDEN† | ALLOWED |  |
 | `/admin/users` | Create user | create | `can(users,edit)` — lib/features/admin/users_screen.dart:368 | `edge.admin-create-user` — supabase/functions/admin-create-user/index.ts:16 | ALLOWED | ALLOWED | HIDDEN | HIDDEN | HIDDEN | HIDDEN |  |
 | `/admin/users` | Edit / reset password / deactivate user | edit | `can(users,edit)` — lib/features/admin/users_screen.dart:487 | `rpc.set_user_access` — supabase/migrations/0015_team_management.sql:15 | ALLOWED | ALLOWED | HIDDEN | HIDDEN | HIDDEN | HIDDEN |  |
 | `/admin/users` | Reset user password | edit | `can(users,edit)` — lib/features/admin/users_screen.dart:487 | `edge.admin-reset-password` — supabase/functions/admin-reset-password/index.ts:1 | ALLOWED | ALLOWED | HIDDEN | HIDDEN | HIDDEN | HIDDEN |  |
-| `/admin/team` | Share admin access | edit | `can(teamAccess,edit)` — lib/features/admin/team_access_screen.dart:274 | `rpc.share_admin_access` — supabase/migrations/0015_team_management.sql:98 | ALLOWED | HIDDEN† | HIDDEN | HIDDEN | HIDDEN | HIDDEN |  |
+| `/admin/team` | Share admin access | edit | `can(teamAccess,edit)` — lib/features/admin/team_access_screen.dart:273 | `rpc.share_admin_access` — supabase/migrations/0015_team_management.sql:98 | ALLOWED | HIDDEN† | HIDDEN | HIDDEN | HIDDEN | HIDDEN |  |
 | `/admin/branches` | Create / edit / deactivate branch | create | `can(branches,edit)` — lib/features/admin/branches_screen.dart:178 | `rls.branches.write` — supabase/migrations/0012_rls_hardening.sql:146 | ALLOWED | HIDDEN† | HIDDEN | HIDDEN | HIDDEN | HIDDEN |  |
-| `/admin/settings` | Save setting / upload branding | edit | `can(settings,edit)` — lib/features/admin/settings_screen.dart:283 | `rls.settings.write` — supabase/migrations/0012_rls_hardening.sql:142 | ALLOWED | ALLOWED | HIDDEN | HIDDEN | HIDDEN | HIDDEN |  |
-| `/admin/settings` | Publish settings | approve | `can(settings,edit)` — lib/features/admin/settings_screen.dart:297 | `rpc.publish_app_settings` — supabase/migrations/0015_team_management.sql:140 | ALLOWED | ALLOWED | HIDDEN | HIDDEN | HIDDEN | HIDDEN |  |
+| `/admin/settings` | Save setting / upload branding | edit | `can(settings,edit)` — lib/features/admin/settings_screen.dart:284 | `rls.settings.write` — supabase/migrations/0012_rls_hardening.sql:142 | ALLOWED | ALLOWED | HIDDEN | HIDDEN | HIDDEN | HIDDEN |  |
+| `/admin/settings` | Publish settings | approve | `can(settings,edit)` — lib/features/admin/settings_screen.dart:298 | `rpc.publish_app_settings` — supabase/migrations/0015_team_management.sql:140 | ALLOWED | ALLOWED | HIDDEN | HIDDEN | HIDDEN | HIDDEN |  |
 | `/admin/audit` | Export audit CSV | export | `can(audit,view)` — lib/features/admin/audit_screen.dart:204 | `rls.activity.read` — supabase/migrations/0023_review_fixes.sql:350 | ALLOWED | ALLOWED | HIDDEN† | HIDDEN† | HIDDEN† | HIDDEN† |  |
 | `/admin/audit` | Approve activity correction | approve | `role(super_admin)` — lib/features/admin/audit_screen.dart:233 | `rpc.approve_activity_correction` — supabase/migrations/0017_activity_audit.sql:113 | ALLOWED | HIDDEN | HIDDEN | HIDDEN | HIDDEN | HIDDEN |  |
 | `/admin/audit` | Request activity correction | edit | `can(audit,view)&&role(admin)` — lib/features/admin/audit_screen.dart:240 | `rpc.request_activity_correction` — supabase/migrations/0019_hardening_fixes.sql:158 | HIDDEN† | ALLOWED | HIDDEN† | HIDDEN† | HIDDEN† | HIDDEN† | DB also allows the activity actor on any role |
@@ -235,19 +235,19 @@ Unmapped database objects (must be `internal` to be ignored by the test):
 
 ### DB permits an action the UI never exposes
 
-- stock.needsOrdering.exportCsv / cashier: views.reorder supabase/migrations/0022_opening_stock_reorder.sql:263 allows cashier but UI lib/features/inventory/screens/needs_ordering_screen.dart:590 hides "Needs ordering — Export / share CSV"
-- stock.needsOrdering.exportCsv / accountant: views.reorder supabase/migrations/0022_opening_stock_reorder.sql:263 allows accountant but UI lib/features/inventory/screens/needs_ordering_screen.dart:590 hides "Needs ordering — Export / share CSV"
-- stock.needsOrdering.exportPdf / cashier: views.reorder supabase/migrations/0022_opening_stock_reorder.sql:263 allows cashier but UI lib/features/inventory/screens/needs_ordering_screen.dart:598 hides "Needs ordering — Export / share PDF"
-- stock.needsOrdering.exportPdf / accountant: views.reorder supabase/migrations/0022_opening_stock_reorder.sql:263 allows accountant but UI lib/features/inventory/screens/needs_ordering_screen.dart:598 hides "Needs ordering — Export / share PDF"
+- stock.needsOrdering.exportCsv / cashier: views.reorder supabase/migrations/0022_opening_stock_reorder.sql:263 allows cashier but UI lib/features/inventory/screens/needs_ordering_screen.dart:592 hides "Needs ordering — Export / share CSV"
+- stock.needsOrdering.exportCsv / accountant: views.reorder supabase/migrations/0022_opening_stock_reorder.sql:263 allows accountant but UI lib/features/inventory/screens/needs_ordering_screen.dart:592 hides "Needs ordering — Export / share CSV"
+- stock.needsOrdering.exportPdf / cashier: views.reorder supabase/migrations/0022_opening_stock_reorder.sql:263 allows cashier but UI lib/features/inventory/screens/needs_ordering_screen.dart:600 hides "Needs ordering — Export / share PDF"
+- stock.needsOrdering.exportPdf / accountant: views.reorder supabase/migrations/0022_opening_stock_reorder.sql:263 allows accountant but UI lib/features/inventory/screens/needs_ordering_screen.dart:600 hides "Needs ordering — Export / share PDF"
 - medicines.image / store_keeper: storage.medicine-images.write supabase/migrations/0019_hardening_fixes.sql:617 allows store_keeper but UI lib/features/inventory/screens/medicines_screen.dart:68 hides "Upload medicine image"
 - po.print / cashier: rls.purchaseOrders.read supabase/migrations/0012_rls_hardening.sql:71 allows cashier but UI lib/features/purchasing/screens/purchase_order_screen.dart:401 hides "Print PO / GRN"
-- pos.shiftReport / store_keeper: rpc.shift_expected_cash supabase/migrations/0019_hardening_fixes.sql:536 allows store_keeper but UI lib/features/shifts/screens/shifts_screen.dart:308 hides "X report / Z report (print)"
-- pos.shiftReport / accountant: rpc.shift_expected_cash supabase/migrations/0019_hardening_fixes.sql:536 allows accountant but UI lib/features/shifts/screens/shifts_screen.dart:308 hides "X report / Z report (print)"
+- pos.shiftReport / store_keeper: rpc.shift_expected_cash supabase/migrations/0019_hardening_fixes.sql:536 allows store_keeper but UI lib/features/shifts/screens/shifts_screen.dart:310 hides "X report / Z report (print)"
+- pos.shiftReport / accountant: rpc.shift_expected_cash supabase/migrations/0019_hardening_fixes.sql:536 allows accountant but UI lib/features/shifts/screens/shifts_screen.dart:310 hides "X report / Z report (print)"
 - expenses.receipt / cashier: storage.receipts.write supabase/migrations/0019_hardening_fixes.sql:577 allows cashier but UI lib/features/expenses/expenses_screen.dart:632 hides "Upload expense receipt"
-- reports.export / pharmacist: views.reports supabase/migrations/0014_report_views.sql:15 allows pharmacist but UI lib/features/reports/reports_screen.dart:559 hides "Export report PDF / CSV"
-- reports.export / cashier: views.reports supabase/migrations/0014_report_views.sql:15 allows cashier but UI lib/features/reports/reports_screen.dart:559 hides "Export report PDF / CSV"
-- reports.export / store_keeper: views.reports supabase/migrations/0014_report_views.sql:15 allows store_keeper but UI lib/features/reports/reports_screen.dart:559 hides "Export report PDF / CSV"
-- team.share / admin: rpc.share_admin_access supabase/migrations/0015_team_management.sql:98 allows admin but UI lib/features/admin/team_access_screen.dart:274 hides "Share admin access"
+- reports.export / pharmacist: views.reports supabase/migrations/0014_report_views.sql:15 allows pharmacist but UI lib/features/reports/reports_screen.dart:565 hides "Export report PDF / CSV"
+- reports.export / cashier: views.reports supabase/migrations/0014_report_views.sql:15 allows cashier but UI lib/features/reports/reports_screen.dart:565 hides "Export report PDF / CSV"
+- reports.export / store_keeper: views.reports supabase/migrations/0014_report_views.sql:15 allows store_keeper but UI lib/features/reports/reports_screen.dart:565 hides "Export report PDF / CSV"
+- team.share / admin: rpc.share_admin_access supabase/migrations/0015_team_management.sql:98 allows admin but UI lib/features/admin/team_access_screen.dart:273 hides "Share admin access"
 - branches.create / admin: rls.branches.write supabase/migrations/0012_rls_hardening.sql:146 allows admin but UI lib/features/admin/branches_screen.dart:178 hides "Create / edit / deactivate branch"
 - audit.export / pharmacist: rls.activity.read supabase/migrations/0023_review_fixes.sql:350 allows pharmacist but UI lib/features/admin/audit_screen.dart:204 hides "Export audit CSV"
 - audit.export / cashier: rls.activity.read supabase/migrations/0023_review_fixes.sql:350 allows cashier but UI lib/features/admin/audit_screen.dart:204 hides "Export audit CSV"

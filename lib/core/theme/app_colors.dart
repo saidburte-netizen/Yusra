@@ -42,6 +42,24 @@ abstract final class AppColors {
     stops: [0.0, 0.55, 1.0],
   );
 
+  // Dark theme tokens
+  static const Color darkBase = Color(0xFF1A0712);
+  static const Color darkSurface = Color(0xFF2D0A1E);
+  static const Color darkElevated = Color(0xFF4A1230);
+  static const Color darkCard = Color(0xFF351026);
+  static const Color darkPink = Color(0xFFE85BA3);
+  static const Color darkGold = Color(0xFFD9B13B);
+  static const Color darkText = Color(0xFFF7EDF2);
+  static const Color darkMuted = Color(0xFFD8B9C7);
+  static const Color darkBorder = Color(0xFF6A2A48);
+
+  static const LinearGradient darkPageGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFF1A0712), Color(0xFF240918), Color(0xFF1A0712)],
+    stops: [0.0, 0.55, 1.0],
+  );
+
   static const LinearGradient primaryGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,

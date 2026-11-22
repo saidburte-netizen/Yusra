@@ -115,8 +115,10 @@ class SecondaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = color ?? AppColors.gold500;
-    final fg = color ?? AppColors.plum800;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final borderColor =
+        color ?? (dark ? AppColors.darkGold : AppColors.gold500);
+    final fg = color ?? (dark ? AppColors.darkGold : AppColors.plum800);
     return SizedBox(
       width: width ?? double.infinity,
       height: 48,

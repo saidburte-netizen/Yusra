@@ -623,6 +623,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     runSpacing: 10,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
+                      const SizedBox(
+                        width: 240,
+                        child: ThemeModeToggle(compact: true),
+                      ),
                       SizedBox(
                         width: rangeWidth,
                         child: Theme(
@@ -736,14 +740,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ],
                       ),
                     ),
-                  if (_loading)
+                  if (_loading && _data == null)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 48),
                       child: Center(child: CircularProgressIndicator()),
                     )
-                  else if (_error != null)
+                  else if (_error != null && _data == null)
                     ErrorState(message: _error!, onRetry: _load)
-                  else
+                  else if (_data != null) ...[
+                    if (_loading)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 12),
+                        child: LinearProgressIndicator(minHeight: 3),
+                      ),
                     _DashboardBody(
                       data: _data!,
                       role: role,
@@ -752,6 +761,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       count: _countOrDash,
                       range: _range,
                     ),
+                  ],
                 ],
               ),
             ),
@@ -1037,7 +1047,8 @@ class _DashboardBody extends StatelessWidget {
                                   vertical: 14,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: AppColors.white,
+                                  color:
+                                      Theme.of(context).colorScheme.onPrimary,
                                   borderRadius: BorderRadius.circular(14),
                                   border: Border.all(
                                     color: AppColors.gold300.withOpacity(0.55),
@@ -1057,7 +1068,10 @@ class _DashboardBody extends StatelessWidget {
                                       width: 38,
                                       height: 38,
                                       decoration: BoxDecoration(
-                                        color: AppColors.pink50,
+                                        color: Theme.of(context).brightness ==
+                                                Brightness.dark
+                                            ? AppColors.darkElevated
+                                            : AppColors.pink50,
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Icon(

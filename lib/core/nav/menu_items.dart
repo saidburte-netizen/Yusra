@@ -102,13 +102,6 @@ const List<MenuItem> allMenuItems = [
       module: Modules.audit),
 ];
 
-const List<String> _preferredBottomNav = [
-  '/dashboard',
-  '/pos',
-  '/inventory',
-  '/sales',
-];
-
 List<MenuItem> menuFor(AppRole role) => allMenuItems
     .where((item) => can(role, item.module, PermAction.view))
     .toList();
@@ -123,20 +116,9 @@ String homeFor(AppRole? role) => switch (role) {
       AppRole.admin || AppRole.superAdmin || null => '/dashboard',
     };
 
-/// Phones get the four most used permitted items; the rest live in More.
-List<MenuItem> bottomNavItems(AppRole role) {
-  final permitted = menuFor(role);
-  final selected = <MenuItem>[];
-  for (final path in _preferredBottomNav) {
-    final matches = permitted.where((item) => item.path == path).toList();
-    if (matches.isNotEmpty) selected.add(matches.first);
-  }
-  for (final item in permitted) {
-    if (selected.length >= 4) break;
-    if (!selected.contains(item)) selected.add(item);
-  }
-  return selected.take(4).toList();
-}
+/// Primary navigation destinations for a role. Bottom nav and drawer use the
+/// same destinations to keep navigation consistent.
+List<MenuItem> bottomNavItems(AppRole role) => menuFor(role);
 
 String titleForLocation(String location) {
   for (final item in allMenuItems) {

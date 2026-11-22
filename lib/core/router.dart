@@ -32,6 +32,68 @@ import 'strings.dart';
 import 'theme/app_colors.dart';
 import 'widgets.dart';
 
+CustomTransitionPage<void> _fadeSlidePage({
+  required GoRouterState state,
+  required Widget child,
+}) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    transitionDuration: const Duration(milliseconds: 220),
+    reverseTransitionDuration: const Duration(milliseconds: 200),
+    child: child,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0.03, 0),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+RouteBase _withTransition(RouteBase route) {
+  if (route is GoRoute) {
+    final builder = route.builder;
+    final pageBuilder = route.pageBuilder;
+    // ignore: prefer_const_declarations
+    final goRoute = GoRoute.new;
+    return goRoute(
+      path: route.path,
+      name: route.name,
+      parentNavigatorKey: route.parentNavigatorKey,
+      redirect: route.redirect,
+      routes: route.routes.map(_withTransition).toList(),
+      pageBuilder: pageBuilder ??
+          (builder == null
+              ? null
+              : (context, state) =>
+                  _fadeSlidePage(state: state, child: builder(context, state))),
+    );
+  }
+  if (route is ShellRoute) {
+    return ShellRoute(
+      navigatorKey: route.navigatorKey,
+      builder: route.builder,
+      pageBuilder: route.pageBuilder,
+      routes: route.routes.map(_withTransition).toList(),
+    );
+  }
+  return route;
+}
+
+List<RouteBase> _withTransitions(List<RouteBase> routes) =>
+    routes.map(_withTransition).toList();
+
 /// The single router for the whole app. A screens own the routes under
 /// /dashboard, /admin, /expenses, /reports and /profile; every other feature
 /// contributes its own route list, which Agent A only wires in here.
@@ -72,7 +134,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
     ),
-    routes: [
+    routes: _withTransitions([
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),
@@ -142,7 +204,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ...suppliersRoutes,
         ],
       ),
-    ],
+    ]),
   );
 });
 

@@ -166,7 +166,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 children: [
                   CircleAvatar(
                     radius: 42,
-                    backgroundColor: AppColors.pink50,
+                    backgroundColor:
+                        Theme.of(context).brightness == Brightness.dark
+                            ? AppColors.darkElevated
+                            : AppColors.pink50,
                     foregroundColor: AppColors.pink600,
                     backgroundImage: profile.avatarUrl != null
                         ? NetworkImage(profile.avatarUrl!)

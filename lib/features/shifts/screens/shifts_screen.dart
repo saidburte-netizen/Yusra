@@ -273,7 +273,9 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
               data: (shift) {
                 if (shift == null) return const SizedBox.shrink();
                 return Card(
-                  color: AppColors.pink50,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? AppColors.darkElevated
+                      : AppColors.pink50,
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(

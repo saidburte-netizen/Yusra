@@ -109,9 +109,12 @@ void main() {
       expect(superAdmin.length, allMenuItems.length);
     });
 
-    test('bottom navigation never exceeds four items', () {
+    test('bottom navigation lists same destinations as drawer per role', () {
       for (final role in AppRole.values) {
-        expect(bottomNavItems(role).length, lessThanOrEqualTo(4));
+        final menuPaths = menuFor(role).map((i) => i.path).toList();
+        final bottomPaths = bottomNavItems(role).map((i) => i.path).toList();
+        expect(bottomPaths, equals(menuPaths),
+            reason: 'role ${role.name} bottom nav must match drawer');
       }
       expect(bottomNavItems(AppRole.cashier).first.path, '/dashboard');
     });
