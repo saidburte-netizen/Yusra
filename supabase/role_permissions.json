@@ -1334,7 +1334,7 @@
       "label": "Needs ordering — Create purchase order(s)",
       "kind": "create",
       "gate": "can(stock,edit)",
-      "evidence": "lib/features/inventory/screens/needs_ordering_screen.dart:580",
+      "evidence": "lib/features/inventory/screens/needs_ordering_screen.dart:579",
       "db_operation": "rpc.create_draft_purchase_orders",
       "ui_roles": [
         "super_admin",
@@ -1348,7 +1348,7 @@
       "label": "Needs ordering — Export / share CSV",
       "kind": "export",
       "gate": "can(stock,edit)",
-      "evidence": "lib/features/inventory/screens/needs_ordering_screen.dart:591",
+      "evidence": "lib/features/inventory/screens/needs_ordering_screen.dart:590",
       "db_operation": "views.reorder",
       "ui_roles": [
         "super_admin",
@@ -1362,7 +1362,7 @@
       "label": "Needs ordering — Export / share PDF",
       "kind": "export",
       "gate": "can(stock,edit)",
-      "evidence": "lib/features/inventory/screens/needs_ordering_screen.dart:599",
+      "evidence": "lib/features/inventory/screens/needs_ordering_screen.dart:598",
       "db_operation": "views.reorder",
       "ui_roles": [
         "super_admin",
@@ -1634,7 +1634,7 @@
       "label": "Create sale / charge cart",
       "kind": "create",
       "gate": "can(pos,edit)",
-      "evidence": "lib/features/pos/screens/pos_screen.dart:485",
+      "evidence": "lib/features/pos/screens/pos_screen.dart:484",
       "db_operation": "rpc.create_sale",
       "ui_roles": [
         "super_admin",
