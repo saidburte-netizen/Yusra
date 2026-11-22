@@ -1,0 +1,66 @@
+[
+  {
+    "key": "super_admin",
+    "role": "super_admin",
+    "branch": "A",
+    "local": "superadmin",
+    "password": "UatDemo!2345",
+    "fullName": "UAT Super Admin"
+  },
+  {
+    "key": "admin",
+    "role": "admin",
+    "branch": "A",
+    "local": "admin",
+    "password": "UatDemo!2345",
+    "fullName": "UAT Admin"
+  },
+  {
+    "key": "pharmacist",
+    "role": "pharmacist",
+    "branch": "A",
+    "local": "pharmacist",
+    "password": "UatDemo!2345",
+    "fullName": "UAT Pharmacist"
+  },
+  {
+    "key": "cashier",
+    "role": "cashier",
+    "branch": "A",
+    "local": "cashier",
+    "password": "UatDemo!2345",
+    "fullName": "UAT Cashier"
+  },
+  {
+    "key": "store_keeper",
+    "role": "store_keeper",
+    "branch": "A",
+    "local": "storekeeper",
+    "password": "UatDemo!2345",
+    "fullName": "UAT Store Keeper"
+  },
+  {
+    "key": "accountant",
+    "role": "accountant",
+    "branch": "A",
+    "local": "accountant",
+    "password": "UatDemo!2345",
+    "fullName": "UAT Accountant"
+  },
+  {
+    "key": "admin_other",
+    "role": "admin",
+    "branch": "B",
+    "local": "adminother",
+    "password": "UatDemo!2345",
+    "fullName": "UAT Other-branch Admin"
+  },
+  {
+    "key": "cashier_b",
+    "role": "cashier",
+    "branch": "B",
+    "local": "cashierb",
+    "password": "UatDemo!2345",
+    "fullName": "UAT Other-branch Cashier"
+  }
+]
