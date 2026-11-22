@@ -56,6 +56,51 @@ void main() {
     await PostgrestProxy.stop();
   });
 
+  /// A branch-scoped read is safe when it returns nothing OR the database
+  /// refuses it outright with 42501.
+  Future<void> expectEmptyOrForbidden(
+      String label, Future<List<Map<String, dynamic>>> Function() query) async {
+    try {
+      final rows = await query();
+      expect(rows, isEmpty, reason: '[$label] must not see branch B rows');
+    } on PostgrestException catch (error) {
+      expect(error.code, '42501',
+          reason: '[$label] only 42501 is an acceptable refusal');
+    }
+  }
+
+  Future<void> expectForbidden(
+      String label, Future<void> Function() operation) async {
+    try {
+      await operation();
+      fail('[$label] expected 42501, but the call succeeded');
+    } on PostgrestException catch (error) {
+      expect(error.code, '42501', reason: '[$label] expected 42501');
+    }
+  }
+
+  /// Test-only fixture escape hatch for rows that RPC validation intentionally
+  /// refuses (an already-expired batch). Never used by application code.
+  Future<void> runSqlFixture(String label, String sql) async {
+    final result = await Process.run(
+      'bash',
+      [
+        'tool/ci_psql.sh',
+        '-d',
+        'postgres',
+        '-v',
+        'ON_ERROR_STOP=1',
+        '-Atc',
+        sql,
+      ],
+      workingDirectory: Directory.current.path,
+    );
+    if (result.exitCode != 0) {
+      fail('[$label] exit=${result.exitCode}\n'
+          'stdout=${result.stdout}\nstderr=${result.stderr}');
+    }
+  }
+
   group('e2e-api', () {
     test('golden pharmacy flow, reports, dashboard and role rules', () async {
       final runId = E2eEnv.runId;
@@ -1086,5 +1131,295 @@ void main() {
 
       stdout.writeln('[e2e] ALL opening-stock/reorder CHECKS PASSED');
     }, timeout: const Timeout(Duration(minutes: 6)));
+
+    test('cross-branch isolation for every branch-scoped object', () async {
+      final runId = E2eEnv.runId;
+      stdout.writeln('[e2e] cross-branch isolation (0023)');
+
+      final adminId = await createUserViaSql(
+          role: 'super_admin', branchId: '', label: 'isolation-admin');
+      useUser(adminId);
+      final admin = SupabaseService.client;
+      final inventory = InventoryRepository();
+      final sales = SalesRepository();
+
+      final branchAId = newUuid();
+      final branchBId = newUuid();
+      await api(
+          'create isolation branches',
+          () => admin.from('branches').insert([
+                {
+                  'id': branchAId,
+                  'name': 'E2E Isolation A $runId',
+                  'code': 'E2EIA$runId',
+                },
+                {
+                  'id': branchBId,
+                  'name': 'E2E Isolation B $runId',
+                  'code': 'E2EIB$runId',
+                },
+              ]));
+
+      final pharmacistA = await createUserViaSql(
+          role: 'pharmacist', branchId: branchAId, label: 'isolation-ph');
+      final storeKeeperA = await createUserViaSql(
+          role: 'store_keeper', branchId: branchAId, label: 'isolation-keeper');
+      final cashierA = await createUserViaSql(
+          role: 'cashier', branchId: branchAId, label: 'isolation-cashier');
+      final accountantA = await createUserViaSql(
+          role: 'accountant',
+          branchId: branchAId,
+          label: 'isolation-accountant');
+
+      final supplierId = newUuid();
+      await api(
+          'isolation supplier',
+          () => admin.from('suppliers').insert({
+                'id': supplierId,
+                'name': 'E2E Isolation Supplier $runId',
+              }));
+      final medicineId = newUuid();
+      await api(
+          'isolation medicine',
+          () => admin.from('medicines').insert({
+                'id': medicineId,
+                'sku': 'ISOL$runId',
+                'name': 'E2E Isolation Medicine $runId',
+                'unit': 'Tablet',
+                'cost_price': 5.0,
+                'selling_price': 10.0,
+                'reorder_level': 1000,
+                'is_controlled': false,
+              }));
+
+      final futureExpiry = DateTime.now().toUtc().add(const Duration(days: 10));
+      // Stock and money tables are RPC-only by design, so the branch B fixture
+      // must use the same SECURITY DEFINER entry points as the app.
+      await api(
+          'branch B stock',
+          () => inventory.addStock(
+                branchId: branchBId,
+                medicineId: medicineId,
+                batchNo: 'ISO-B-$runId',
+                expiry: futureExpiry,
+                quantity: 7,
+                cost: 5.0,
+              ));
+      await api(
+          'branch B expired stock seed',
+          () => inventory.addStock(
+                branchId: branchBId,
+                medicineId: medicineId,
+                batchNo: 'ISO-B-EXPIRED-$runId',
+                expiry: futureExpiry,
+                quantity: 2,
+                cost: 5.0,
+              ));
+      await runSqlFixture(
+        'branch B expired stock fixture',
+        "update public.stock_batches set expiry_date = '${_dateIn(-2)}' "
+            "where branch_id = '$branchBId' "
+            "  and batch_no = 'ISO-B-EXPIRED-$runId';",
+      );
+      await api(
+          'branch A stock',
+          () => inventory.addStock(
+                branchId: branchAId,
+                medicineId: medicineId,
+                batchNo: 'ISO-A-$runId',
+                expiry: futureExpiry,
+                quantity: 9,
+                cost: 5.0,
+              ));
+
+      final isolationShift =
+          await api('branch B shift', () => sales.openShift(branchBId, 0));
+      expect(isolationShift, isNotNull);
+      await api(
+          'branch B sale',
+          () => sales.createSale(
+                branchId: branchBId,
+                shiftId: isolationShift!.id,
+                customerId: null,
+                prescriptionId: null,
+                items: [
+                  {'medicine_id': medicineId, 'quantity': 2},
+                ],
+                payments: [
+                  {'method': 'cash', 'amount': 30.0},
+                ],
+                discount: 0.0,
+              ));
+      await api(
+          'close branch B shift',
+          () =>
+              sales.closeShift(isolationShift!.id, 30, 'E2E isolation close'));
+      await api(
+          'branch B expense',
+          () => admin.from('expenses').insert({
+                'branch_id': branchBId,
+                'category': 'E2E isolation',
+                'amount': 3.0,
+                'expense_date': _dateIn(0),
+              }));
+      await api(
+          'branch B purchase order',
+          () => admin.from('purchase_orders').insert({
+                'po_no': 'E2EISO-PO-$runId',
+                'branch_id': branchBId,
+                'supplier_id': supplierId,
+                'status': 'ordered',
+                'order_date': _dateIn(0),
+                'total': 50.0,
+              }));
+
+      const branchTables = [
+        'profiles',
+        'doc_counters',
+        'audit_logs',
+        'activity_log',
+        'stock_batches',
+        'stock_movements',
+        'purchase_orders',
+        'shifts',
+        'sales',
+        'sale_returns',
+        'expenses',
+        'prescriptions',
+      ];
+      const stockViews = [
+        'v_stock_summary',
+        'v_low_stock',
+        'v_expiring_batches',
+        'v_daily_sales',
+      ];
+      const reportViews = [
+        'v_report_sales_by_day',
+        'v_report_sales_by_cashier',
+        'v_report_sales_payment',
+        'v_report_sales_by_medicine',
+        'v_report_profit',
+        'v_report_stock_valuation',
+        'v_report_expiry_losses',
+        'v_report_purchases_supplier',
+        'v_report_expenses',
+        'v_report_net_profit',
+        'v_report_shift_variance',
+        'v_report_controlled_register',
+      ];
+
+      final roles = <String, String>{
+        'cashier': cashierA,
+        'pharmacist': pharmacistA,
+        'store_keeper': storeKeeperA,
+      };
+      for (final entry in roles.entries) {
+        final role = entry.key;
+        useUser(entry.value);
+        final client = SupabaseService.client;
+
+        for (final table in branchTables) {
+          await expectEmptyOrForbidden(
+              '[$role] table $table',
+              () => client
+                  .from(table)
+                  .select('*')
+                  .eq('branch_id', branchBId)
+                  .limit(1));
+        }
+        for (final view in stockViews) {
+          await expectEmptyOrForbidden(
+              '[$role] stock view $view',
+              () => client
+                  .from(view)
+                  .select('*')
+                  .eq('branch_id', branchBId)
+                  .limit(1));
+        }
+        final branchARows = await api(
+            '[$role] branch A stock visible',
+            () => client
+                .from('v_stock_summary')
+                .select('*')
+                .eq('branch_id', branchAId)
+                .limit(1));
+        expect(branchARows, isNotEmpty,
+            reason: '[$role] must still see its own branch stock');
+
+        if (role == 'cashier') {
+          await expectEmptyOrForbidden('[cashier] reorder view',
+              () => client.from('v_reorder_suggestions').select('*').limit(1));
+        } else {
+          await expectEmptyOrForbidden(
+              '[$role] reorder view branch B',
+              () => client
+                  .from('v_reorder_suggestions')
+                  .select('*')
+                  .eq('branch_id', branchBId)
+                  .limit(1));
+        }
+        for (final view in reportViews) {
+          await expectEmptyOrForbidden('[$role] report view $view',
+              () => client.from(view).select('*').limit(1));
+        }
+      }
+
+      useUser(accountantA);
+      final accountantClient = SupabaseService.client;
+      for (final view in reportViews) {
+        await expectEmptyOrForbidden(
+            '[accountant] $view branch B',
+            () => accountantClient
+                .from(view)
+                .select('*')
+                .eq('branch_id', branchBId)
+                .limit(1));
+      }
+
+      for (final entry in <String, String>{
+        'pharmacist': pharmacistA,
+        'store_keeper': storeKeeperA,
+      }.entries) {
+        useUser(entry.value);
+        final role = entry.key;
+        await expectForbidden('[$role] add_stock_batch branch B', () async {
+          await inventory.addStock(
+            branchId: branchBId,
+            medicineId: medicineId,
+            batchNo: 'BAD-B-$runId-$role',
+            expiry: DateTime.now().toUtc().add(const Duration(days: 30)),
+            quantity: 1,
+            cost: 1.0,
+          );
+        });
+        await expectForbidden('[$role] add_opening_stock branch B', () async {
+          await inventory.addOpeningStock(
+            branchId: branchBId,
+            rows: [
+              OpeningStockRowInput(
+                medicineId: medicineId,
+                quantity: 1,
+                expiry: DateTime.now().toUtc().add(const Duration(days: 30)),
+              ),
+            ],
+          );
+        });
+        await expectForbidden('[$role] draft POs branch B', () async {
+          await inventory.createDraftPurchaseOrders(
+            branchId: branchBId,
+            lines: [
+              {
+                'supplier_id': supplierId,
+                'medicine_id': medicineId,
+                'quantity': 1,
+                'unit_cost': 1.0,
+              },
+            ],
+          );
+        });
+      }
+
+      stdout.writeln('[e2e] ALL cross-branch isolation CHECKS PASSED');
+    }, timeout: const Timeout(Duration(minutes: 8)));
   });
 }

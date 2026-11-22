@@ -583,6 +583,16 @@ declare
   v_suggested int;
   v_supplier uuid;
   v_cost numeric(14,2);
+  -- 0023 review-fix fixture.
+  v_batch uuid;
+  v_branch_b uuid;
+  v_pharmacist uuid;
+  v_store_keeper uuid;
+  v_accountant uuid;
+  v_view text;
+  v_obj text;
+  v_role_id uuid;
+  v_role_name text;
 begin
   perform set_config('request.jwt.claim.sub', v_admin::text, true);
 
@@ -889,6 +899,336 @@ begin
   insert into db_test_results values
     ('cashier_cannot_create_draft_purchase_orders',
      case when v_state <> 'NO_ERROR' then 'PASS' else 'FAIL' end, v_state);
+
+  -- 10f. 0023: the 7-argument overload must treat NULL cost as zero.
+  perform set_config('request.jwt.claim.sub', v_admin::text, true);
+  v_state := 'NO_ERROR';
+  begin
+    v_batch := public.add_stock_batch(
+      v_branch, v_med_auto, '', current_date + 301, 1, null::numeric, null);
+    select cost_price::text into v_detail from public.stock_batches where id = v_batch;
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate, v_message = message_text;
+  end;
+  insert into db_test_results values
+    ('add_stock_batch_null_cost_is_zero',
+     case when v_state = 'NO_ERROR' and v_detail::numeric = 0
+          then 'PASS' else 'FAIL' end,
+     coalesce(v_message, v_detail, v_state));
+
+  -- 10g. 0023: friendly, row-numbered validation errors (SQLSTATE 22023).
+  v_state := 'NO_ERROR';
+  begin
+    perform public.add_opening_stock(v_branch, jsonb_build_array(
+      jsonb_build_object('medicine_id', 'not-a-uuid', 'quantity', 1,
+                         'expiry_date', (current_date + 200)::text)));
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate, v_message = message_text;
+  end;
+  insert into db_test_results values
+    ('add_opening_stock_bad_uuid_friendly',
+     case when v_state = '22023' and v_message like 'Row 1: field medicine_id must be a UUID%'
+               and v_message not like '%invalid input syntax%'
+          then 'PASS' else 'FAIL' end,
+     coalesce(v_message, v_state));
+
+  v_state := 'NO_ERROR';
+  begin
+    perform public.add_opening_stock(v_branch, jsonb_build_array(
+      jsonb_build_object('medicine_id', v_med_open::text, 'quantity', 'many',
+                         'expiry_date', (current_date + 200)::text)));
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate, v_message = message_text;
+  end;
+  insert into db_test_results values
+    ('add_opening_stock_bad_quantity_friendly',
+     case when v_state = '22023' and v_message like 'Row 1: field quantity must be an integer%'
+               and v_message not like '%invalid input syntax%'
+          then 'PASS' else 'FAIL' end,
+     coalesce(v_message, v_state));
+
+  v_state := 'NO_ERROR';
+  begin
+    perform public.add_opening_stock(v_branch, jsonb_build_array(
+      jsonb_build_object('medicine_id', v_med_open::text, 'quantity', 1,
+                         'expiry_date', 'not-a-date')));
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate, v_message = message_text;
+  end;
+  insert into db_test_results values
+    ('add_opening_stock_bad_date_friendly',
+     case when v_state = '22023' and v_message like 'Row 1: field expiry_date must be a valid date%'
+               and v_message not like '%invalid input syntax%'
+          then 'PASS' else 'FAIL' end,
+     coalesce(v_message, v_state));
+
+  v_state := 'NO_ERROR';
+  begin
+    perform public.add_opening_stock(v_branch, jsonb_build_array(
+      jsonb_build_object('medicine_id', v_med_open::text, 'quantity', 1)));
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate, v_message = message_text;
+  end;
+  insert into db_test_results values
+    ('add_opening_stock_missing_field_friendly',
+     case when v_state = '22023' and v_message like 'Row 1: field expiry_date is required%'
+          then 'PASS' else 'FAIL' end,
+     coalesce(v_message, v_state));
+
+  v_state := 'NO_ERROR';
+  begin
+    perform public.add_opening_stock(v_branch, jsonb_build_array('null'::jsonb));
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate, v_message = message_text;
+  end;
+  insert into db_test_results values
+    ('add_opening_stock_null_row_friendly',
+     case when v_state = '22023' and v_message like 'Row 1: expected an object%'
+          then 'PASS' else 'FAIL' end,
+     coalesce(v_message, v_state));
+
+  v_state := 'NO_ERROR';
+  begin
+    perform public.create_draft_purchase_orders(v_branch, jsonb_build_array(
+      jsonb_build_object('supplier_id', 'not-a-uuid', 'medicine_id', v_med_po1::text,
+                         'quantity', 1, 'unit_cost', 1)));
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate, v_message = message_text;
+  end;
+  insert into db_test_results values
+    ('draft_po_bad_supplier_friendly',
+     case when v_state = '22023' and v_message like 'Row 1: field supplier_id must be a UUID%'
+               and v_message not like '%invalid input syntax%'
+          then 'PASS' else 'FAIL' end,
+     coalesce(v_message, v_state));
+
+  v_state := 'NO_ERROR';
+  begin
+    perform public.create_draft_purchase_orders(v_branch, jsonb_build_array(
+      jsonb_build_object('supplier_id', v_sup_a::text, 'medicine_id', v_med_po1::text,
+                         'quantity', 'many', 'unit_cost', 1)));
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate, v_message = message_text;
+  end;
+  insert into db_test_results values
+    ('draft_po_bad_quantity_friendly',
+     case when v_state = '22023' and v_message like 'Row 1: field quantity must be an integer%'
+               and v_message not like '%invalid input syntax%'
+          then 'PASS' else 'FAIL' end,
+     coalesce(v_message, v_state));
+
+  v_state := 'NO_ERROR';
+  begin
+    perform public.create_draft_purchase_orders(v_branch, jsonb_build_array(
+      jsonb_build_object('medicine_id', v_med_po1::text, 'quantity', 1,
+                         'unit_cost', 1)));
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate, v_message = message_text;
+  end;
+  insert into db_test_results values
+    ('draft_po_missing_supplier_friendly',
+     case when v_state = '22023' and v_message like 'Row 1: field supplier_id is required%'
+          then 'PASS' else 'FAIL' end,
+     coalesce(v_message, v_state));
+
+  v_state := 'NO_ERROR';
+  begin
+    perform public.create_draft_purchase_orders(v_branch, jsonb_build_array('null'::jsonb));
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate, v_message = message_text;
+  end;
+  insert into db_test_results values
+    ('draft_po_null_row_friendly',
+     case when v_state = '22023' and v_message like 'Row 1: expected an object%'
+          then 'PASS' else 'FAIL' end,
+     coalesce(v_message, v_state));
+
+  -- 10h. 0023: branch B fixture and staff for isolation tests.
+  insert into public.branches (name, code)
+  values ('DB Test Branch B', 'DBTESTB')
+  on conflict (code) do update set name = excluded.name
+  returning id into v_branch_b;
+
+  insert into auth.users (id, email, raw_app_meta_data)
+  values
+    ('30000000-0000-0000-0000-000000000005', 'pharmacist@yusra.test',
+     jsonb_build_object('role', 'pharmacist', 'branch_id', v_branch::text)),
+    ('30000000-0000-0000-0000-000000000006', 'storekeeper@yusra.test',
+     jsonb_build_object('role', 'store_keeper', 'branch_id', v_branch::text)),
+    ('30000000-0000-0000-0000-000000000007', 'accountant@yusra.test',
+     jsonb_build_object('role', 'accountant', 'branch_id', v_branch::text))
+  on conflict (id) do update set raw_app_meta_data = excluded.raw_app_meta_data;
+
+  v_pharmacist := '30000000-0000-0000-0000-000000000005';
+  v_store_keeper := '30000000-0000-0000-0000-000000000006';
+  v_accountant := '30000000-0000-0000-0000-000000000007';
+  update public.profiles
+     set role = 'pharmacist', branch_id = v_branch, is_active = true
+   where id = v_pharmacist;
+  update public.profiles
+     set role = 'store_keeper', branch_id = v_branch, is_active = true
+   where id = v_store_keeper;
+  update public.profiles
+     set role = 'accountant', branch_id = v_branch, is_active = true
+   where id = v_accountant;
+
+  -- 10i. Stock views: allowed roles see only branch A; no branch B leakage.
+  for v_role_id, v_role_name in
+    select * from (values
+      (v_cashier::uuid, 'cashier'),
+      (v_pharmacist::uuid, 'pharmacist'),
+      (v_store_keeper::uuid, 'store_keeper')) r(id, name)
+  loop
+    perform set_config('request.jwt.claim.sub', v_role_id::text, true);
+    for v_view in
+      select unnest(array['v_stock_summary','v_low_stock','v_expiring_batches'])
+    loop
+      execute format('select count(*) from public.%I where branch_id = %L',
+                     v_view, v_branch_b) into v_count;
+      insert into db_test_results values
+        ('view_branch_isolation_' || v_view || '_' || v_role_name,
+         case when v_count = 0 then 'PASS' else 'FAIL' end,
+         'branch B rows=' || v_count);
+    end loop;
+    execute 'select count(*) from public.v_stock_summary where branch_id = ' ||
+            quote_literal(v_branch::text) into v_count;
+    insert into db_test_results values
+      ('view_branch_a_visible_' || v_role_name,
+       case when v_count > 0 then 'PASS' else 'FAIL' end,
+       'branch A rows=' || v_count);
+  end loop;
+
+  -- 10j. Reorder suggestions: cashier blocked; pharmacist/store_keeper scoped.
+  perform set_config('request.jwt.claim.sub', v_cashier::text, true);
+  execute 'select count(*) from public.v_reorder_suggestions' into v_count;
+  insert into db_test_results values
+    ('reorder_suggestions_cashier_no_rows',
+     case when v_count = 0 then 'PASS' else 'FAIL' end,
+     'all-branch rows=' || v_count);
+  for v_role_id, v_role_name in
+    select * from (values
+      (v_pharmacist::uuid, 'pharmacist'),
+      (v_store_keeper::uuid, 'store_keeper')) r(id, name)
+  loop
+    perform set_config('request.jwt.claim.sub', v_role_id::text, true);
+    execute format('select count(*) from public.v_reorder_suggestions where branch_id = %L',
+                   v_branch_b) into v_count;
+    insert into db_test_results values
+      ('reorder_suggestions_branch_isolation_' || v_role_name,
+       case when v_count = 0 then 'PASS' else 'FAIL' end,
+       'branch B rows=' || v_count);
+  end loop;
+
+  -- 10k. Report views: cashier/pharmacist/store_keeper/accountant rules.
+  for v_role_id, v_role_name in
+    select * from (values
+      (v_cashier::uuid, 'cashier'),
+      (v_pharmacist::uuid, 'pharmacist'),
+      (v_store_keeper::uuid, 'store_keeper')) r(id, name)
+  loop
+    perform set_config('request.jwt.claim.sub', v_role_id::text, true);
+    for v_view in
+      select unnest(array[
+        'v_report_sales_by_day','v_report_sales_by_cashier','v_report_sales_payment',
+        'v_report_sales_by_medicine','v_report_profit','v_report_stock_valuation',
+        'v_report_expiry_losses','v_report_purchases_supplier','v_report_expenses',
+        'v_report_net_profit','v_report_shift_variance','v_report_controlled_register'])
+    loop
+      execute format('select count(*) from public.%I', v_view) into v_count;
+      insert into db_test_results values
+        ('report_view_role_gate_' || v_view || '_' || v_role_name,
+         case when v_count = 0 then 'PASS' else 'FAIL' end,
+         'all-branch rows=' || v_count);
+    end loop;
+  end loop;
+  perform set_config('request.jwt.claim.sub', v_accountant::text, true);
+  for v_view in
+    select unnest(array[
+      'v_report_sales_by_day','v_report_sales_by_cashier','v_report_sales_payment',
+      'v_report_sales_by_medicine','v_report_profit','v_report_stock_valuation',
+      'v_report_expiry_losses','v_report_purchases_supplier','v_report_expenses',
+      'v_report_net_profit','v_report_shift_variance','v_report_controlled_register'])
+  loop
+    execute format('select count(*) from public.%I where branch_id = %L',
+                   v_view, v_branch_b) into v_count;
+    insert into db_test_results values
+      ('report_view_branch_isolation_' || v_view || '_accountant',
+       case when v_count = 0 then 'PASS' else 'FAIL' end,
+       'branch B rows=' || v_count);
+  end loop;
+
+  -- 10l. Every branch-scoped table: branch A roles see zero branch B rows or 42501.
+  for v_role_id, v_role_name in
+    select * from (values
+      (v_cashier::uuid, 'cashier'),
+      (v_pharmacist::uuid, 'pharmacist'),
+      (v_store_keeper::uuid, 'store_keeper')) r(id, name)
+  loop
+    perform set_config('request.jwt.claim.sub', v_role_id::text, true);
+    for v_obj in
+      select c.table_name
+        from information_schema.columns c
+       where c.table_schema = 'public' and c.column_name = 'branch_id'
+       group by c.table_name
+       order by c.table_name
+    loop
+      v_state := 'NO_ERROR';
+      begin
+        execute format('select count(*) from public.%I where branch_id = %L',
+                       v_obj, v_branch_b) into v_count;
+      exception when insufficient_privilege then
+        v_state := '42501';
+      end;
+      insert into db_test_results values
+        ('table_branch_isolation_' || v_obj || '_' || v_role_name,
+         case when v_state <> 'NO_ERROR' or v_count = 0
+              then 'PASS' else 'FAIL' end,
+         case when v_state <> 'NO_ERROR' then v_state else 'rows=' || v_count end);
+    end loop;
+  end loop;
+
+  -- 10m. Branch-scoped RPCs reject branch B for branch A staff.
+  for v_role_id, v_role_name in
+    select * from (values
+      (v_pharmacist::uuid, 'pharmacist'),
+      (v_store_keeper::uuid, 'store_keeper')) r(id, name)
+  loop
+    perform set_config('request.jwt.claim.sub', v_role_id::text, true);
+    v_state := 'NO_ERROR';
+    begin
+      perform public.add_stock_batch(
+        v_branch_b, v_med_auto, '', current_date + 200, 1, 1, null, 'opening');
+    exception when others then
+      get stacked diagnostics v_state = returned_sqlstate;
+    end;
+    insert into db_test_results values
+      ('rpc_branch_isolation_add_stock_batch_' || v_role_name,
+       case when v_state = '42501' then 'PASS' else 'FAIL' end, v_state);
+
+    v_state := 'NO_ERROR';
+    begin
+      perform public.add_opening_stock(v_branch_b, jsonb_build_array(
+        jsonb_build_object('medicine_id', v_med_auto::text, 'quantity', 1,
+                           'expiry_date', (current_date + 200)::text)));
+    exception when others then
+      get stacked diagnostics v_state = returned_sqlstate;
+    end;
+    insert into db_test_results values
+      ('rpc_branch_isolation_add_opening_stock_' || v_role_name,
+       case when v_state = '42501' then 'PASS' else 'FAIL' end, v_state);
+
+    v_state := 'NO_ERROR';
+    begin
+      perform public.create_draft_purchase_orders(v_branch_b, jsonb_build_array(
+        jsonb_build_object('supplier_id', v_sup_a::text, 'medicine_id', v_med_po1::text,
+                           'quantity', 1, 'unit_cost', 1)));
+    exception when others then
+      get stacked diagnostics v_state = returned_sqlstate;
+    end;
+    insert into db_test_results values
+      ('rpc_branch_isolation_draft_po_' || v_role_name,
+       case when v_state = '42501' then 'PASS' else 'FAIL' end, v_state);
+  end loop;
 
   perform set_config('request.jwt.claim.sub', v_admin::text, true);
 end $$;

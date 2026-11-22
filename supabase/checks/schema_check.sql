@@ -40,7 +40,8 @@ expected_functions(name, nargs) as (
          ('trg_po_defaults', 0), ('trg_rx_defaults', 0), ('trg_po_total', 0),
          ('recalc_po_subtotal', 0), ('guard_po_status', 0),
          ('guard_po_receipt', 0), ('guard_expense_status', 0),
-         ('protect_profile_fields', 0), ('audit_row', 0)
+         ('protect_profile_fields', 0), ('audit_row', 0),
+         ('write_activity_log', 0)
 ),
 expected_triggers(name) as (
   values ('on_auth_user_created'), ('trg_branches_updated'), ('trg_profiles_updated'),
@@ -72,7 +73,8 @@ expected_policies(name) as (
          ('rls_receipts_read'), ('rls_receipts_write'),
          ('rls_avatars_read'), ('rls_avatars_write'), ('rls_avatars_update'), ('rls_avatars_delete'),
          ('rls_branding_read'), ('rls_branding_write'), ('rls_branding_delete'),
-         ('rls_medicine_images_read'), ('rls_medicine_images_write'), ('rls_medicine_images_delete')
+         ('rls_medicine_images_read'), ('rls_medicine_images_write'),
+         ('rls_medicine_images_delete'), ('rls_activity_read')
 ),
 expected_storage_buckets(name, is_public) as (
   values ('prescriptions', false), ('receipts', false), ('branding', true),
@@ -364,6 +366,31 @@ results as (
                  @> array['SELECT','USAGE']::text[]
          ) then 'PASS' else 'FAIL' end,
          'Re-run 0021_grants.sql (alter default privileges ... grant usage, select on sequences).'
+  union all
+  select 'security', 'view_branch_role_guard.' || g.name,
+         case when pg_get_viewdef(to_regclass('public.' || g.name), true) like '%can_access_branch%'
+                   and pg_get_viewdef(to_regclass('public.' || g.name), true) like '%has_role%'
+              then 'PASS' else 'FAIL' end,
+         'Apply 0023_review_fixes.sql (explicit branch + role guard on ' || g.name || ').'
+  from (values
+    ('v_stock_summary'),
+    ('v_low_stock'),
+    ('v_expiring_batches'),
+    ('v_daily_sales'),
+    ('v_reorder_suggestions'),
+    ('v_report_sales_by_day'),
+    ('v_report_sales_by_cashier'),
+    ('v_report_sales_payment'),
+    ('v_report_sales_by_medicine'),
+    ('v_report_profit'),
+    ('v_report_stock_valuation'),
+    ('v_report_expiry_losses'),
+    ('v_report_purchases_supplier'),
+    ('v_report_expenses'),
+    ('v_report_net_profit'),
+    ('v_report_shift_variance'),
+    ('v_report_controlled_register')
+  ) g(name)
 )
 select kind, object, status,
        case when status = 'FAIL' then fix else '' end as fix
