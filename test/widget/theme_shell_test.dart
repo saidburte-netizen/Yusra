@@ -102,7 +102,7 @@ void main() {
 
       expect(find.text('Light'), findsOneWidget);
       expect(find.text('Dark'), findsOneWidget);
-      expect(find.text('System'), findsOneWidget);
+      expect(find.text('Auto'), findsOneWidget);
 
       await tester.tap(find.text('Dark'));
       await tester.pumpAndSettle();

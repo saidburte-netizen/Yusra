@@ -103,17 +103,24 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
                 SizedBox(
                   width: 200,
                   child: categories.when(
-                    data: (items) => AppDropdown<String?>(
-                      label: 'Category',
-                      value: _categoryId,
-                      items: [
-                        const DropdownMenuItem(value: null, child: Text('All')),
-                        for (final item in items)
-                          DropdownMenuItem(
-                              value: item.id, child: Text(item.name)),
-                      ],
-                      onChanged: (value) => setState(() => _categoryId = value),
-                    ),
+                    data: (items) {
+                      final value = _categoryId != null &&
+                              !items.any((item) => item.id == _categoryId)
+                          ? null
+                          : _categoryId;
+                      return AppDropdown<String?>(
+                        label: 'Category',
+                        value: value,
+                        items: [
+                          const DropdownMenuItem(
+                              value: null, child: Text('All')),
+                          for (final item in items)
+                            DropdownMenuItem(
+                                value: item.id, child: Text(item.name)),
+                        ],
+                        onChanged: (next) => setState(() => _categoryId = next),
+                      );
+                    },
                     loading: () => const SizedBox(height: 56),
                     error: (_, __) => const SizedBox(height: 56),
                   ),
@@ -670,6 +677,13 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
                           items: [
                             const DropdownMenuItem(
                                 value: null, child: Text('None')),
+                            if (_categoryId != null &&
+                                !categories
+                                    .any((item) => item.id == _categoryId))
+                              DropdownMenuItem(
+                                value: _categoryId,
+                                child: const Text('Current category'),
+                              ),
                             for (final category in categories)
                               DropdownMenuItem(
                                   value: category.id,

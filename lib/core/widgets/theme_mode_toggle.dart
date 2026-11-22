@@ -77,7 +77,7 @@ class ThemeModeToggle extends ConsumerWidget {
           const SizedBox(width: 4),
           button(ThemeMode.dark, Icons.dark_mode_outlined, 'Dark'),
           const SizedBox(width: 4),
-          button(ThemeMode.system, Icons.brightness_auto_outlined, 'System'),
+          button(ThemeMode.system, Icons.brightness_auto_outlined, 'Auto'),
         ],
       ),
     );

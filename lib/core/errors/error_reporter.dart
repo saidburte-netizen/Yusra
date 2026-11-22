@@ -20,18 +20,21 @@ class AppErrorReporter {
     _installed = true;
 
     FlutterError.onError = (details) {
-      // Local logging only. Never interpolate the exception itself: Supabase
-      // and socket errors can contain emails, names and tokens (PII).
-      debugPrint('Uncaught Flutter error: ${_safe(details.exception)}');
+      final mapped = AppErrorMapper.from(details.exception);
+      debugPrint('Uncaught Flutter error: ${mapped.sanitizedLogLine}');
+      debugPrint('Error detail: ${details.exception}');
+      debugPrint('Stack trace:\n${details.stack}');
     };
 
     PlatformDispatcher.instance.onError = (error, stack) {
-      debugPrint('Uncaught async error: ${_safe(error)}');
+      final mapped = AppErrorMapper.from(error);
+      debugPrint('Uncaught async error: ${mapped.sanitizedLogLine}');
+      debugPrint('Error detail: $error');
+      debugPrint('Stack trace:\n$stack');
       return true; // prevent the process from being torn down
     };
 
-    ErrorWidget.builder =
-        (details) => _FatalErrorView(error: details.exception);
+    ErrorWidget.builder = (details) => _FatalErrorView(details: details);
   }
 
   /// Convenience for repository boundaries that should not throw raw errors.
@@ -44,46 +47,100 @@ class AppErrorReporter {
     debugPrint('Handled error: ${mapped.sanitizedLogLine}');
     return mapped;
   }
-
-  /// Maps any exception to a stable `kind:code` string without touching its
-  /// message, stack trace or `toString()` (which may contain PII).
-  static String _safe(Object error) =>
-      AppErrorMapper.from(error).sanitizedLogLine;
 }
 
 class _FatalErrorView extends StatelessWidget {
-  const _FatalErrorView({required this.error});
+  const _FatalErrorView({required this.details});
 
-  final Object error;
+  final FlutterErrorDetails details;
 
   @override
   Widget build(BuildContext context) {
+    final error = details.exception;
     final mapped = AppErrorMapper.from(error);
-    return Scaffold(
-      backgroundColor: AppColors.pink50,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460),
-          child: Card(
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final bg = isDark ? AppColors.darkBase : AppColors.pink50;
+    final debugMessage = '$error';
+    final stack = details.stack?.toString() ?? '';
+    return Material(
+      color: bg,
+      child: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
             child: Padding(
               padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.error_outline,
-                      size: 48, color: AppColors.danger),
-                  const SizedBox(height: 16),
-                  Text(S.somethingWrong,
-                      style: Theme.of(context).textTheme.headlineSmall),
-                  const SizedBox(height: 8),
-                  Text(mapped.message, textAlign: TextAlign.center),
-                  const SizedBox(height: 20),
-                  ElevatedButton.icon(
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text(S.retry),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Icon(Icons.error_outline,
+                            size: 48, color: AppColors.danger),
+                        const SizedBox(height: 16),
+                        Text(
+                          S.somethingWrong,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          mapped.message,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        if (kDebugMode) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                            'Debug details (not shown in release)',
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              color: AppColors.danger,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? AppColors.darkCard
+                                  : AppColors.pink50.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isDark
+                                    ? AppColors.darkBorder
+                                    : AppColors.gold300.withOpacity(0.5),
+                              ),
+                            ),
+                            child: SelectableText(
+                              '$debugMessage\n\n$stack',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 20),
+                        Center(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              final nav = Navigator.maybeOf(context);
+                              if (nav != null) {
+                                nav.maybePop();
+                              }
+                            },
+                            icon: const Icon(Icons.refresh),
+                            label: const Text(S.retry),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
+                ),
               ),
             ),
           ),
