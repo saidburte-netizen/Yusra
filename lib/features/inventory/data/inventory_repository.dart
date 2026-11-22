@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/state/idempotency.dart';
+import '../../../core/state/invalidation.dart';
 import '../../../core/supabase_client.dart';
 import 'inventory_models.dart';
 import 'reorder_models.dart';
@@ -9,6 +11,11 @@ import 'reorder_models.dart';
 /// All reads and writes for Agent B. Stock mutations always go through the
 /// database RPCs; nothing here updates stock_batches directly.
 class InventoryRepository {
+  InventoryRepository({WriteCoordinator? coordinator})
+      : _coordinator = coordinator ?? const WriteCoordinator();
+
+  final WriteCoordinator _coordinator;
+
   SupabaseClient get _db => SupabaseService.client;
 
   Future<List<Category>> categories({bool includeInactive = true}) async {
@@ -217,14 +224,21 @@ class InventoryRepository {
   Future<int> addOpeningStock({
     required String branchId,
     required List<OpeningStockRowInput> rows,
-  }) async {
-    final result = await _db.rpc('add_opening_stock', params: {
-      'p_branch': branchId,
-      'p_rows': rows.map((row) => row.toJson()).toList(),
-    });
-    return result is num
-        ? result.toInt()
-        : int.tryParse('$result') ?? rows.length;
+    String? idempotencyKey,
+  }) {
+    return _coordinator.run<int>(
+      operation: Mutation.addOpeningStock,
+      key: idempotencyKey ?? WriteIdempotency.newKey(Mutation.addOpeningStock),
+      action: () async {
+        final result = await _db.rpc('add_opening_stock', params: {
+          'p_branch': branchId,
+          'p_rows': rows.map((row) => row.toJson()).toList(),
+        });
+        return result is num
+            ? result.toInt()
+            : int.tryParse('$result') ?? rows.length;
+      },
+    );
   }
 
   Future<List<ReorderSuggestion>> reorderSuggestions(String? branchId) async {
@@ -241,13 +255,21 @@ class InventoryRepository {
   Future<List<String>> createDraftPurchaseOrders({
     required String branchId,
     required List<Map<String, dynamic>> lines,
-  }) async {
-    final result = await _db.rpc('create_draft_purchase_orders', params: {
-      'p_branch': branchId,
-      'p_lines': lines,
-    });
-    if (result is! List) return const <String>[];
-    return result.map((id) => id.toString()).toList();
+    String? idempotencyKey,
+  }) {
+    return _coordinator.run<List<String>>(
+      operation: Mutation.createDraftPurchaseOrders,
+      key: idempotencyKey ??
+          WriteIdempotency.newKey(Mutation.createDraftPurchaseOrders),
+      action: () async {
+        final result = await _db.rpc('create_draft_purchase_orders', params: {
+          'p_branch': branchId,
+          'p_lines': lines,
+        });
+        if (result is! List) return const <String>[];
+        return result.map((id) => id.toString()).toList();
+      },
+    );
   }
 
   Future<void> adjustStock({
@@ -255,13 +277,20 @@ class InventoryRepository {
     required int change,
     required String type,
     required String reason,
+    String? idempotencyKey,
   }) =>
-      _db.rpc('adjust_stock', params: {
-        'p_batch': batchId,
-        'p_change': change,
-        'p_type': type,
-        'p_reason': reason,
-      });
+      _coordinator.run<void>(
+        operation: Mutation.adjustStock,
+        key: idempotencyKey ?? WriteIdempotency.newKey(Mutation.adjustStock),
+        action: () async {
+          await _db.rpc('adjust_stock', params: {
+            'p_batch': batchId,
+            'p_change': change,
+            'p_type': type,
+            'p_reason': reason,
+          });
+        },
+      );
 
   static String _date(DateTime date) =>
       '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';

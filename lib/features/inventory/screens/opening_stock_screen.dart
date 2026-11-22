@@ -9,6 +9,9 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/dates.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/permissions.dart';
+import '../../../core/state/connectivity.dart';
+import '../../../core/state/idempotency.dart';
+import '../../../core/state/invalidation.dart';
 import '../../../core/strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets.dart';
@@ -46,6 +49,7 @@ class _OpeningStockScreenState extends ConsumerState<OpeningStockScreen> {
   final List<_OpeningRow> _rows = <_OpeningRow>[_OpeningRow()];
   final Set<int> _badRows = <int>{};
   bool _busy = false;
+  String _submitKey = WriteIdempotency.newKey(Mutation.addOpeningStock);
 
   @override
   void dispose() {
@@ -141,11 +145,15 @@ class _OpeningStockScreenState extends ConsumerState<OpeningStockScreen> {
       await ref.read(inventoryRepositoryProvider).addOpeningStock(
             branchId: branch,
             rows: rows,
+            idempotencyKey: _submitKey,
           );
       if (!mounted) return;
       AppSnackbar.success(context, 'Saved ${rows.length} opening stock rows.');
-      setState(_resetRows);
-      invalidateStockProviders(ref);
+      setState(() {
+        _resetRows();
+        _submitKey = WriteIdempotency.newKey(Mutation.addOpeningStock);
+      });
+      ref.applyMutation(Mutation.addOpeningStock);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -463,7 +471,10 @@ class _OpeningStockScreenState extends ConsumerState<OpeningStockScreen> {
                             label: 'Save all',
                             icon: Icons.save_outlined,
                             loading: _busy,
-                            onPressed: _rows.isEmpty ? null : _save,
+                            onPressed:
+                                _rows.isEmpty || _busy || !writeEnabled(ref)
+                                    ? null
+                                    : _save,
                           ),
                         ],
                       ),

@@ -1,0 +1,2011 @@
+{
+  "generated_by": "dart run tool/gen_role_matrix.dart",
+  "roles": [
+    "super_admin",
+    "admin",
+    "pharmacist",
+    "cashier",
+    "store_keeper",
+    "accountant"
+  ],
+  "sources": [
+    "lib/core/nav/app_shell.dart",
+    "lib/core/nav/menu_items.dart",
+    "lib/core/permissions.dart",
+    "lib/core/router.dart",
+    "lib/core/router.dart",
+    "lib/features/customers/customers_routes.dart",
+    "lib/features/dashboard/dashboard_screen.dart",
+    "lib/features/inventory/inventory_routes.dart",
+    "lib/features/pos/pos_routes.dart",
+    "lib/features/prescriptions/prescriptions_routes.dart",
+    "lib/features/purchasing/purchasing_routes.dart",
+    "lib/features/sales/sales_routes.dart",
+    "lib/features/shifts/shifts_routes.dart",
+    "lib/features/suppliers/suppliers_routes.dart",
+    "supabase/functions/admin-create-user/index.ts",
+    "supabase/functions/admin-reset-password/index.ts",
+    "supabase/migrations/0001_extensions_enums.sql",
+    "supabase/migrations/0002_core_tables_helpers.sql",
+    "supabase/migrations/0007_functions.sql",
+    "supabase/migrations/0009_triggers.sql",
+    "supabase/migrations/0012_rls_hardening.sql",
+    "supabase/migrations/0013_rpc_gaps.sql",
+    "supabase/migrations/0015_team_management.sql",
+    "supabase/migrations/0016_profile_rpc.sql",
+    "supabase/migrations/0017_activity_audit.sql",
+    "supabase/migrations/0019_hardening_fixes.sql",
+    "supabase/migrations/0019_hardening_fixes.sql",
+    "supabase/migrations/0022_opening_stock_reorder.sql",
+    "supabase/migrations/0023_review_fixes.sql"
+  ],
+  "operations": {
+    "rls.branches.write": {
+      "roles": [
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:146",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "branches ALL"
+    },
+    "rls.users.read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "pharmacist",
+        "super_admin"
+      ],
+      "own_roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:47",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "profiles SELECT"
+    },
+    "rls.settings.write": {
+      "roles": [
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:142",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "app_settings ALL"
+    },
+    "rls.categories.write": {
+      "roles": [
+        "admin",
+        "pharmacist",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:126",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "categories ALL"
+    },
+    "rls.medicines.write": {
+      "roles": [
+        "admin",
+        "pharmacist",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:130",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "medicines ALL"
+    },
+    "rls.suppliers.write": {
+      "roles": [
+        "admin",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:134",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "suppliers ALL"
+    },
+    "rls.customers.write": {
+      "roles": [
+        "admin",
+        "cashier",
+        "pharmacist",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:138",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "customers ALL"
+    },
+    "rls.purchaseOrders.read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:71",
+      "all_authenticated": true,
+      "internal": false,
+      "note": "purchase_orders SELECT"
+    },
+    "rls.purchaseOrders.write": {
+      "roles": [
+        "admin",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:150",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "purchase_orders ALL"
+    },
+    "rls.prescriptions.write": {
+      "roles": [
+        "admin",
+        "pharmacist",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:160",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "prescriptions ALL"
+    },
+    "rls.expenses.write": {
+      "roles": [
+        "accountant",
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:165",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "expenses ALL"
+    },
+    "rls.sales.read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "pharmacist",
+        "super_admin"
+      ],
+      "own_roles": [
+        "cashier"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:95",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "sales SELECT"
+    },
+    "rls.activity.read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0023_review_fixes.sql:350",
+      "all_authenticated": true,
+      "internal": false,
+      "note": "public.activity_log SELECT"
+    },
+    "storage.medicine-images.write": {
+      "roles": [
+        "admin",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:617",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "storage.objects INSERT"
+    },
+    "storage.prescriptions.write": {
+      "roles": [
+        "admin",
+        "pharmacist",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:215",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "storage.objects INSERT"
+    },
+    "storage.receipts.write": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:577",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "storage.objects INSERT"
+    },
+    "storage.avatars.write": {
+      "roles": [],
+      "own_roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:587",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "storage.objects INSERT"
+    },
+    "storage.branding.write": {
+      "roles": [
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:605",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "storage.objects INSERT"
+    },
+    "rpc.add_stock_batch": {
+      "roles": [
+        "admin",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0007_functions.sql:1",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.add_opening_stock": {
+      "roles": [
+        "admin",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0022_opening_stock_reorder.sql:143",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.create_draft_purchase_orders": {
+      "roles": [
+        "admin",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0022_opening_stock_reorder.sql:323",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.adjust_stock": {
+      "roles": [
+        "admin",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0007_functions.sql:36",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.receive_purchase_order": {
+      "roles": [
+        "admin",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0007_functions.sql:65",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.set_purchase_order_status": {
+      "roles": [
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:312",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.open_shift": {
+      "roles": [
+        "admin",
+        "cashier",
+        "pharmacist",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0007_functions.sql:129",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.close_shift": {
+      "roles": [
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0007_functions.sql:149",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.create_sale": {
+      "roles": [
+        "admin",
+        "cashier",
+        "pharmacist",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0007_functions.sql:189",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.void_sale": {
+      "roles": [
+        "admin",
+        "pharmacist",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0013_rpc_gaps.sql:11",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.process_sale_return": {
+      "roles": [
+        "admin",
+        "pharmacist",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0013_rpc_gaps.sql:49",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.set_expense_status": {
+      "roles": [
+        "accountant",
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:467",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.set_user_access": {
+      "roles": [
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0015_team_management.sql:15",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.share_admin_access": {
+      "roles": [
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0015_team_management.sql:98",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.publish_app_settings": {
+      "roles": [
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0015_team_management.sql:140",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.approve_activity_correction": {
+      "roles": [
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0017_activity_audit.sql:113",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.request_activity_correction": {
+      "roles": [
+        "admin",
+        "super_admin"
+      ],
+      "own_roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:158",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.get_my_profile": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "own_roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0016_profile_rpc.sql:9",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.update_my_profile": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "own_roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:213",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.customer_stats": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:515",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "rpc.shift_expected_cash": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:536",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "SECURITY DEFINER RPC; branch scope enforced in function body"
+    },
+    "views.reports": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0014_report_views.sql:15",
+      "all_authenticated": true,
+      "internal": false,
+      "note": "SELECT granted to authenticated; views are security_invoker"
+    },
+    "views.reorder": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0022_opening_stock_reorder.sql:263",
+      "all_authenticated": true,
+      "internal": false,
+      "note": "SELECT granted to authenticated; views are security_invoker"
+    },
+    "edge.admin-create-user": {
+      "roles": [
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/functions/admin-create-user/index.ts:16",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "server-side caller role check"
+    },
+    "edge.admin-reset-password": {
+      "roles": [
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/functions/admin-reset-password/index.ts:1",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "server-side caller role check"
+    }
+  },
+  "unmapped_objects": {
+    "function:approve_expense": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:500",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:approve_purchase_order": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:357",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:audit_row": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0009_triggers.sql:101",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:can_access_branch": {
+      "roles": [
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0002_core_tables_helpers.sql:41",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:cancel_purchase_order": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:363",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:guard_expense_status": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:448",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:guard_po_receipt": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:293",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:guard_po_status": {
+      "roles": [
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0009_triggers.sql:54",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:handle_new_user": {
+      "roles": [
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:99",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:has_role": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0002_core_tables_helpers.sql:36",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:my_branch": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0002_core_tables_helpers.sql:31",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:my_role": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0002_core_tables_helpers.sql:26",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:next_doc_no": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0002_core_tables_helpers.sql:83",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:protect_profile_fields": {
+      "roles": [
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0009_triggers.sql:79",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:recalc_po_subtotal": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0009_triggers.sql:41",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:reject_expense": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:506",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:set_updated_at": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0001_extensions_enums.sql:12",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:trg_po_defaults": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0009_triggers.sql:10",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:trg_po_total": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0009_triggers.sql:32",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:trg_rx_defaults": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0009_triggers.sql:21",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "function:write_activity_log": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0017_activity_audit.sql:28",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Database plumbing / trigger helper"
+    },
+    "policy:rls_audit_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:54",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_avatars_delete": {
+      "roles": [],
+      "own_roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:597",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_avatars_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:583",
+      "all_authenticated": true,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_avatars_update": {
+      "roles": [],
+      "own_roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:592",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_batches_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:79",
+      "all_authenticated": true,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_branches_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:44",
+      "all_authenticated": true,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_branding_delete": {
+      "roles": [
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:609",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_branding_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:601",
+      "all_authenticated": true,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_categories_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:58",
+      "all_authenticated": true,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_customers_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:67",
+      "all_authenticated": true,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_expenses_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:119",
+      "all_authenticated": true,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_medicine_images_delete": {
+      "roles": [
+        "admin",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:622",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_medicine_images_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:613",
+      "all_authenticated": true,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_medicines_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:61",
+      "all_authenticated": true,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_movements_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:83",
+      "all_authenticated": true,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_poi_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:75",
+      "all_authenticated": true,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_poi_write": {
+      "roles": [
+        "admin",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:155",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_receipts_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0019_hardening_fixes.sql:570",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_return_items_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "pharmacist",
+        "super_admin"
+      ],
+      "own_roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:114",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_returns_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "pharmacist",
+        "super_admin"
+      ],
+      "own_roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:109",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_rx_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:87",
+      "all_authenticated": true,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_rx_storage_delete": {
+      "roles": [
+        "admin",
+        "pharmacist",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:220",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_rx_storage_read": {
+      "roles": [
+        "admin",
+        "pharmacist",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:208",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_sale_items_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "pharmacist",
+        "super_admin"
+      ],
+      "own_roles": [
+        "cashier"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:99",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_sale_payments_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "pharmacist",
+        "super_admin"
+      ],
+      "own_roles": [
+        "cashier"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:104",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_settings_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:51",
+      "all_authenticated": true,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_shifts_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "pharmacist",
+        "super_admin"
+      ],
+      "own_roles": [
+        "cashier"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:91",
+      "all_authenticated": false,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_suppliers_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0012_rls_hardening.sql:64",
+      "all_authenticated": true,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    }
+  },
+  "ui_actions": {
+    "stock.add": {
+      "route": "/inventory",
+      "label": "Add stock",
+      "kind": "create",
+      "gate": "can(stock,edit)",
+      "evidence": "lib/features/inventory/screens/stock_overview_screen.dart:50",
+      "db_operation": "rpc.add_stock_batch",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "stock.source": {
+      "route": "/inventory",
+      "label": "Add stock source selector (opening / purchase / other)",
+      "kind": "create",
+      "gate": "can(stock,edit)",
+      "evidence": "lib/features/inventory/widgets/stock_widgets.dart:133",
+      "db_operation": "rpc.add_stock_batch",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "stock.opening.entry": {
+      "route": "/inventory",
+      "label": "Opening stock (entry button)",
+      "kind": "navigate",
+      "gate": "can(stock,edit)",
+      "evidence": "lib/features/inventory/screens/stock_overview_screen.dart:60",
+      "db_operation": "rpc.add_opening_stock",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "stock.opening.save": {
+      "route": "/inventory/opening-stock",
+      "label": "Opening stock — Save all",
+      "kind": "create",
+      "gate": "can(stock,edit)",
+      "evidence": "lib/features/inventory/screens/opening_stock_screen.dart:471",
+      "db_operation": "rpc.add_opening_stock",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "stock.opening.import": {
+      "route": "/inventory/opening-stock",
+      "label": "Opening stock — Import CSV",
+      "kind": "create",
+      "gate": "can(stock,edit)",
+      "evidence": "lib/features/inventory/screens/opening_stock_screen.dart:442",
+      "db_operation": "rpc.add_opening_stock",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "stock.needsOrdering.entry": {
+      "route": "/inventory",
+      "label": "Needs ordering (entry button)",
+      "kind": "navigate",
+      "gate": "can(stock,edit)&&can(purchaseOrders,edit)",
+      "evidence": "lib/features/inventory/screens/stock_overview_screen.dart:70",
+      "db_operation": "rpc.create_draft_purchase_orders",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "stock.needsOrdering.create": {
+      "route": "/inventory/needs-ordering",
+      "label": "Needs ordering — Create purchase order(s)",
+      "kind": "create",
+      "gate": "can(stock,edit)",
+      "evidence": "lib/features/inventory/screens/needs_ordering_screen.dart:579",
+      "db_operation": "rpc.create_draft_purchase_orders",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "stock.needsOrdering.exportCsv": {
+      "route": "/inventory/needs-ordering",
+      "label": "Needs ordering — Export / share CSV",
+      "kind": "export",
+      "gate": "can(stock,edit)",
+      "evidence": "lib/features/inventory/screens/needs_ordering_screen.dart:590",
+      "db_operation": "views.reorder",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "stock.needsOrdering.exportPdf": {
+      "route": "/inventory/needs-ordering",
+      "label": "Needs ordering — Export / share PDF",
+      "kind": "export",
+      "gate": "can(stock,edit)",
+      "evidence": "lib/features/inventory/screens/needs_ordering_screen.dart:598",
+      "db_operation": "views.reorder",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "medicines.create": {
+      "route": "/inventory/medicines",
+      "label": "New medicine",
+      "kind": "create",
+      "gate": "can(medicines,edit)",
+      "evidence": "lib/features/inventory/screens/medicines_screen.dart:68",
+      "db_operation": "rls.medicines.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist"
+      ]
+    },
+    "medicines.edit": {
+      "route": "/inventory/medicines",
+      "label": "Edit medicine",
+      "kind": "edit",
+      "gate": "can(medicines,edit)",
+      "evidence": "lib/features/inventory/screens/medicines_screen.dart:205",
+      "db_operation": "rls.medicines.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist"
+      ]
+    },
+    "medicines.deactivate": {
+      "route": "/inventory/medicines",
+      "label": "Deactivate / reactivate medicine",
+      "kind": "deactivate",
+      "gate": "can(medicines,edit)",
+      "evidence": "lib/features/inventory/screens/medicines_screen.dart:212",
+      "db_operation": "rls.medicines.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist"
+      ]
+    },
+    "medicines.image": {
+      "route": "/inventory/medicines",
+      "label": "Upload medicine image",
+      "kind": "create",
+      "gate": "can(medicines,edit)",
+      "evidence": "lib/features/inventory/screens/medicines_screen.dart:68",
+      "db_operation": "storage.medicine-images.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist"
+      ]
+    },
+    "categories.create": {
+      "route": "/inventory/categories",
+      "label": "New category",
+      "kind": "create",
+      "gate": "can(medicines,edit)",
+      "evidence": "lib/features/inventory/screens/categories_screen.dart:34",
+      "db_operation": "rls.categories.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist"
+      ]
+    },
+    "categories.edit": {
+      "route": "/inventory/categories",
+      "label": "Edit category",
+      "kind": "edit",
+      "gate": "can(medicines,edit)",
+      "evidence": "lib/features/inventory/screens/categories_screen.dart:58",
+      "db_operation": "rls.categories.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist"
+      ]
+    },
+    "categories.deactivate": {
+      "route": "/inventory/categories",
+      "label": "Deactivate / reactivate category",
+      "kind": "deactivate",
+      "gate": "can(medicines,edit)",
+      "evidence": "lib/features/inventory/screens/categories_screen.dart:65",
+      "db_operation": "rls.categories.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist"
+      ]
+    },
+    "batches.adjust": {
+      "route": "/inventory/batches",
+      "label": "Add stock / adjust batch",
+      "kind": "edit",
+      "gate": "can(stock,edit)",
+      "evidence": "lib/features/inventory/screens/batches_screen.dart:46",
+      "db_operation": "rpc.adjust_stock",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "adjustments.create": {
+      "route": "/inventory/adjustments",
+      "label": "New adjustment",
+      "kind": "create",
+      "gate": "can(stock,edit)",
+      "evidence": "lib/features/inventory/screens/adjustments_screen.dart:35",
+      "db_operation": "rpc.adjust_stock",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "stocktake.apply": {
+      "route": "/inventory/stocktake",
+      "label": "Apply stocktake variance",
+      "kind": "edit",
+      "gate": "can(stock,edit)",
+      "evidence": "lib/features/inventory/screens/stocktake_screen.dart:258",
+      "db_operation": "rpc.adjust_stock",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "alerts.createPo": {
+      "route": "/inventory/alerts",
+      "label": "Create purchase order (from alert)",
+      "kind": "create",
+      "gate": "can(purchaseOrders,edit)",
+      "evidence": "lib/features/inventory/screens/alerts_screen.dart:59",
+      "db_operation": "rls.purchaseOrders.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "suppliers.create": {
+      "route": "/suppliers",
+      "label": "New supplier",
+      "kind": "create",
+      "gate": "can(suppliers,edit)",
+      "evidence": "lib/features/suppliers/screens/suppliers_screen.dart:58",
+      "db_operation": "rls.suppliers.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "suppliers.edit": {
+      "route": "/suppliers/:id",
+      "label": "Edit supplier",
+      "kind": "edit",
+      "gate": "can(suppliers,edit)",
+      "evidence": "lib/features/suppliers/screens/suppliers_screen.dart:132",
+      "db_operation": "rls.suppliers.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "suppliers.deactivate": {
+      "route": "/suppliers/:id",
+      "label": "Deactivate / reactivate supplier",
+      "kind": "deactivate",
+      "gate": "can(suppliers,edit)",
+      "evidence": "lib/features/suppliers/screens/suppliers_screen.dart:401",
+      "db_operation": "rls.suppliers.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "suppliers.newPo": {
+      "route": "/suppliers/:id",
+      "label": "New purchase order (from supplier)",
+      "kind": "create",
+      "gate": "can(suppliers,edit)",
+      "evidence": "lib/features/suppliers/screens/suppliers_screen.dart:412",
+      "db_operation": "rls.purchaseOrders.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "po.create": {
+      "route": "/purchasing/orders",
+      "label": "New purchase order",
+      "kind": "create",
+      "gate": "can(purchaseOrders,edit)",
+      "evidence": "lib/features/purchasing/screens/purchase_orders_screen.dart:51",
+      "db_operation": "rls.purchaseOrders.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "po.approve": {
+      "route": "/purchasing/orders/:id",
+      "label": "Approve & send / cancel purchase order",
+      "kind": "approve",
+      "gate": "role(super_admin,admin)",
+      "evidence": "lib/features/purchasing/screens/purchase_order_screen.dart:430",
+      "db_operation": "rpc.set_purchase_order_status",
+      "ui_roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    "po.receive": {
+      "route": "/purchasing/orders/:id",
+      "label": "Receive goods",
+      "kind": "edit",
+      "gate": "can(purchaseOrders,edit)",
+      "evidence": "lib/features/purchasing/screens/purchase_order_screen.dart:656",
+      "db_operation": "rpc.receive_purchase_order",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper"
+      ]
+    },
+    "po.print": {
+      "route": "/purchasing/orders/:id",
+      "label": "Print PO / GRN",
+      "kind": "print",
+      "gate": "can(purchaseOrders,view)",
+      "evidence": "lib/features/purchasing/screens/purchase_order_screen.dart:401",
+      "db_operation": "rls.purchaseOrders.read",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "store_keeper",
+        "accountant"
+      ]
+    },
+    "pos.sale": {
+      "route": "/pos",
+      "label": "Create sale / charge cart",
+      "kind": "create",
+      "gate": "can(pos,edit)",
+      "evidence": "lib/features/pos/screens/pos_screen.dart:484",
+      "db_operation": "rpc.create_sale",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "cashier"
+      ]
+    },
+    "pos.shift": {
+      "route": "/shifts",
+      "label": "Start / close shift",
+      "kind": "create",
+      "gate": "can(pos,edit)",
+      "evidence": "lib/features/shifts/screens/shifts_screen.dart:256",
+      "db_operation": "rpc.open_shift",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "cashier"
+      ]
+    },
+    "pos.shiftReport": {
+      "route": "/shifts",
+      "label": "X report / Z report (print)",
+      "kind": "print",
+      "gate": "can(pos,edit)",
+      "evidence": "lib/features/shifts/screens/shifts_screen.dart:308",
+      "db_operation": "rpc.shift_expected_cash",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "cashier"
+      ]
+    },
+    "sales.reprint": {
+      "route": "/sales",
+      "label": "Reprint receipt",
+      "kind": "print",
+      "gate": "can(sales,view)",
+      "evidence": "lib/features/sales/screens/sales_screen.dart:353",
+      "db_operation": "rls.sales.read",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "cashier",
+        "accountant"
+      ]
+    },
+    "sales.void": {
+      "route": "/sales",
+      "label": "Void sale",
+      "kind": "deactivate",
+      "gate": "can(saleReturns,edit)",
+      "evidence": "lib/features/sales/screens/sales_screen.dart:124",
+      "db_operation": "rpc.void_sale",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist"
+      ]
+    },
+    "sales.return": {
+      "route": "/sales/:id",
+      "label": "Process partial return",
+      "kind": "create",
+      "gate": "can(saleReturns,edit)",
+      "evidence": "lib/features/sales/screens/sale_detail_screen.dart:240",
+      "db_operation": "rpc.process_sale_return",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist"
+      ]
+    },
+    "customers.create": {
+      "route": "/customers",
+      "label": "Add customer",
+      "kind": "create",
+      "gate": "can(customers,edit)",
+      "evidence": "lib/features/customers/screens/customers_screen.dart:62",
+      "db_operation": "rls.customers.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "cashier"
+      ]
+    },
+    "customers.deactivate": {
+      "route": "/customers",
+      "label": "Deactivate / reactivate customer",
+      "kind": "deactivate",
+      "gate": "can(customers,edit)",
+      "evidence": "lib/features/customers/screens/customers_screen.dart:144",
+      "db_operation": "rls.customers.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "cashier"
+      ]
+    },
+    "customers.stats": {
+      "route": "/customers/:id",
+      "label": "View customer stats",
+      "kind": "view",
+      "gate": "can(customers,view)",
+      "evidence": "lib/features/customers/screens/customers_screen.dart:128",
+      "db_operation": "rpc.customer_stats",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "cashier",
+        "accountant"
+      ]
+    },
+    "prescriptions.register": {
+      "route": "/prescriptions",
+      "label": "Register prescription",
+      "kind": "create",
+      "gate": "can(prescriptions,edit)",
+      "evidence": "lib/features/prescriptions/screens/prescriptions_screen.dart:348",
+      "db_operation": "rls.prescriptions.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist"
+      ]
+    },
+    "prescriptions.cancel": {
+      "route": "/prescriptions",
+      "label": "Cancel prescription",
+      "kind": "deactivate",
+      "gate": "can(prescriptions,edit)",
+      "evidence": "lib/features/prescriptions/screens/prescriptions_screen.dart:427",
+      "db_operation": "rls.prescriptions.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist"
+      ]
+    },
+    "prescriptions.image": {
+      "route": "/prescriptions",
+      "label": "Upload prescription image",
+      "kind": "create",
+      "gate": "can(prescriptions,edit)",
+      "evidence": "lib/features/prescriptions/screens/prescriptions_screen.dart:410",
+      "db_operation": "storage.prescriptions.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist"
+      ]
+    },
+    "expenses.create": {
+      "route": "/expenses",
+      "label": "Add expense",
+      "kind": "create",
+      "gate": "can(expenses,edit)",
+      "evidence": "lib/features/expenses/expenses_screen.dart:324",
+      "db_operation": "rls.expenses.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "accountant"
+      ]
+    },
+    "expenses.edit": {
+      "route": "/expenses",
+      "label": "Edit / delete expense",
+      "kind": "edit",
+      "gate": "can(expenses,edit)",
+      "evidence": "lib/features/expenses/expenses_screen.dart:485",
+      "db_operation": "rls.expenses.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "accountant"
+      ]
+    },
+    "expenses.approve": {
+      "route": "/expenses",
+      "label": "Approve / reject expense",
+      "kind": "approve",
+      "gate": "role(super_admin,admin,accountant)",
+      "evidence": "lib/features/expenses/expenses_screen.dart:465",
+      "db_operation": "rpc.set_expense_status",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "accountant"
+      ]
+    },
+    "expenses.receipt": {
+      "route": "/expenses",
+      "label": "Upload expense receipt",
+      "kind": "create",
+      "gate": "can(expenses,edit)",
+      "evidence": "lib/features/expenses/expenses_screen.dart:632",
+      "db_operation": "storage.receipts.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "accountant"
+      ]
+    },
+    "reports.export": {
+      "route": "/reports",
+      "label": "Export report PDF / CSV",
+      "kind": "export",
+      "gate": "can(reports,view)",
+      "evidence": "lib/features/reports/reports_screen.dart:559",
+      "db_operation": "views.reports",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "accountant"
+      ]
+    },
+    "users.create": {
+      "route": "/admin/users",
+      "label": "Create user",
+      "kind": "create",
+      "gate": "can(users,edit)",
+      "evidence": "lib/features/admin/users_screen.dart:368",
+      "db_operation": "edge.admin-create-user",
+      "ui_roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    "users.edit": {
+      "route": "/admin/users",
+      "label": "Edit / reset password / deactivate user",
+      "kind": "edit",
+      "gate": "can(users,edit)",
+      "evidence": "lib/features/admin/users_screen.dart:487",
+      "db_operation": "rpc.set_user_access",
+      "ui_roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    "users.reset": {
+      "route": "/admin/users",
+      "label": "Reset user password",
+      "kind": "edit",
+      "gate": "can(users,edit)",
+      "evidence": "lib/features/admin/users_screen.dart:487",
+      "db_operation": "edge.admin-reset-password",
+      "ui_roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    "team.share": {
+      "route": "/admin/team",
+      "label": "Share admin access",
+      "kind": "edit",
+      "gate": "can(teamAccess,edit)",
+      "evidence": "lib/features/admin/team_access_screen.dart:274",
+      "db_operation": "rpc.share_admin_access",
+      "ui_roles": [
+        "super_admin"
+      ]
+    },
+    "branches.create": {
+      "route": "/admin/branches",
+      "label": "Create / edit / deactivate branch",
+      "kind": "create",
+      "gate": "can(branches,edit)",
+      "evidence": "lib/features/admin/branches_screen.dart:178",
+      "db_operation": "rls.branches.write",
+      "ui_roles": [
+        "super_admin"
+      ]
+    },
+    "settings.save": {
+      "route": "/admin/settings",
+      "label": "Save setting / upload branding",
+      "kind": "edit",
+      "gate": "can(settings,edit)",
+      "evidence": "lib/features/admin/settings_screen.dart:283",
+      "db_operation": "rls.settings.write",
+      "ui_roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    "settings.publish": {
+      "route": "/admin/settings",
+      "label": "Publish settings",
+      "kind": "approve",
+      "gate": "can(settings,edit)",
+      "evidence": "lib/features/admin/settings_screen.dart:297",
+      "db_operation": "rpc.publish_app_settings",
+      "ui_roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    "audit.export": {
+      "route": "/admin/audit",
+      "label": "Export audit CSV",
+      "kind": "export",
+      "gate": "can(audit,view)",
+      "evidence": "lib/features/admin/audit_screen.dart:204",
+      "db_operation": "rls.activity.read",
+      "ui_roles": [
+        "super_admin",
+        "admin"
+      ]
+    },
+    "audit.approveCorrection": {
+      "route": "/admin/audit",
+      "label": "Approve activity correction",
+      "kind": "approve",
+      "gate": "role(super_admin)",
+      "evidence": "lib/features/admin/audit_screen.dart:233",
+      "db_operation": "rpc.approve_activity_correction",
+      "ui_roles": [
+        "super_admin"
+      ]
+    },
+    "audit.requestCorrection": {
+      "route": "/admin/audit",
+      "label": "Request activity correction",
+      "kind": "edit",
+      "gate": "can(audit,view)&&role(admin)",
+      "evidence": "lib/features/admin/audit_screen.dart:240",
+      "db_operation": "rpc.request_activity_correction",
+      "ui_roles": [
+        "admin"
+      ]
+    },
+    "profile.avatar": {
+      "route": "/profile",
+      "label": "Upload own avatar",
+      "kind": "create",
+      "gate": "all",
+      "evidence": "lib/features/auth/profile_screen.dart:29",
+      "db_operation": "storage.avatars.write",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "cashier",
+        "store_keeper",
+        "accountant"
+      ]
+    },
+    "profile.update": {
+      "route": "/profile",
+      "label": "Edit own profile",
+      "kind": "edit",
+      "gate": "all",
+      "evidence": "lib/features/auth/profile_screen.dart:89",
+      "db_operation": "rpc.update_my_profile",
+      "ui_roles": [
+        "super_admin",
+        "admin",
+        "pharmacist",
+        "cashier",
+        "store_keeper",
+        "accountant"
+      ]
+    }
+  }
+}

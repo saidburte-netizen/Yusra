@@ -5,8 +5,19 @@ import 'dart:io' if (dart.library.io) 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../state/idempotency.dart';
 import '../strings.dart';
 import '../supabase_client.dart';
+
+/// Raised by every guarded write when the device has no connection. Defined
+/// here (not in the connectivity widget layer) so the error mapper can turn
+/// it into a friendly, retryable [AppError] without a circular dependency.
+class OfflineException implements Exception {
+  const OfflineException();
+
+  @override
+  String toString() => S.noConnection;
+}
 
 /// Error categories used by the UI to decide wording and whether a retry
 /// makes sense. Kept independent of any widget so it is unit-testable.
@@ -48,6 +59,14 @@ class AppError implements Exception {
   /// The line shown underneath the friendly message in error banners.
   String? get codeLine => code == null ? null : 'Error code: $code';
 
+  /// True when the server rejected an expired token and the user must sign in
+  /// again. The router uses this to send the user to /login.
+  bool get isSessionExpired => code == 'AUTH_EXPIRED';
+
+  /// Safe to write to a local log: a stable kind + short code only. Never the
+  /// friendly message, raw exception text, a stack trace or any PII.
+  String get sanitizedLogLine => '${kind.name}${code == null ? '' : ':$code'}';
+
   @override
   String toString() => message;
 }
@@ -59,6 +78,25 @@ class AppErrorMapper {
   static AppError from(Object error) {
     if (error is AppError) return error;
 
+    if (error is DuplicateSubmitException) {
+      return AppError(
+        S.duplicateSubmit,
+        kind: AppErrorKind.validation,
+        code: 'DUPLICATE',
+        cause: error,
+      );
+    }
+
+    if (error is OfflineException) {
+      return AppError(
+        S.noConnection,
+        kind: AppErrorKind.network,
+        retryable: true,
+        code: 'OFFLINE',
+        cause: error,
+      );
+    }
+
     if (error is SupabaseNotConfigured) {
       return AppError(
         S.configurationMissing,
@@ -68,30 +106,41 @@ class AppErrorMapper {
     }
 
     if (error is AuthException) {
+      final expired = _isExpiredSession(error.message);
       return AppError(
-        _authMessage(error.message),
+        expired ? S.sessionExpired : _authMessage(error.message),
         kind: AppErrorKind.authentication,
+        code: expired ? 'AUTH_EXPIRED' : null,
         cause: error,
       );
     }
 
     if (error is PostgrestException) {
       final code = _cleanCode(error.code);
+      final expired = _isExpiredSession(error.message) ||
+          error.code == 'PGRST301' ||
+          error.code == '401';
       return AppError(
-        _withCode(_postgrestMessage(error), code),
-        kind: _postgrestKind(error),
-        retryable: _postgrestRetryable(error),
+        _withCode(
+          expired ? S.sessionExpired : _postgrestMessage(error),
+          expired ? 'AUTH_EXPIRED' : code,
+        ),
+        kind: expired ? AppErrorKind.authentication : _postgrestKind(error),
+        retryable: expired ? false : _postgrestRetryable(error),
         cause: error,
-        code: code,
+        code: expired ? 'AUTH_EXPIRED' : code,
       );
     }
 
     if (error is FunctionException) {
+      final expired = error.status == 401;
       return AppError(
-        _functionMessage(error),
-        kind: _functionKind(error.status),
-        retryable: _functionRetryable(error.status),
+        expired ? S.sessionExpired : _functionMessage(error),
+        kind:
+            expired ? AppErrorKind.authentication : _functionKind(error.status),
+        retryable: expired ? false : _functionRetryable(error.status),
         cause: error,
+        code: expired ? 'AUTH_EXPIRED' : null,
       );
     }
 
@@ -142,6 +191,20 @@ class AppErrorMapper {
     final clean = _cleanCode(code);
     if (clean == null) return message;
     return '$message\nError code: $clean';
+  }
+
+  /// Detects the several ways Supabase reports an expired/invalid session.
+  /// Kept conservative: a generic "database error" must stay unknown rather
+  /// than signing a healthy user out.
+  static bool _isExpiredSession(String raw) {
+    final lower = raw.toLowerCase();
+    return lower.contains('jwt expired') ||
+        lower.contains('token expired') ||
+        lower.contains('session expired') ||
+        lower.contains('access token has expired') ||
+        lower.contains('refresh token') ||
+        (lower.contains('expired') && lower.contains('token')) ||
+        (lower.contains('invalid') && lower.contains('jwt'));
   }
 
   static String _authMessage(String raw) {

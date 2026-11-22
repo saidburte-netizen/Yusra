@@ -1,0 +1,74 @@
+# Dependabot coverage for every ecosystem in this repository.
+# All pull requests land on `audit/full-system-wiring`-style branches and must
+# pass the same required PR checks as any other change (see docs/CICD.md).
+version: 2
+updates:
+  # Flutter / Dart packages (pubspec.yaml, pubspec.lock).
+  - package-ecosystem: "pub"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Africa/Addis_Ababa"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "dart"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      flutter-sdk:
+        patterns:
+          - "flutter*"
+      dart-packages:
+        patterns:
+          - "*"
+
+  # Node packages. Becomes active once a package.json is committed (for
+  # example to pin the Playwright version used by the e2e CI job).
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Africa/Addis_Ababa"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "chore(deps-npm)"
+
+  # GitHub Actions: actions/checkout, subosito/flutter-action, and the other
+  # pinned actions used by ci.yml, release.yml and web-deploy.yml.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Africa/Addis_Ababa"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "chore(deps-actions)"
+
+  # Container base images. Becomes active once a Dockerfile or compose file is
+  # committed (for example a local PostgREST/Supabase test image).
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Africa/Addis_Ababa"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore(deps-docker)"

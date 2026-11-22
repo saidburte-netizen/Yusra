@@ -81,6 +81,7 @@ class _FakeInventoryRepository extends InventoryRepository {
   @override
   Future<int> addOpeningStock({
     required String branchId,
+    String? idempotencyKey,
     required List<OpeningStockRowInput> rows,
   }) async =>
       rows.length;
@@ -92,6 +93,7 @@ class _FakeInventoryRepository extends InventoryRepository {
   @override
   Future<List<String>> createDraftPurchaseOrders({
     required String branchId,
+    String? idempotencyKey,
     required List<Map<String, dynamic>> lines,
   }) async =>
       const <String>['po-1'];

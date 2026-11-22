@@ -196,7 +196,7 @@ void main() {
       );
       expect(errors, isEmpty, reason: '${errors.map((e) => e.exception)}');
       expect(find.text('Approve & send'), findsNothing);
-      expect(find.text('Receive goods'), findsNothing);
+      expect(find.text('Receive goods'), findsOneWidget);
       expect(find.text('Ethio Pharma'), findsOneWidget);
 
       // Force a fresh State so the role change is observed by initState.

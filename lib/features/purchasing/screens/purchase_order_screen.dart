@@ -14,6 +14,9 @@ import '../../suppliers/data/suppliers.dart';
 import '../data/purchase_documents.dart';
 import '../data/purchasing.dart';
 import '../../../core/errors/app_error.dart';
+import '../../../core/state/connectivity.dart';
+import '../../../core/state/idempotency.dart';
+import '../../../core/state/invalidation.dart';
 import '../../../core/strings.dart';
 import '../../inventory/widgets/responsive_ui.dart';
 
@@ -46,6 +49,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
   PurchaseOrder? _order;
   bool _loading = true;
   bool _saving = false;
+  String _receiveKey = WriteIdempotency.newKey(Mutation.receivePurchaseOrder);
 
   final Map<String, TextEditingController> _receiveQty = {};
   final Map<String, TextEditingController> _receiveBatch = {};
@@ -109,11 +113,15 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
     return can(role, Modules.purchaseOrders, PermAction.edit);
   }
 
-  /// Approving, cancelling and receiving are edits to a purchase order, so
-  /// they follow the permission matrix rather than an admin-role check.
+  /// Receiving is an edit; approving/cancelling are admin-only in the DB.
   bool get _canManage {
     final role = ref.read(authProvider).profile?.role ?? AppRole.cashier;
     return can(role, Modules.purchaseOrders, PermAction.edit);
+  }
+
+  bool get _canApprove {
+    final role = ref.read(authProvider).profile?.role ?? AppRole.cashier;
+    return role == AppRole.superAdmin || role == AppRole.admin;
   }
 
   Future<void> _saveDraft() async {
@@ -346,14 +354,14 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
     }
     setState(() => _saving = true);
     try {
-      await ref
-          .read(purchaseRepositoryProvider)
-          .receive(widget.orderId, payload);
-      ref.invalidate(purchaseOrderProvider(widget.orderId));
-      ref.invalidate(purchaseItemsProvider(widget.orderId));
-      ref.invalidate(purchaseOrdersProvider);
-      ref.invalidate(batchesProvider(null));
-      ref.invalidate(stockSummaryProvider);
+      await ref.read(purchaseRepositoryProvider).receive(
+            widget.orderId,
+            payload,
+            idempotencyKey: _receiveKey,
+          );
+      ref.applyMutation(Mutation.receivePurchaseOrder);
+      setState(() =>
+          _receiveKey = WriteIdempotency.newKey(Mutation.receivePurchaseOrder));
       if (!mounted) return;
       AppSnackbar.success(context, 'Goods received and stock updated.');
       await _load();
@@ -406,7 +414,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                               onPressed: _printGrn,
                             ),
                           ),
-                        if (!_isNew && _canManage && status == 'draft') ...[
+                        if (!_isNew && _canApprove && status == 'draft') ...[
                           Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: ResponsiveSecondaryButton(
@@ -648,7 +656,10 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                                           label: 'Receive goods',
                                           icon: Icons.inventory_outlined,
                                           loading: _saving,
-                                          onPressed: _receive,
+                                          onPressed:
+                                              _saving || !writeEnabled(ref)
+                                                  ? null
+                                                  : _receive,
                                         ),
                                       ),
                                     ],

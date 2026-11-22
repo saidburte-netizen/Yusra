@@ -214,6 +214,10 @@ String? redirectFor(AuthState auth, String location) {
 
   // Wait for both session and profile before deciding where to send anyone.
   if (waiting) return null;
+  // An expired token always lands on sign-in, whatever screen was open.
+  if (auth.sessionExpired) {
+    return _publicPaths.contains(location) ? null : '/login';
+  }
   if (auth.status == AuthStatus.profileError) return '/profile_error';
   if (auth.status != AuthStatus.authenticated) return '/login';
   if (auth.profile?.isActive != true) return '/forbidden';

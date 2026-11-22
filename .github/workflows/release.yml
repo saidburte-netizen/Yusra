@@ -1,0 +1,390 @@
+name: Release
+
+# Tag-driven release for vX.Y.Z. Manual dispatch is for migration validation,
+# optional gated live migration apply and optional gated Edge Function deploy;
+# a GitHub Release is only ever created from a tag push.
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      apply_migrations:
+        description: 'Apply pending migrations to the live project (needs the production-approval environment)'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: '3.24.5'
+  POSTGREST_IMAGE: postgrest/postgrest:v12.2.3
+
+jobs:
+  # DB migration validation — runs on every tag and every dispatch. It brings
+  # up the real local Supabase stack and resets it twice, so the full numbered
+  # migration set is applied from scratch two independent times. No secrets or
+  # tokens are needed for this job.
+  validate-migrations:
+    name: Validate migrations from scratch twice (local Supabase)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout (full history and tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Print toolchain versions
+        run: |
+          set -euo pipefail
+          supabase --version
+          docker --version
+          docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
+          echo "Local stack major version from supabase/config.toml:"
+          grep '^major_version' supabase/config.toml
+
+      - name: Start local Supabase stack
+        run: |
+          set -euo pipefail
+          # `supabase start` boots PostgreSQL 16, Auth, Storage and PostgREST
+          # from supabase/config.toml; no project link or token is required.
+          supabase start
+
+      - name: Reset from scratch twice and check each pass
+        run: |
+          set -euo pipefail
+          for pass in 1 2; do
+            echo "=== supabase db reset pass $pass ==="
+            # Each reset drops and recreates the local database, then applies
+            # every file in supabase/migrations/ in filename order.
+            supabase db reset --yes
+
+            echo "=== db lint pass $pass ==="
+            supabase db lint --local
+
+            echo "=== schema_check.sql pass $pass ==="
+            supabase db execute --local --file supabase/checks/schema_check.sql \
+              | tee "/tmp/schema-check-pass-$pass.txt"
+            test -s "/tmp/schema-check-pass-$pass.txt"
+            if grep -qi 'FAIL' "/tmp/schema-check-pass-$pass.txt"; then
+              echo "::error::schema_check.sql reported FAIL on reset pass $pass"
+              exit 1
+            fi
+
+            echo "=== db_test.sql pass $pass ==="
+            supabase db execute --local --file tool/db_test.sql \
+              | tee "/tmp/db-test-pass-$pass.txt"
+            test -s "/tmp/db-test-pass-$pass.txt"
+            echo "Reset pass $pass OK"
+          done
+          echo "Migrations validated from scratch twice on the local Supabase stack."
+
+      - name: Stop local Supabase stack
+        if: always()
+        run: supabase stop --no-backup || true
+
+  # Release — tag pushes only. Build numbers are derived automatically from
+  # the tag (build name) and the Actions run number (monotonically increasing
+  # build number), so pubspec.yaml never has to be edited by hand.
+  release:
+    name: Build signed APK + web zip and publish GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: validate-migrations
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout (full history for the changelog)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version and build number
+        id: version
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag must be vX.Y.Z (got $GITHUB_REF_NAME)"
+            exit 1
+          fi
+          BUILD_NUMBER="${{ github.run_number }}"
+          echo "name=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "Release $VERSION, build $BUILD_NUMBER"
+
+      - name: Set up Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter (pinned)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Set up Android SDK (platform 34, build-tools 34.0.0)
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          if [ ! -d "$SDK/platforms/android-34" ] || [ ! -d "$SDK/build-tools/34.0.0" ]; then
+            yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" \
+              "platforms;android-34" "build-tools;34.0.0"
+          fi
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --list_installed | \
+            grep -E 'platforms;android-34|build-tools;34.0.0'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Install dependencies, format, analyze and test
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart format --set-exit-if-changed .
+          flutter analyze
+          flutter test --exclude-tags e2e-api
+
+      - name: Analyze Edge Functions (Deno)
+        run: |
+          deno check --no-config supabase/functions/admin-create-user/index.ts
+          deno check --no-config supabase/functions/admin-reset-password/index.ts
+
+      - name: Prepare optional Android signing
+        id: signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            if [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+              echo "::error::A keystore was supplied but one of the KEY_* secrets is missing."
+              exit 1
+            fi
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/yusra-release.jks
+            cat > android/key.properties <<EOF
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=app/yusra-release.jks
+          EOF
+            echo "signing=signed" >> "$GITHUB_OUTPUT"
+            echo "Release keystore configured."
+          else
+            echo "signing=debug" >> "$GITHUB_OUTPUT"
+            echo "::warning::No signing secrets; falling back to the default debug key."
+          fi
+
+      - name: Build release APK with bumped build number
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          flutter build apk --release \
+            --build-name="${{ steps.version.outputs.name }}" \
+            --build-number="${{ steps.version.outputs.number }}" \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+
+      - name: Build release web zip with correct base href
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          BASE_HREF="${{ vars.WEB_BASE_HREF || '/' }}"
+          case "$BASE_HREF" in
+            /*/) ;;
+            *) echo "::error::WEB_BASE_HREF must start and end with '/' (got '$BASE_HREF')"; exit 1 ;;
+          esac
+          flutter build web --release \
+            --base-href="$BASE_HREF" \
+            --build-name="${{ steps.version.outputs.name }}" \
+            --build-number="${{ steps.version.outputs.number }}" \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+          (cd build/web && zip -qr "../yusra-pharmacy-web-${{ steps.version.outputs.name }}.zip" .)
+          echo "base_href=$BASE_HREF" >> "$GITHUB_OUTPUT"
+
+      - name: Generate changelog
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.name }}"
+          PREVIOUS=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          {
+            echo "## $VERSION"
+            echo
+            if [ -n "$PREVIOUS" ]; then
+              echo "Changes since $PREVIOUS:"
+              echo
+              git log --no-merges --pretty=format:'- %h %s' "$PREVIOUS..$GITHUB_REF_NAME"
+            else
+              echo "Initial tagged release. Recent commits:"
+              echo
+              git log --no-merges --pretty=format:'- %h %s' -20
+            fi
+            echo
+          } > CHANGELOG.md
+          cat CHANGELOG.md
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yusra-pharmacy-apk-${{ steps.version.outputs.name }}
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload web zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yusra-pharmacy-web-${{ steps.version.outputs.name }}
+          path: build/yusra-pharmacy-web-${{ steps.version.outputs.name }}.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release with APK and web zip
+        # The only step that needs a token: it uses the automatic GITHUB_TOKEN
+        # granted to the workflow (contents: write). No user-managed secret is
+        # read, echoed or stored.
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Yusra Pharmacy ${{ steps.version.outputs.name }}
+          body_path: CHANGELOG.md
+          files: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/yusra-pharmacy-web-${{ steps.version.outputs.name }}.zip
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Live migration apply — manual dispatch only, behind a required-reviewer
+  # environment. It never runs on a tag push, and it is a no-op (with a clear
+  # warning) when the two Supabase secrets are not configured.
+  apply-migrations-live:
+    name: Apply pending migrations to live project (approval required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: validate-migrations
+    if: github.event_name == 'workflow_dispatch' && inputs.apply_migrations
+    environment:
+      name: production-approval
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check migration secrets
+        id: migration_secrets
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$REF" ]; then
+            echo "::warning::SUPABASE_ACCESS_TOKEN / SUPABASE_PROJECT_REF are not configured; live migration apply is a no-op."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Supabase CLI
+        if: steps.migration_secrets.outputs.available == 'true'
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Show pending migrations (dry run)
+        if: steps.migration_secrets.outputs.available == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          supabase db push --linked --dry-run --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Apply pending migrations
+        if: steps.migration_secrets.outputs.available == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          supabase db push --linked --project-ref "$SUPABASE_PROJECT_REF"
+
+  # Edge Function deploy — gated on deploy secrets; a no-op when they are
+  # absent. CI already deploys from main; keeping it here means a tag release
+  # can also publish the functions the shipped app calls.
+  deploy-edge-functions:
+    name: Deploy Edge Functions (gated on secrets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: validate-migrations
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check deploy secrets
+        id: deploy_secrets
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$REF" ]; then
+            echo "::warning::Deploy secrets absent; Edge Function deploy is a no-op."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Supabase CLI
+        if: steps.deploy_secrets.outputs.available == 'true'
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy admin-create-user
+        if: steps.deploy_secrets.outputs.available == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: supabase functions deploy admin-create-user --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Deploy admin-reset-password
+        if: steps.deploy_secrets.outputs.available == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: supabase functions deploy admin-reset-password --project-ref "$SUPABASE_PROJECT_REF"

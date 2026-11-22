@@ -9,6 +9,9 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/dates.dart';
 import '../../../core/permissions.dart';
 import '../../../core/state/app_cache.dart';
+import '../../../core/state/cache_policy.dart';
+import '../../../core/state/idempotency.dart';
+import '../../../core/state/invalidation.dart';
 import '../../../core/supabase_client.dart';
 import '../../inventory/data/inventory_providers.dart';
 
@@ -328,17 +331,28 @@ typedef SaleFilter = ({
 });
 
 class SalesRepository {
+  SalesRepository({WriteCoordinator? coordinator})
+      : _coordinator = coordinator ?? const WriteCoordinator();
+
+  final WriteCoordinator _coordinator;
+
   SupabaseClient get _db => SupabaseService.client;
 
   // ---- Shifts -----------------------------------------------------------
-  Future<Shift?> openShift(String branchId, double openingCash) async {
-    final raw = await _db.rpc('open_shift', params: {
-      'p_branch': branchId,
-      'p_opening_cash': openingCash,
-    });
-    final id = raw is Map ? raw['id']?.toString() : raw?.toString();
-    if (id == null) return null;
-    return shift(id);
+  Future<Shift?> openShift(String branchId, double openingCash) {
+    return _coordinator.run<Shift?>(
+      operation: Mutation.openShift,
+      key: WriteIdempotency.newKey(Mutation.openShift),
+      action: () async {
+        final raw = await _db.rpc('open_shift', params: {
+          'p_branch': branchId,
+          'p_opening_cash': openingCash,
+        });
+        final id = raw is Map ? raw['id']?.toString() : raw?.toString();
+        if (id == null) return null;
+        return shift(id);
+      },
+    );
   }
 
   Future<Shift> shift(String id) async {
@@ -382,13 +396,19 @@ class SalesRepository {
     String shiftId,
     double closingCash,
     String? note,
-  ) async {
-    final raw = await _db.rpc('close_shift', params: {
-      'p_shift': shiftId,
-      'p_closing_cash': closingCash,
-      'p_note': note,
-    });
-    return ShiftCloseResult.fromRpc(raw);
+  ) {
+    return _coordinator.run<ShiftCloseResult>(
+      operation: Mutation.closeShift,
+      key: WriteIdempotency.newKey(Mutation.closeShift),
+      action: () async {
+        final raw = await _db.rpc('close_shift', params: {
+          'p_shift': shiftId,
+          'p_closing_cash': closingCash,
+          'p_note': note,
+        });
+        return ShiftCloseResult.fromRpc(raw);
+      },
+    );
   }
 
   /// Number of completed sales in a shift, read from the sales table.
@@ -411,39 +431,61 @@ class SalesRepository {
     required List<Map<String, dynamic>> payments,
     required double discount,
     String? note,
-  }) async {
-    final raw = await _db.rpc('create_sale', params: {
-      'p_branch': branchId,
-      'p_shift': shiftId,
-      'p_customer': customerId,
-      'p_prescription': prescriptionId,
-      'p_items': items,
-      'p_payments': payments,
-      'p_discount': discount,
-      'p_note': note,
-    });
-    return raw.toString();
+    String? idempotencyKey,
+  }) {
+    return _coordinator.run<String>(
+      operation: Mutation.createSale,
+      key: idempotencyKey ?? WriteIdempotency.newKey(Mutation.createSale),
+      action: () async {
+        final raw = await _db.rpc('create_sale', params: {
+          'p_branch': branchId,
+          'p_shift': shiftId,
+          'p_customer': customerId,
+          'p_prescription': prescriptionId,
+          'p_items': items,
+          'p_payments': payments,
+          'p_discount': discount,
+          'p_note': note,
+        });
+        return raw.toString();
+      },
+    );
   }
 
-  Future<void> voidSale(String saleId, String reason) =>
-      _db.rpc('void_sale', params: {
-        'p_sale': saleId,
-        'p_reason': reason,
-      });
+  Future<void> voidSale(String saleId, String reason,
+          {String? idempotencyKey}) =>
+      _coordinator.run<void>(
+        operation: Mutation.voidSale,
+        key: idempotencyKey ?? WriteIdempotency.newKey(Mutation.voidSale),
+        action: () async {
+          await _db.rpc('void_sale', params: {
+            'p_sale': saleId,
+            'p_reason': reason,
+          });
+        },
+      );
 
   Future<String> processReturn({
     required String saleId,
     required List<Map<String, dynamic>> items,
     required String reason,
     required String refundMethod,
-  }) async {
-    final raw = await _db.rpc('process_sale_return', params: {
-      'p_sale': saleId,
-      'p_items': items,
-      'p_reason': reason,
-      'p_refund_method': refundMethod,
-    });
-    return raw.toString();
+    String? idempotencyKey,
+  }) {
+    return _coordinator.run<String>(
+      operation: Mutation.processSaleReturn,
+      key:
+          idempotencyKey ?? WriteIdempotency.newKey(Mutation.processSaleReturn),
+      action: () async {
+        final raw = await _db.rpc('process_sale_return', params: {
+          'p_sale': saleId,
+          'p_items': items,
+          'p_reason': reason,
+          'p_refund_method': refundMethod,
+        });
+        return raw.toString();
+      },
+    );
   }
 
   Future<List<Sale>> sales(SaleFilter filter, String? branchId) async {
@@ -607,8 +649,9 @@ class ReceiptSettings {
   final double maxCashierDiscountPct;
 }
 
-final salesRepositoryProvider =
-    Provider<SalesRepository>((ref) => SalesRepository());
+final salesRepositoryProvider = Provider<SalesRepository>((ref) {
+  return SalesRepository(coordinator: ref.read(writeCoordinatorProvider));
+});
 
 final receiptSettingsProvider = FutureProvider<ReceiptSettings>((ref) async {
   const fallback = ReceiptSettings(
@@ -626,9 +669,10 @@ final receiptSettingsProvider = FutureProvider<ReceiptSettings>((ref) async {
 
   final scope = ref.watch(authProvider).profile?.branchId ?? 'global';
   final key = AppCache.scopedKey(CacheTag.settings, scope, 'receipt');
-  return ref.read(appCacheProvider).read(
+  return ref.read(appCacheProvider).readVersioned<ReceiptSettings>(
         key,
-        const Duration(minutes: 10),
+        CachePolicy.settingsTtl,
+        () => ref.read(settingsVersionProvider.future),
         () => ref.read(salesRepositoryProvider).receiptSettings(),
       );
 });

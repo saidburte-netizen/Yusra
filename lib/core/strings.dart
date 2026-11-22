@@ -73,6 +73,12 @@ abstract final class S {
       'Too many attempts. Wait a moment and try again.';
   static const noConnection =
       'No connection. Check your internet and try again.';
+  static const offlineBanner =
+      'You are offline. Changes cannot be saved until you reconnect.';
+  static const sessionExpired =
+      'Your session has expired. Please sign in again.';
+  static const duplicateSubmit =
+      'This action is already in progress. Please wait.';
   static const notFoundTitle = '404';
   static const notFoundBody = 'This page does not exist.';
   static const backToHome = 'Back to home';

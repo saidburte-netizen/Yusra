@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/state/connectivity.dart';
+import '../../../core/state/idempotency.dart';
+import '../../../core/state/invalidation.dart';
+
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/dates.dart';
 import '../../../core/money.dart';
@@ -24,6 +28,7 @@ class SaleDetailScreen extends ConsumerStatefulWidget {
 
 class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
   bool _busy = false;
+  String _returnKey = WriteIdempotency.newKey(Mutation.processSaleReturn);
 
   Future<void> _reprint() async {
     try {
@@ -192,11 +197,11 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
             items: payload,
             reason: reason.text.trim(),
             refundMethod: method.value,
+            idempotencyKey: _returnKey,
           );
-      ref.invalidate(saleProvider);
-      ref.invalidate(saleItemsProvider);
-      ref.invalidate(salesProvider);
-      ref.invalidate(saleReturnsProvider);
+      ref.applyMutation(Mutation.processSaleReturn);
+      setState(() =>
+          _returnKey = WriteIdempotency.newKey(Mutation.processSaleReturn));
       final settings = await ref.read(receiptSettingsProvider.future);
       await Receipts.printReturnNote(
         returnNo: returnId.substring(0, 8).toUpperCase(),
@@ -376,8 +381,10 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                                 label: _busy ? 'Working…' : 'Process return',
                                 icon: Icons.assignment_return,
                                 loading: _busy,
-                                onPressed: () => _return(
-                                    value, items.valueOrNull ?? const []),
+                                onPressed: _busy || !writeEnabled(ref)
+                                    ? null
+                                    : () => _return(
+                                        value, items.valueOrNull ?? const []),
                               ),
                           ],
                         ),

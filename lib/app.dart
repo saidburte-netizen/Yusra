@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router.dart';
+import 'core/state/connectivity.dart';
 import 'core/strings.dart';
 import 'core/theme/app_theme.dart';
 
@@ -17,6 +18,14 @@ class YusraApp extends ConsumerWidget {
       theme: AppTheme.light,
       routerConfig: ref.watch(appRouterProvider),
       debugShowCheckedModeBanner: false,
+      builder: (context, child) => Column(
+        children: [
+          // Auth screens sit outside AppShell; the shell shows its own banner
+          // for the main app layout. Keep a single top banner globally.
+          const OfflineBanner(),
+          Expanded(child: child ?? const SizedBox.shrink()),
+        ],
+      ),
     );
   }
 }

@@ -68,11 +68,16 @@ class AuthState {
     required this.status,
     this.profile,
     this.error,
+    this.sessionExpired = false,
   });
 
   final AuthStatus status;
   final UserProfile? profile;
   final String? error;
+
+  /// Set when the server rejected an expired token. The router uses it to
+  /// route to /login and the login screen can show a re-sign-in hint.
+  final bool sessionExpired;
 
   bool get isAuthenticated => status == AuthStatus.authenticated;
   bool get isInitialising =>
@@ -84,6 +89,8 @@ class AuthState {
   static const initial = AuthState(status: AuthStatus.initial);
   static const loading = AuthState(status: AuthStatus.loading);
   static const unauthenticated = AuthState(status: AuthStatus.unauthenticated);
+  static const expired =
+      AuthState(status: AuthStatus.unauthenticated, sessionExpired: true);
 }
 
 /// Bumped whenever auth state changes so go_router re-runs its redirect.
@@ -182,11 +189,28 @@ class AuthController extends StateNotifier<AuthState> {
         profile: UserProfile.fromJson(row, email: user.email ?? ''),
       );
     } catch (e) {
-      state = AuthState(
-        status: AuthStatus.profileError,
-        error: AppErrorMapper.from(e).message,
-      );
+      final mapped = AppErrorMapper.from(e);
+      if (mapped.isSessionExpired) {
+        // An expired token is not a profile bug: route to sign-in so the user
+        // can refresh the session instead of staring at a profile error.
+        state = AuthState.expired;
+      } else {
+        state = AuthState(
+          status: AuthStatus.profileError,
+          error: mapped.message,
+        );
+      }
     }
+    _bump();
+  }
+
+  /// Called by repository boundaries that receive a 401 / PGRST301 /
+  /// "JWT expired" response. Idempotent: repeated calls keep one state.
+  void markSessionExpired() {
+    if (state.sessionExpired && state.status == AuthStatus.unauthenticated) {
+      return;
+    }
+    state = AuthState.expired;
     _bump();
   }
 

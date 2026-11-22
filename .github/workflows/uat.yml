@@ -1,0 +1,123 @@
+name: UAT journeys
+
+# Browser-driven acceptance journeys against a real local Supabase stack
+# (Postgres + GoTrue + PostgREST + Storage) and locally served Edge Functions.
+# Credentials are read from `supabase status` at runtime: this workflow never
+# stores them in GITHUB_ENV, prints them or uploads them as evidence.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'lib/**'
+      - 'web/**'
+      - 'supabase/**'
+      - 'tool/uat/**'
+      - 'docs/UAT_*.md'
+      - '.github/workflows/uat.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'web/**'
+      - 'supabase/**'
+      - 'tool/uat/**'
+      - 'docs/UAT_*.md'
+      - '.github/workflows/uat.yml'
+
+permissions:
+  contents: read
+
+# Supabase CLI binds fixed local ports; only one UAT stack may run per runner.
+concurrency:
+  group: uat-journeys-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  uat-journeys:
+    name: UAT journeys (desktop + mobile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter 3.24.5
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: stable
+          cache: true
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tool/uat/package-lock.json
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Install Flutter packages
+        run: flutter pub get
+
+      - name: Install Playwright and Chromium
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+        working-directory: tool/uat
+
+      - name: Start real local stack and seed UAT fixtures
+        run: bash tool/uat/bootstrap/start-stack.sh
+
+      - name: Run UAT journeys (both viewports)
+        run: npm run test:stack
+        working-directory: tool/uat
+
+      - name: Stop local stack
+        if: always()
+        run: bash tool/uat/bootstrap/stop-stack.sh
+
+      - name: Upload step screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uat-screenshots
+          path: tool/uat/artifacts/screenshots/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload videos and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uat-videos-and-traces
+          path: |
+            tool/uat/artifacts/test-results/**
+            tool/uat/artifacts/videos/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Playwright report and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uat-playwright-report
+          path: |
+            tool/uat/artifacts/playwright-report/**
+            tool/uat/artifacts/results.json
+            tool/uat/artifacts/run.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload UAT evidence docs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uat-docs
+          path: docs/UAT_*.md
+          if-no-files-found: warn
+          retention-days: 14
