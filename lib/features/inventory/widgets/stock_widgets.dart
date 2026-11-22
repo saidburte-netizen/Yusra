@@ -9,6 +9,9 @@ import '../data/inventory_providers.dart';
 import '../logic/stock_rules.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/strings.dart';
+import '../../../core/theme/app_colors.dart';
+import '../data/inventory_ids.dart';
+import '../screens/medicines_screen.dart' show showMedicineFormDialog;
 import 'responsive_ui.dart';
 
 /// Dialog content width that never exceeds a phone viewport. A fixed 480/520
@@ -57,6 +60,29 @@ Widget stockState<T>(
       data: builder,
     );
 
+/// Registers a brand-new medicine from the shared catalogue dialog and returns
+/// the saved row so pickers can select it immediately.
+Future<Medicine?> addNewMedicine(BuildContext context, WidgetRef ref) async {
+  final data = await showMedicineFormDialog(context, ref);
+  if (data == null) return null;
+  final payload = Map<String, dynamic>.from(data);
+  final rawId = payload['id'];
+  final id =
+      rawId is String && rawId.trim().isNotEmpty ? rawId : generateUuidV4();
+  payload['id'] = id;
+  final repository = ref.read(inventoryRepositoryProvider);
+  await repository.saveMedicine(payload);
+  return repository.medicine(id);
+}
+
+/// Shared display string for medicine pickers: name, SKU and barcode.
+String medicineOptionLabel(Medicine item) {
+  final barcode = item.barcode?.trim() ?? '';
+  return barcode.isEmpty
+      ? '${item.name} (${item.sku})'
+      : '${item.name} (${item.sku}) • $barcode';
+}
+
 Future<void> showAddStockDialog(BuildContext context, WidgetRef ref) async {
   final branch = ref.read(branchScopeProvider);
   if (branch == null) {
@@ -66,90 +92,127 @@ Future<void> showAddStockDialog(BuildContext context, WidgetRef ref) async {
   final formKey = GlobalKey<FormState>();
   final batchNo = TextEditingController();
   final quantity = TextEditingController(text: '1');
-  final cost = TextEditingController(text: '0');
+  final cost = TextEditingController();
   Medicine? medicine;
   DateTime? expiryDate;
   String? supplierId;
+  var source = 'opening';
   var busy = false;
+  String? successMessage;
 
   final result = await showDialog<bool>(
     context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
+    builder: (_) => StatefulBuilder(
+      builder: (dialogContext, setState) => AlertDialog(
         title: const Text('Add stock'),
         content: SizedBox(
-          width: 460,
+          width: dialogContentWidth(dialogContext),
           child: Form(
             key: formKey,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   SearchableSelect<Medicine>(
                     label: 'Medicine',
-                    search: (query) => ref
-                        .read(inventoryRepositoryProvider)
-                        .medicines(query: query),
-                    display: (item) => '${item.name} (${item.sku})',
+                    search: (query) =>
+                        ref.read(inventoryRepositoryProvider).medicines(
+                              query: query,
+                              limit: query.trim().isEmpty ? 20 : 200,
+                            ),
+                    display: medicineOptionLabel,
                     value: medicine,
                     onSelected: (value) => setState(() => medicine = value),
+                    onAddNew: (pickerContext) =>
+                        addNewMedicine(pickerContext, ref),
                     validator: (value) => value == null ? 'Required' : null,
                   ),
                   const SizedBox(height: 12),
+                  AppDropdown<String>(
+                    label: 'Stock source',
+                    value: source,
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'opening',
+                        child: Text('Opening stock (already in store)'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'purchase',
+                        child: Text('Purchase received'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'other',
+                        child: Text(
+                            'Other (donation, transfer, return from customer)'),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => source = value ?? 'opening'),
+                  ),
+                  if (source == 'purchase') ...[
+                    const SizedBox(height: 12),
+                    FutureBuilder<List<SupplierOption>>(
+                      future: SupplierOption.load(ref),
+                      builder: (context, snapshot) => AppDropdown<String?>(
+                        label: 'Supplier (optional)',
+                        value: supplierId,
+                        items: [
+                          const DropdownMenuItem(
+                              value: null, child: Text('None')),
+                          for (final supplier
+                              in snapshot.data ?? const <SupplierOption>[])
+                            DropdownMenuItem(
+                                value: supplier.id, child: Text(supplier.name)),
+                        ],
+                        onChanged: (value) =>
+                            setState(() => supplierId = value),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
                   AppTextField(
-                    label: 'Batch number',
+                    label: 'Batch number (optional)',
                     controller: batchNo,
-                    validator: (value) =>
-                        (value ?? '').trim().isEmpty ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Leave blank to generate OPEN-YYYYMMDD-NNN',
+                    style:
+                        Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
+                              color: AppColors.muted,
+                            ),
                   ),
                   const SizedBox(height: 12),
                   DatePickerField(
                     label: 'Expiry date',
                     value: expiryDate,
                     onChanged: (date) => setState(() => expiryDate = date),
+                    emptyText: 'Select expiry date',
                     firstDate: DateTime.now().add(const Duration(days: 1)),
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: AppTextField(
-                          label: 'Quantity',
-                          controller: quantity,
-                          keyboardType: TextInputType.number,
-                          validator: (value) =>
-                              (int.tryParse(value ?? '') ?? 0) > 0
-                                  ? null
-                                  : 'Must be above zero',
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: MoneyField(
-                          label: 'Unit cost',
-                          controller: cost,
-                          validator: (value) =>
-                              (value ?? 0) >= 0 ? null : 'Invalid',
-                        ),
-                      ),
-                    ],
+                  AppTextField(
+                    label: 'Quantity',
+                    controller: quantity,
+                    keyboardType: TextInputType.number,
+                    validator: (value) => (int.tryParse(value ?? '') ?? 0) > 0
+                        ? null
+                        : 'Must be above zero',
                   ),
                   const SizedBox(height: 12),
-                  FutureBuilder<List<SupplierOption>>(
-                    future: SupplierOption.load(ref),
-                    builder: (context, snapshot) => AppDropdown<String?>(
-                      label: 'Supplier (optional)',
-                      value: supplierId,
-                      items: [
-                        const DropdownMenuItem(
-                            value: null, child: Text('None')),
-                        for (final supplier
-                            in snapshot.data ?? const <SupplierOption>[])
-                          DropdownMenuItem(
-                              value: supplier.id, child: Text(supplier.name)),
-                      ],
-                      onChanged: (value) => setState(() => supplierId = value),
-                    ),
+                  AppTextField(
+                    label: 'Unit cost (optional)',
+                    controller: cost,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    validator: (value) {
+                      final parsed =
+                          double.tryParse((value ?? '').replaceAll(',', ''));
+                      return parsed == null || parsed >= 0
+                          ? null
+                          : 'Must not be negative';
+                    },
                   ),
                 ],
               ),
@@ -158,7 +221,7 @@ Future<void> showAddStockDialog(BuildContext context, WidgetRef ref) async {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Cancel'),
           ),
           ResponsivePrimaryButton(
@@ -167,27 +230,44 @@ Future<void> showAddStockDialog(BuildContext context, WidgetRef ref) async {
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
               if (expiryDate == null) {
-                AppSnackbar.error(context, 'Choose a future expiry date.');
+                AppSnackbar.error(
+                    dialogContext, 'Choose a future expiry date.');
                 return;
               }
+              final now = DateTime.now();
+              final today = DateTime(now.year, now.month, now.day);
+              final expiryDay = DateTime(
+                  expiryDate!.year, expiryDate!.month, expiryDate!.day);
+              if (!expiryDay.isAfter(today)) {
+                AppSnackbar.error(dialogContext,
+                    'Expired stock cannot be added; use write-off.');
+                return;
+              }
+              final count = int.parse(quantity.text);
               setState(() => busy = true);
               try {
-                await ref.read(inventoryRepositoryProvider).addStock(
+                final savedBatch = await ref
+                    .read(inventoryRepositoryProvider)
+                    .addStock(
                       branchId: branch,
                       medicineId: medicine!.id,
-                      batchNo: batchNo.text,
+                      batchNo: batchNo.text.trim(),
                       expiry: expiryDate!,
-                      quantity: int.parse(quantity.text),
+                      quantity: count,
                       cost: double.tryParse(cost.text.replaceAll(',', '')) ?? 0,
-                      supplierId: supplierId,
+                      source: source,
+                      supplierId: source == 'purchase' ? supplierId : null,
                     );
-                if (context.mounted) Navigator.pop(context, true);
+                successMessage =
+                    'Added $count × ${medicine!.name} (batch $savedBatch).';
+                if (dialogContext.mounted) Navigator.pop(dialogContext, true);
               } catch (e) {
-                if (context.mounted) {
-                  AppSnackbar.error(context, AppErrorMapper.from(e).message);
+                if (dialogContext.mounted) {
+                  AppSnackbar.error(
+                      dialogContext, AppErrorMapper.from(e).message);
                 }
               } finally {
-                if (context.mounted) setState(() => busy = false);
+                if (dialogContext.mounted) setState(() => busy = false);
               }
             },
           ),
@@ -196,13 +276,19 @@ Future<void> showAddStockDialog(BuildContext context, WidgetRef ref) async {
     ),
   );
   if (result == true && context.mounted) {
-    AppSnackbar.success(context, 'Stock added.');
-    ref.invalidate(stockSummaryProvider);
-    ref.invalidate(batchesProvider);
-    ref.invalidate(lowStockProvider);
-    ref.invalidate(expiringBatchesProvider);
-    ref.invalidate(movementsProvider);
+    AppSnackbar.success(context, successMessage ?? 'Stock added.');
+    invalidateStockProviders(ref);
   }
+}
+
+/// Every provider that can change when a stock batch is written.
+void invalidateStockProviders(WidgetRef ref) {
+  ref.invalidate(stockSummaryProvider);
+  ref.invalidate(batchesProvider);
+  ref.invalidate(lowStockProvider);
+  ref.invalidate(expiringBatchesProvider);
+  ref.invalidate(movementsProvider);
+  ref.invalidate(reorderSuggestionsProvider);
 }
 
 class SupplierOption {
@@ -239,7 +325,7 @@ Future<void> showAdjustStockDialog(
       builder: (context, setState) => AlertDialog(
         title: Text('Adjust ${batch.batchNo}'),
         content: SizedBox(
-          width: 420,
+          width: dialogContentWidth(context),
           child: Form(
             key: formKey,
             child: Column(

@@ -1,5 +1,5 @@
--- Yusra Pharmacy — schema verification (0001 through 0021).
--- Run with the Supabase SQL Editor after applying 0021_grants.sql.
+-- Yusra Pharmacy — schema verification (0001 through 0022).
+-- Run with the Supabase SQL Editor after applying 0022_opening_stock_reorder.sql.
 -- Every row has a kind, object name, status of PASS or FAIL, and a FIX hint
 -- (blank for PASS). The db-test CI job fails on any non-PASS row.
 -- v_expired_batches is intentionally not required: the screen derives the same
@@ -20,12 +20,14 @@ expected_views(name) as (
          ('v_report_profit'), ('v_report_stock_valuation'),
          ('v_report_expiry_losses'), ('v_report_purchases_supplier'),
          ('v_report_expenses'), ('v_report_net_profit'),
-         ('v_report_shift_variance'), ('v_report_controlled_register')
+         ('v_report_shift_variance'), ('v_report_controlled_register'),
+         ('v_reorder_suggestions')
 ),
 expected_functions(name, nargs) as (
   values ('set_updated_at', 0), ('my_role', 0), ('my_branch', 0),
          ('has_role', 1), ('can_access_branch', 1), ('handle_new_user', 0),
-         ('next_doc_no', 2), ('add_stock_batch', 7), ('adjust_stock', 4),
+         ('next_doc_no', 2), ('add_stock_batch', 7), ('add_stock_batch', 8),
+         ('add_opening_stock', 2), ('create_draft_purchase_orders', 2), ('adjust_stock', 4),
          ('receive_purchase_order', 2), ('open_shift', 2), ('close_shift', 3),
          ('create_sale', 8), ('void_sale', 2), ('process_sale_return', 4),
          ('set_user_access', 4), ('share_admin_access', 1),
@@ -92,14 +94,14 @@ results as (
          case when exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
                             where n.nspname = 'public' and c.relname = name and c.relkind in ('v','m'))
               then 'PASS' else 'FAIL' end,
-         'Re-run 0008_views.sql / 0014_report_views.sql / 0019_hardening_fixes.sql.'
+         'Re-run 0008_views.sql / 0014_report_views.sql / 0019_hardening_fixes.sql / 0022_opening_stock_reorder.sql.'
   from expected_views
   union all
   select 'function', name,
          case when exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                             where n.nspname = 'public' and p.proname = name and p.pronargs = nargs)
               then 'PASS' else 'FAIL' end,
-         'Apply the migration defining this function (through 0020_fix_sale_return.sql).'
+         'Apply the migration defining this function (through 0022_opening_stock_reorder.sql).'
   from expected_functions
   union all
   -- The RPCs the Flutter app calls must exist AND be executable by the
@@ -110,14 +112,15 @@ results as (
            where n.nspname = 'public' and p.proname = f.name and p.pronargs = f.nargs
              and has_function_privilege('authenticated', p.oid, 'EXECUTE')
          ) then 'PASS' else 'FAIL' end,
-         'Re-run 0013/0015/0016/0019/0020 SQL and revoke from public, anon; grant execute to authenticated.'
+         'Re-run 0013/0015/0016/0019/0020/0022 SQL and revoke from public, anon; grant execute to authenticated.'
   from expected_functions f
   where f.name in (
     'void_sale', 'process_sale_return', 'share_admin_access',
     'publish_app_settings', 'set_user_access', 'get_my_profile',
     'update_my_profile', 'set_purchase_order_status',
     'approve_purchase_order', 'cancel_purchase_order',
-    'set_expense_status', 'approve_expense', 'reject_expense'
+    'set_expense_status', 'approve_expense', 'reject_expense',
+    'add_stock_batch', 'add_opening_stock', 'create_draft_purchase_orders'
   )
   union all
   -- Regression guard for the 0013 bug: the CASE branches must be enum casts,
@@ -166,6 +169,38 @@ results as (
                @> array['branch_id','medicine_id','batch_no','expiry_date','quantity','cost_price']::text[]
               then 'PASS' else 'FAIL' end,
          'Re-run 0005_stock.sql.'
+  union all
+  select 'column', 'medicines.preferred_supplier_id',
+         case when exists (
+           select 1 from information_schema.columns c
+           where c.table_schema = 'public' and c.table_name = 'medicines'
+             and c.column_name = 'preferred_supplier_id' and c.data_type = 'uuid')
+                then 'PASS' else 'FAIL' end,
+         'Apply 0022_opening_stock_reorder.sql.'
+  union all
+  select 'column', 'medicines.target_level',
+         case when exists (
+           select 1 from information_schema.columns c
+           where c.table_schema = 'public' and c.table_name = 'medicines'
+             and c.column_name = 'target_level' and c.data_type = 'integer')
+                then 'PASS' else 'FAIL' end,
+         'Apply 0022_opening_stock_reorder.sql.'
+  union all
+  select 'column_group', 'v_reorder_suggestions.columns',
+         case when (select cols from actual_columns where table_name = 'v_reorder_suggestions')
+               @> array['branch_id','medicine_id','name','sku','unit','on_hand','available_qty',
+                        'expiring_qty','reorder_level','target_level','suggested_order_qty',
+                        'preferred_supplier_id','preferred_supplier_name','last_purchase_cost','reason']::text[]
+                then 'PASS' else 'FAIL' end,
+         'Apply 0022_opening_stock_reorder.sql.'
+  union all
+  select 'view_option', 'v_reorder_suggestions.security_invoker',
+         case when exists (
+           select 1 from pg_class c
+           where c.oid = to_regclass('public.v_reorder_suggestions')
+             and coalesce(c.reloptions, array[]::text[]) @> array['security_invoker=true'])
+                then 'PASS' else 'FAIL' end,
+         'Apply 0022_opening_stock_reorder.sql (with security_invoker = true).'
   union all
   select 'column_group', 'sale_items.core',
          case when (select cols from actual_columns where table_name = 'sale_items')
@@ -238,6 +273,16 @@ results as (
          case when has_schema_privilege('authenticated', 'public', 'USAGE')
               then 'PASS' else 'FAIL' end,
          'Re-run 0021_grants.sql (grant usage on schema public to authenticated).'
+  union all
+  select 'grant', 'authenticated.v_reorder_suggestions.select',
+         case when has_table_privilege('authenticated', to_regclass('public.v_reorder_suggestions'), 'SELECT')
+               then 'PASS' else 'FAIL' end,
+         'Re-run 0022_opening_stock_reorder.sql (grant select on the view to authenticated).'
+  union all
+  select 'grant', 'anon.v_reorder_suggestions.no_select',
+         case when not has_table_privilege('anon', to_regclass('public.v_reorder_suggestions'), 'SELECT')
+               then 'PASS' else 'FAIL' end,
+         'Re-run 0022_opening_stock_reorder.sql (revoke select on the view from anon).'
   union all
   select 'grant', 'authenticated.core_tables.crud',
          case when (

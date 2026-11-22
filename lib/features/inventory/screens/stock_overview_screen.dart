@@ -11,6 +11,7 @@ import '../../../core/widgets.dart';
 import '../data/inventory_models.dart';
 import '../data/inventory_providers.dart';
 import '../logic/stock_rules.dart';
+import '../widgets/responsive_ui.dart';
 import '../widgets/stock_widgets.dart';
 
 class StockOverviewScreen extends ConsumerStatefulWidget {
@@ -52,6 +53,25 @@ class _StockOverviewScreenState extends ConsumerState<StockOverviewScreen> {
                       onPressed: () => showAddStockDialog(context, ref),
                     ),
                   ),
+                if (canEdit)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ResponsiveSecondaryButton(
+                      label: 'Opening stock',
+                      icon: Icons.playlist_add_check_outlined,
+                      onPressed: () => context.go('/inventory/opening-stock'),
+                    ),
+                  ),
+                if (canEdit &&
+                    can(role, Modules.purchaseOrders, PermAction.edit))
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ResponsiveSecondaryButton(
+                      label: 'Needs ordering',
+                      icon: Icons.shopping_cart_outlined,
+                      onPressed: () => context.go('/inventory/needs-ordering'),
+                    ),
+                  ),
                 IconButton(
                   tooltip: 'Refresh',
                   onPressed: () => ref.invalidate(stockSummaryProvider),
@@ -89,31 +109,53 @@ class _StockOverviewScreenState extends ConsumerState<StockOverviewScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      ResponsiveGrid(
-                        minTileWidth: 180,
-                        children: [
-                          StatCard(
-                            title: 'Medicines',
-                            value: '${rows.length}',
-                            icon: Icons.medication_outlined,
-                            color: AppColors.pink600,
-                          ),
-                          StatCard(
-                            title: 'Units on hand',
-                            value: '$units',
-                            icon: Icons.inventory_2_outlined,
-                            color: AppColors.gold700,
-                          ),
-                          if (showCost)
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final cards = <Widget>[
                             StatCard(
-                              title: 'Stock value at cost',
-                              value: formatMoneyWhole(value),
-                              icon: Icons.account_balance_wallet_outlined,
-                              color: AppColors.success,
+                              title: 'Medicines',
+                              value: '${rows.length}',
+                              icon: Icons.medication_outlined,
+                              color: AppColors.pink600,
                             ),
-                        ],
+                            StatCard(
+                              title: 'Units on hand',
+                              value: '$units',
+                              icon: Icons.inventory_2_outlined,
+                              color: AppColors.gold700,
+                            ),
+                            if (showCost)
+                              StatCard(
+                                title: 'Stock value at cost',
+                                value: formatMoneyWhole(value),
+                                icon: Icons.account_balance_wallet_outlined,
+                                color: AppColors.success,
+                              ),
+                          ];
+                          if (constraints.maxWidth < 600) {
+                            // A single scrolling strip keeps the summary cards
+                            // from consuming the phone's short viewport.
+                            return SizedBox(
+                              height: 116,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: cards.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(width: 8),
+                                itemBuilder: (context, index) => SizedBox(
+                                  width: 190,
+                                  child: cards[index],
+                                ),
+                              ),
+                            );
+                          }
+                          return ResponsiveGrid(
+                            minTileWidth: 180,
+                            children: cards,
+                          );
+                        },
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                       Expanded(
                         child: DataTablePlus(
                           columns: [

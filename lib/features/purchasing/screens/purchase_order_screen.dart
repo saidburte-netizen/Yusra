@@ -479,6 +479,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                                           child: DatePickerField(
                                             label: 'Expected date',
                                             value: _expectedDate,
+                                            emptyText: 'Select date',
                                             onChanged: (value) {
                                               if (_canEditDraft) {
                                                 setState(() =>
@@ -718,6 +719,7 @@ class _ReceiveLine extends StatelessWidget {
               child: DatePickerField(
                 label: 'Expiry',
                 value: expiry,
+                emptyText: 'Select expiry date',
                 firstDate: DateTime.now().add(const Duration(days: 1)),
                 onChanged: onExpiry,
               ),

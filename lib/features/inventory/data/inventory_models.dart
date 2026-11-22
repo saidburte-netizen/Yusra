@@ -54,6 +54,8 @@ class Medicine {
     this.requiresPrescription = false,
     this.isControlled = false,
     this.reorderLevel = 10,
+    this.preferredSupplierId,
+    this.targetLevel,
     this.storageNotes,
     this.imageUrl,
     this.isActive = true,
@@ -75,6 +77,8 @@ class Medicine {
   final bool requiresPrescription;
   final bool isControlled;
   final int reorderLevel;
+  final String? preferredSupplierId;
+  final int? targetLevel;
   final String? storageNotes;
   final String? imageUrl;
   final bool isActive;
@@ -96,6 +100,10 @@ class Medicine {
         requiresPrescription: boolValue(json['requires_prescription']),
         isControlled: boolValue(json['is_controlled']),
         reorderLevel: intValue(json['reorder_level']),
+        preferredSupplierId: json['preferred_supplier_id'] as String?,
+        targetLevel: json['target_level'] == null
+            ? null
+            : intValue(json['target_level']),
         storageNotes: json['storage_notes'] as String?,
         imageUrl: json['image_url'] as String?,
         isActive: boolValue(json['is_active']),
@@ -116,6 +124,9 @@ class Medicine {
         'requires_prescription': requiresPrescription,
         'is_controlled': isControlled,
         'reorder_level': reorderLevel,
+        if (preferredSupplierId != null)
+          'preferred_supplier_id': preferredSupplierId,
+        if (targetLevel != null) 'target_level': targetLevel,
         'storage_notes': storageNotes,
         'image_url': imageUrl,
       };
