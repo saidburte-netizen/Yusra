@@ -83,7 +83,7 @@ jobs:
 
       - name: Upload step screenshots
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: uat-screenshots
           path: tool/uat/artifacts/screenshots/**
@@ -92,7 +92,7 @@ jobs:
 
       - name: Upload videos and traces
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: uat-videos-and-traces
           path: |
@@ -103,7 +103,7 @@ jobs:
 
       - name: Upload Playwright report and results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: uat-playwright-report
           path: |
@@ -115,7 +115,7 @@ jobs:
 
       - name: Upload UAT evidence docs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: uat-docs
           path: docs/UAT_*.md

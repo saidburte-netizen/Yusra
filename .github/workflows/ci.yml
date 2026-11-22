@@ -368,7 +368,7 @@ jobs:
 
       - name: Upload APK artifact
         if: steps.supabase_secrets.outputs.available == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: yusra-pharmacy-apk
           path: build/app/outputs/flutter-apk/app-release.apk
@@ -377,7 +377,7 @@ jobs:
 
       - name: Upload web artifact
         if: steps.supabase_secrets.outputs.available == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: yusra-pharmacy-web
           path: build/web/
