@@ -1,0 +1,143 @@
+name: Deploy Web
+
+# Builds the Flutter web bundle with an explicit --base-href and deploys it
+# when hosting credentials are configured. The deploy itself is a no-op (a
+# warning, not a failure) so a fresh repository stays green.
+on:
+  workflow_dispatch:
+    inputs:
+      base_href:
+        description: 'Base href for the host (must start and end with /), e.g. / for a domain root'
+        type: string
+        required: true
+        default: '/'
+      publish_deploy:
+        description: 'Attempt the host deploy step (gated on FIREBASE_TOKEN + FIREBASE_PROJECT_ID)'
+        type: boolean
+        required: false
+        default: false
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-deploy
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: '3.24.5'
+
+jobs:
+  build-web:
+    name: Build web bundle with the correct base href
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter (pinned)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Resolve and validate base href
+        id: base_href
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            BASE_HREF="${{ inputs.base_href }}"
+          else
+            BASE_HREF="${{ vars.WEB_BASE_HREF || '/' }}"
+          fi
+          case "$BASE_HREF" in
+            /*/) ;;
+            *) echo "::error::base href must start and end with '/' (got '$BASE_HREF')"; exit 1 ;;
+          esac
+          echo "value=$BASE_HREF" >> "$GITHUB_OUTPUT"
+          echo "Building web with --base-href=$BASE_HREF"
+
+      - name: Install dependencies and analyze
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter analyze
+
+      - name: Build release web
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::warning::SUPABASE_URL / SUPABASE_ANON_KEY are not configured; the bundle will be built without Supabase configuration."
+          fi
+          flutter build web --release \
+            --base-href="${{ steps.base_href.outputs.value }}" \
+            --build-number="${{ github.run_number }}" \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yusra-pharmacy-web
+          path: build/web/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Supabase redirect URL reminder
+        # Auth redirects are configured in the Supabase dashboard, not in this
+        # repository. The deployed origin must be registered exactly, or magic
+        # links / password resets / OAuth callbacks will fail at runtime.
+        run: |
+          ORIGIN="${{ vars.WEB_PUBLIC_ORIGIN || 'https://yusra-pharmacy.web.app' }}"
+          echo "::notice::After this deploy, add $ORIGIN (and $ORIGIN/) under Supabase Auth -> URL Configuration -> Redirect URLs, and set Site URL to $ORIGIN."
+          echo "::notice::Keep supabase/config.toml [auth].additional_redirect_urls in sync for local/CLI parity."
+
+  deploy-host:
+    name: Deploy to configured static host (gated on credentials)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build-web
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_deploy
+
+    steps:
+      - name: Check host credentials
+        id: host_secrets
+        env:
+          TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          PROJECT: ${{ vars.FIREBASE_PROJECT_ID }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$PROJECT" ]; then
+            echo "::warning::FIREBASE_TOKEN / FIREBASE_PROJECT_ID are not configured; host deploy is a no-op. Download the web artifact and deploy it manually."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download web artifact
+        if: steps.host_secrets.outputs.available == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: yusra-pharmacy-web
+          path: build/web
+
+      - name: Deploy to Firebase Hosting
+        if: steps.host_secrets.outputs.available == 'true'
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only hosting --project "${{ vars.FIREBASE_PROJECT_ID }}"
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Post-deploy redirect URL reminder
+        if: steps.host_secrets.outputs.available == 'true'
+        run: |
+          ORIGIN="${{ vars.WEB_PUBLIC_ORIGIN || 'https://yusra-pharmacy.web.app' }}"
+          echo "::notice::Confirm $ORIGIN is listed in Supabase Auth -> URL Configuration -> Redirect URLs before asking users to sign in."
