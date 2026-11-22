@@ -537,6 +537,362 @@ begin
      'future public sequences inherit USAGE/SELECT for authenticated');
 end $$;
 
+-- ---------------------------------------------------------------------------
+-- 10. Opening stock, auto-generated batches, reorder suggestions and draft POs
+--     (0022). Every fixture uses a deterministic id and is cleaned first, so
+--     this whole file can be run repeatedly against the same database.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_branch uuid := (select id from public.branches where code = 'DBTEST');
+  v_admin uuid := '30000000-0000-0000-0000-000000000001';
+  v_cashier uuid := '30000000-0000-0000-0000-000000000002';
+  v_sup_a uuid := 'bb000000-0000-0000-0000-000000000011';
+  v_sup_b uuid := 'bb000000-0000-0000-0000-000000000012';
+  v_med_auto uuid := 'bb000000-0000-0000-0000-000000000021';
+  v_med_open uuid := 'bb000000-0000-0000-0000-000000000022';
+  v_med_low uuid := 'bb000000-0000-0000-0000-000000000023';
+  v_med_exp uuid := 'bb000000-0000-0000-0000-000000000024';
+  v_med_healthy uuid := 'bb000000-0000-0000-0000-000000000025';
+  v_med_po1 uuid := 'bb000000-0000-0000-0000-000000000026';
+  v_med_po2 uuid := 'bb000000-0000-0000-0000-000000000027';
+  v_med_ids uuid[] := array[
+    'bb000000-0000-0000-0000-000000000021', 'bb000000-0000-0000-0000-000000000022',
+    'bb000000-0000-0000-0000-000000000023', 'bb000000-0000-0000-0000-000000000024',
+    'bb000000-0000-0000-0000-000000000025', 'bb000000-0000-0000-0000-000000000026',
+    'bb000000-0000-0000-0000-000000000027']::uuid[];
+  v_rows jsonb;
+  v_lines jsonb;
+  v_batches text[];
+  v_cols text[];
+  v_opts text[];
+  v_pos uuid[];
+  v_prefix text;
+  v_state text;
+  v_message text;
+  v_detail text;
+  v_count int;
+  v_count2 int;
+  v_count3 int;
+  v_before int;
+  v_saved int;
+  v_avail int;
+  v_onhand int;
+  v_expqty int;
+  v_target int;
+  v_suggested int;
+  v_supplier uuid;
+  v_cost numeric(14,2);
+begin
+  perform set_config('request.jwt.claim.sub', v_admin::text, true);
+
+  -- Repeatable cleanup, in foreign-key order.
+  delete from public.stock_movements where medicine_id = any(v_med_ids);
+  delete from public.stock_batches where medicine_id = any(v_med_ids);
+  delete from public.purchase_orders
+   where id in (select distinct poi.po_id from public.purchase_order_items poi
+                 where poi.medicine_id = any(v_med_ids));
+  delete from public.purchase_order_items where medicine_id = any(v_med_ids);
+
+  insert into public.suppliers (id, name) values
+    (v_sup_a, 'DB Test Reorder Supplier A'),
+    (v_sup_b, 'DB Test Reorder Supplier B')
+  on conflict (id) do update set name = excluded.name, is_active = true;
+
+  insert into public.medicines
+    (id, sku, name, unit, reorder_level, target_level, preferred_supplier_id)
+  values
+    (v_med_auto, 'DBT-AUTO', 'DB Test Auto Batch', 'Pack', 10, 20, null),
+    (v_med_open, 'DBT-OPEN', 'DB Test Opening', 'Pack', 10, 20, null),
+    (v_med_low, 'DBT-LOW', 'DB Test Low Stock', 'Pack', 10, null, v_sup_a),
+    (v_med_exp, 'DBT-EXP', 'DB Test Expiring', 'Tablet', 5, 6, null),
+    (v_med_healthy, 'DBT-HEALTHY', 'DB Test Healthy', 'Pack', 2, 4, null),
+    (v_med_po1, 'DBT-PO1', 'DB Test Draft PO One', 'Pack', 10, 20, null),
+    (v_med_po2, 'DBT-PO2', 'DB Test Draft PO Two', 'Pack', 10, 20, null)
+  on conflict (id) do update
+     set sku = excluded.sku, name = excluded.name, unit = excluded.unit,
+         reorder_level = excluded.reorder_level, target_level = excluded.target_level,
+         preferred_supplier_id = excluded.preferred_supplier_id, is_active = true;
+
+  -- 10a. Blank/null batches generate unique OPEN-YYYYMMDD-NNN numbers.
+  perform public.add_stock_batch(v_branch, v_med_auto, null, current_date + 30, 3, 2.5, null);
+  perform public.add_stock_batch(v_branch, v_med_auto, '', current_date + 30, 4, 2.5, null);
+  v_prefix := 'OPEN-' || to_char(current_date, 'YYYYMMDD') || '-';
+  select array_agg(batch_no order by batch_no) into v_batches
+    from public.stock_batches
+   where branch_id = v_branch and medicine_id = v_med_auto;
+  insert into db_test_results values
+    ('auto_batch_open_format_and_unique',
+     case when coalesce(array_length(v_batches, 1), 0) = 2
+           and v_batches[1] = v_prefix || '001'
+           and v_batches[2] = v_prefix || '002'
+          then 'PASS' else 'FAIL' end,
+     coalesce(array_to_string(v_batches, ','), 'none'));
+
+  select count(*) into v_count
+    from public.stock_movements
+   where branch_id = v_branch and medicine_id = v_med_auto
+     and movement_type = 'opening' and quantity_change in (3, 4);
+  insert into db_test_results values
+    ('add_stock_batch_opening_movement',
+     case when v_count = 2 then 'PASS' else 'FAIL' end, 'movements=' || v_count);
+
+  perform public.add_stock_batch(
+    v_branch, v_med_auto, 'DBT-PURCHASE-1', current_date + 40, 2, 2.5, v_sup_a, 'purchase');
+  select movement_type::text into v_state
+    from public.stock_movements
+   where medicine_id = v_med_auto and batch_id in (
+           select id from public.stock_batches
+            where medicine_id = v_med_auto and batch_no = 'DBT-PURCHASE-1');
+  insert into db_test_results values
+    ('add_stock_batch_purchase_source_movement',
+     case when v_state = 'purchase' then 'PASS' else 'FAIL' end, coalesce(v_state, 'none'));
+
+  -- 10b. add_opening_stock is all-or-nothing and records the fixed reason.
+  v_rows := jsonb_build_array(
+    jsonb_build_object('medicine_id', v_med_open::text, 'quantity', 5,
+                       'expiry_date', (current_date + 200)::text, 'batch_no', 'OPENING-GOOD'),
+    jsonb_build_object('medicine_id', v_med_open::text, 'quantity', -1,
+                       'expiry_date', (current_date + 200)::text, 'batch_no', 'OPENING-BAD'));
+  v_state := 'NO_ERROR';
+  v_message := '';
+  begin
+    v_saved := public.add_opening_stock(v_branch, v_rows);
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate;
+    get stacked diagnostics v_message = message_text;
+  end;
+  select count(*) into v_count
+    from public.stock_batches where medicine_id = v_med_open;
+  insert into db_test_results values
+    ('add_opening_stock_all_or_nothing',
+     case when v_state <> 'NO_ERROR' and v_count = 0
+          then 'PASS' else 'FAIL' end,
+     v_state || ' rows=' || v_count);
+
+  v_saved := public.add_opening_stock(v_branch, jsonb_build_array(
+    jsonb_build_object('medicine_id', v_med_open::text, 'quantity', 5,
+                       'expiry_date', (current_date + 200)::text, 'batch_no', 'OPENING-GOOD'),
+    jsonb_build_object('medicine_id', v_med_open::text, 'quantity', 7,
+                       'expiry_date', (current_date + 200)::text)));
+  select count(*) into v_count
+    from public.stock_batches where medicine_id = v_med_open;
+  select count(*) into v_count2
+    from public.stock_movements
+   where medicine_id = v_med_open
+     and movement_type = 'opening' and reason = 'Opening stock registered';
+  insert into db_test_results values
+    ('add_opening_stock_saves_all_valid_rows',
+     case when v_saved = 2 and v_count = 2 and v_count2 = 2
+          then 'PASS' else 'FAIL' end,
+     'saved=' || v_saved || ',batches=' || v_count || ',movements=' || v_count2);
+
+  v_state := 'NO_ERROR';
+  begin
+    perform public.add_opening_stock(v_branch, jsonb_build_array(
+      jsonb_build_object('medicine_id', v_med_open::text, 'quantity', 1,
+                         'expiry_date', (current_date + 200)::text, 'batch_no', 'OPENING-DUP'),
+      jsonb_build_object('medicine_id', v_med_open::text, 'quantity', 1,
+                         'expiry_date', (current_date + 200)::text, 'batch_no', 'OPENING-DUP')));
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate;
+  end;
+  select count(*) into v_count
+    from public.stock_batches
+   where medicine_id = v_med_open and batch_no = 'OPENING-DUP';
+  insert into db_test_results values
+    ('add_opening_stock_rejects_duplicate_batch',
+     case when v_state <> 'NO_ERROR' and v_count = 0
+          then 'PASS' else 'FAIL' end, v_state);
+
+  -- 10c. Reorder view: low/zero stock, 30-day exclusion and last cost.
+  insert into public.stock_batches
+    (branch_id, medicine_id, batch_no, expiry_date, quantity, initial_quantity, cost_price)
+  values
+    (v_branch, v_med_exp, 'DBT-EXP-SOON', current_date + 10, 8, 8, 1),
+    (v_branch, v_med_exp, 'DBT-EXP-FAR', current_date + 400, 2, 2, 1),
+    (v_branch, v_med_exp, 'DBT-EXP-OLD', current_date - 1, 50, 50, 1),
+    (v_branch, v_med_healthy, 'DBT-OK', current_date + 400, 100, 100, 1);
+
+  insert into public.purchase_orders
+    (id, branch_id, supplier_id, po_no, status, order_date, notes)
+  values
+    ('bb000000-0000-0000-0000-000000000031', v_branch, v_sup_a,
+     'DBT-COST-1', 'ordered', current_date - 1, 'DB test last cost')
+  on conflict (id) do update set order_date = excluded.order_date;
+  insert into public.purchase_order_items
+    (id, po_id, medicine_id, quantity_ordered, quantity_received, unit_cost)
+  values
+    ('bb000000-0000-0000-0000-000000000032',
+     'bb000000-0000-0000-0000-000000000031', v_med_low, 10, 10, 7.25)
+  on conflict (id) do update set quantity_received = 10, unit_cost = 7.25;
+
+  select array_agg(column_name::text order by column_name) into v_cols
+    from information_schema.columns
+   where table_schema = 'public' and table_name = 'v_reorder_suggestions';
+  insert into db_test_results values
+    ('reorder_view_exact_columns',
+     case when v_cols = array[
+       'available_qty','branch_id','expiring_qty','last_purchase_cost','medicine_id','name',
+       'on_hand','preferred_supplier_id','preferred_supplier_name','reason','reorder_level',
+       'sku','suggested_order_qty','target_level','unit']::text[]
+          then 'PASS' else 'FAIL' end,
+     coalesce(array_to_string(v_cols, ','), 'none'));
+
+  select reloptions into v_opts
+    from pg_class where oid = to_regclass('public.v_reorder_suggestions');
+  insert into db_test_results values
+    ('reorder_view_security_invoker',
+     case when coalesce(v_opts, array[]::text[]) @> array['security_invoker=true']
+          then 'PASS' else 'FAIL' end,
+     coalesce(array_to_string(v_opts, ','), 'none'));
+
+  select available_qty, on_hand, expiring_qty, target_level, suggested_order_qty,
+         preferred_supplier_id, preferred_supplier_name, last_purchase_cost, reason
+    into v_avail, v_onhand, v_expqty, v_target, v_suggested,
+         v_supplier, v_detail, v_cost, v_state
+    from public.v_reorder_suggestions
+   where branch_id = v_branch and medicine_id = v_med_low;
+  insert into db_test_results values
+    ('reorder_view_zero_available_row',
+     case when v_avail = 0 and v_onhand = 0 and v_expqty = 0
+           and v_target = 20 and v_suggested = 20
+          then 'PASS' else 'FAIL' end,
+     'available=' || coalesce(v_avail::text, 'null') ||
+     ',target=' || coalesce(v_target::text, 'null') ||
+     ',suggested=' || coalesce(v_suggested::text, 'null'));
+  insert into db_test_results values
+    ('reorder_view_supplier_and_last_cost',
+     case when v_supplier = v_sup_a and v_detail = 'DB Test Reorder Supplier A'
+           and v_cost = 7.25 and v_state = 'Below reorder level'
+          then 'PASS' else 'FAIL' end,
+     coalesce(v_detail, 'no supplier') || ',cost=' || coalesce(v_cost::text, 'null') ||
+     ',reason=' || coalesce(v_state, 'null'));
+
+  select on_hand, available_qty, expiring_qty, target_level, suggested_order_qty, reason
+    into v_onhand, v_avail, v_expqty, v_target, v_suggested, v_state
+    from public.v_reorder_suggestions
+   where branch_id = v_branch and medicine_id = v_med_exp;
+  insert into db_test_results values
+    ('reorder_view_excludes_expiring_from_available',
+     case when v_onhand = 10 and v_avail = 2 and v_expqty = 8
+           and v_target = 6 and v_suggested = 4
+           and v_state like '%expiring within 30 days%'
+          then 'PASS' else 'FAIL' end,
+     'on_hand=' || coalesce(v_onhand::text, 'null') ||
+     ',available=' || coalesce(v_avail::text, 'null') ||
+     ',expiring=' || coalesce(v_expqty::text, 'null') ||
+     ',reason=' || coalesce(v_state, 'null'));
+
+  select count(*) into v_count
+    from public.v_reorder_suggestions
+   where branch_id = v_branch and medicine_id = v_med_healthy;
+  insert into db_test_results values
+    ('reorder_view_omits_healthy_stock',
+     case when v_count = 0 then 'PASS' else 'FAIL' end, 'rows=' || v_count);
+
+  -- 10d. One draft PO per supplier, and blank suppliers are rejected.
+  v_lines := jsonb_build_array(
+    jsonb_build_object('supplier_id', v_sup_a::text, 'medicine_id', v_med_po1::text,
+                       'quantity', 3, 'unit_cost', 4.5),
+    jsonb_build_object('supplier_id', v_sup_b::text, 'medicine_id', v_med_po2::text,
+                       'quantity', 5, 'unit_cost', 6),
+    jsonb_build_object('supplier_id', v_sup_a::text, 'medicine_id', v_med_po2::text,
+                       'quantity', 2, 'unit_cost', 6));
+  v_pos := public.create_draft_purchase_orders(v_branch, v_lines);
+  select count(*) into v_count
+    from public.purchase_orders po
+   where po.branch_id = v_branch
+     and exists (select 1 from public.purchase_order_items poi
+                  where poi.po_id = po.id and poi.medicine_id in (v_med_po1, v_med_po2));
+  select count(*) into v_count2
+    from public.purchase_order_items where medicine_id in (v_med_po1, v_med_po2);
+  select count(distinct supplier_id) into v_count3
+    from public.purchase_orders where id = any(v_pos);
+  insert into db_test_results values
+    ('create_draft_purchase_orders_one_po_per_supplier',
+     case when coalesce(array_length(v_pos, 1), 0) = 2
+           and v_count = 2 and v_count2 = 3 and v_count3 = 2
+          then 'PASS' else 'FAIL' end,
+     'pos=' || coalesce(array_length(v_pos, 1), 0) || ',po_rows=' || v_count ||
+     ',lines=' || v_count2 || ',suppliers=' || v_count3);
+
+  select count(*) into v_count
+    from public.purchase_orders
+   where id = any(v_pos) and status = 'draft' and po_no like 'PO-%';
+  insert into db_test_results values
+    ('create_draft_purchase_orders_draft_with_po_no',
+     case when v_count = 2 then 'PASS' else 'FAIL' end, 'draft_numbered=' || v_count);
+
+  select count(*) into v_before from public.purchase_orders where branch_id = v_branch;
+  v_state := 'NO_ERROR';
+  v_message := '';
+  begin
+    perform public.create_draft_purchase_orders(v_branch, jsonb_build_array(
+      jsonb_build_object('supplier_id', '   ', 'medicine_id', v_med_po1::text,
+                         'quantity', 1, 'unit_cost', 1)));
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate;
+    get stacked diagnostics v_message = message_text;
+  end;
+  select count(*) into v_count from public.purchase_orders where branch_id = v_branch;
+  insert into db_test_results values
+    ('create_draft_purchase_orders_blank_supplier',
+     case when v_state <> 'NO_ERROR' and v_message like '%Choose supplier%'
+           and v_count = v_before
+          then 'PASS' else 'FAIL' end,
+     coalesce(v_message, v_state));
+
+  -- 10e. A cashier cannot call any of the three RPCs.
+  perform set_config('request.jwt.claim.sub', v_cashier::text, true);
+  v_state := 'NO_ERROR';
+  begin
+    perform public.add_stock_batch(v_branch, v_med_auto, '', current_date + 30, 1, 1, null);
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate;
+  end;
+  insert into db_test_results values
+    ('cashier_cannot_add_stock_batch',
+     case when v_state <> 'NO_ERROR' then 'PASS' else 'FAIL' end, v_state);
+
+  v_state := 'NO_ERROR';
+  begin
+    perform public.add_stock_batch(
+      v_branch, v_med_auto, '', current_date + 30, 1, 1, null, 'opening');
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate;
+  end;
+  insert into db_test_results values
+    ('cashier_cannot_add_stock_batch_with_source',
+     case when v_state <> 'NO_ERROR' then 'PASS' else 'FAIL' end, v_state);
+
+  v_state := 'NO_ERROR';
+  begin
+    perform public.add_opening_stock(v_branch, jsonb_build_array(
+      jsonb_build_object('medicine_id', v_med_open::text, 'quantity', 1,
+                         'expiry_date', (current_date + 200)::text)));
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate;
+  end;
+  insert into db_test_results values
+    ('cashier_cannot_add_opening_stock',
+     case when v_state <> 'NO_ERROR' then 'PASS' else 'FAIL' end, v_state);
+
+  v_state := 'NO_ERROR';
+  begin
+    perform public.create_draft_purchase_orders(v_branch, jsonb_build_array(
+      jsonb_build_object('supplier_id', v_sup_a::text, 'medicine_id', v_med_po1::text,
+                         'quantity', 1, 'unit_cost', 1)));
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate;
+  end;
+  insert into db_test_results values
+    ('cashier_cannot_create_draft_purchase_orders',
+     case when v_state <> 'NO_ERROR' then 'PASS' else 'FAIL' end, v_state);
+
+  perform set_config('request.jwt.claim.sub', v_admin::text, true);
+end $$;
+
 select test, status, detail from db_test_results order by test;
 
 -- Compact grant-only lines, e.g. "PASS grant authenticated core table access".

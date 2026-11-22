@@ -616,6 +616,7 @@ class _ExpenseFormDialogState extends State<_ExpenseFormDialog> {
                 DatePickerField(
                   label: 'Date',
                   value: _date,
+                  emptyText: 'Select date',
                   onChanged: (value) => setState(() => _date = value),
                 ),
                 const SizedBox(height: 12),

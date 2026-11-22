@@ -242,10 +242,8 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
   }
 
   Future<void> _edit(Medicine? medicine) async {
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (_) => _MedicineFormDialog(initial: medicine),
-    );
+    final result =
+        await showMedicineFormDialog(context, ref, initial: medicine);
     if (result == null) return;
     try {
       await ref.read(inventoryRepositoryProvider).saveMedicine(
@@ -400,10 +398,34 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
   }
 }
 
+/// Shows the medicine registration/edit dialog.
+///
+/// Public and top-level so other features can reuse the same minimal form.
+/// The returned map uses database column names and already contains a fresh
+/// uuid in `id` for new medicines only.
+Future<Map<String, dynamic>?> showMedicineFormDialog(
+  BuildContext context,
+  WidgetRef ref, {
+  Medicine? initial,
+}) {
+  final supplierOptions = SupplierOption.load(ref);
+  return showDialog<Map<String, dynamic>>(
+    context: context,
+    builder: (_) => _MedicineFormDialog(
+      initial: initial,
+      supplierOptions: supplierOptions,
+    ),
+  );
+}
+
 class _MedicineFormDialog extends ConsumerStatefulWidget {
-  const _MedicineFormDialog({this.initial});
+  const _MedicineFormDialog({
+    this.initial,
+    required this.supplierOptions,
+  });
 
   final Medicine? initial;
+  final Future<List<SupplierOption>> supplierOptions;
 
   @override
   ConsumerState<_MedicineFormDialog> createState() =>
@@ -422,8 +444,10 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
   late final TextEditingController _cost;
   late final TextEditingController _price;
   late final TextEditingController _reorder;
+  late final TextEditingController _target;
   late final TextEditingController _storage;
   String? _categoryId;
+  String? _supplierId;
   bool _vat = false;
   bool _rx = false;
   bool _controlled = false;
@@ -446,8 +470,10 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
     _cost = TextEditingController(text: '${item?.costPrice ?? 0}');
     _price = TextEditingController(text: '${item?.sellingPrice ?? 0}');
     _reorder = TextEditingController(text: '${item?.reorderLevel ?? 10}');
+    _target = TextEditingController(text: item?.targetLevel?.toString() ?? '');
     _storage = TextEditingController(text: item?.storageNotes ?? '');
     _categoryId = item?.categoryId;
+    _supplierId = item?.preferredSupplierId;
     _vat = item?.vatApplicable ?? false;
     _rx = item?.requiresPrescription ?? false;
     _controlled = item?.isControlled ?? false;
@@ -467,6 +493,7 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
       _cost,
       _price,
       _reorder,
+      _target,
       _storage,
     ]) {
       controller.dispose();
@@ -495,6 +522,71 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _addCategory() async {
+    final name = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Add category'),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: dialogContentWidth(context, maxWidth: 400),
+          ),
+          child: Form(
+            key: formKey,
+            child: AppTextField(
+              label: 'Name',
+              controller: name,
+              autofocus: true,
+              validator: (value) =>
+                  (value ?? '').trim().isEmpty ? 'Required' : null,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ResponsivePrimaryButton(
+            label: 'Save',
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(context, true);
+              }
+            },
+          ),
+        ],
+      ),
+    );
+    final value = name.text.trim();
+    name.dispose();
+    if (saved != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(inventoryRepositoryProvider).saveCategory({'name': value});
+      ref.invalidate(categoriesProvider);
+      final categories = await ref.read(categoriesProvider.future);
+      if (!mounted) return;
+      final created = categories
+          .where((item) => item.name.toLowerCase() == value.toLowerCase())
+          .firstOrNull;
+      if (created != null) setState(() => _categoryId = created.id);
+    } catch (e) {
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String? _wholeNumberValidator(String? value) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) return null;
+    final parsed = int.tryParse(text);
+    return parsed != null && parsed >= 0 ? null : 'Whole number required';
   }
 
   /// Two side-by-side fields on wide dialogs, stacked on a phone.
@@ -562,16 +654,38 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                AppDropdown<String?>(
-                  label: 'Category',
-                  value: _categoryId,
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('None')),
-                    for (final category in categories)
-                      DropdownMenuItem(
-                          value: category.id, child: Text(category.name)),
-                  ],
-                  onChanged: (value) => setState(() => _categoryId = value),
+                LayoutBuilder(
+                  builder: (context, constraints) => Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: constraints.maxWidth < 420
+                            ? constraints.maxWidth
+                            : constraints.maxWidth - 140,
+                        child: AppDropdown<String?>(
+                          label: 'Category',
+                          value: _categoryId,
+                          items: [
+                            const DropdownMenuItem(
+                                value: null, child: Text('None')),
+                            for (final category in categories)
+                              DropdownMenuItem(
+                                  value: category.id,
+                                  child: Text(category.name)),
+                          ],
+                          onChanged: (value) =>
+                              setState(() => _categoryId = value),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: _busy ? null : _addCategory,
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Add category'),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 10),
                 _pair(
@@ -580,7 +694,12 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
                 ),
                 const SizedBox(height: 10),
                 _pair(
-                  AppTextField(label: 'Unit', controller: _unit),
+                  AppTextField(
+                    label: 'Unit',
+                    controller: _unit,
+                    validator: (value) =>
+                        (value ?? '').trim().isEmpty ? 'Required' : null,
+                  ),
                   AppTextField(
                       label: 'Manufacturer', controller: _manufacturer),
                 ),
@@ -598,13 +717,44 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                AppTextField(
-                  label: 'Reorder level',
-                  controller: _reorder,
-                  keyboardType: TextInputType.number,
-                  validator: (value) => (int.tryParse(value ?? '') ?? -1) >= 0
-                      ? null
-                      : 'Whole number required',
+                _pair(
+                  AppTextField(
+                    label: 'Reorder level',
+                    controller: _reorder,
+                    keyboardType: TextInputType.number,
+                    validator: _wholeNumberValidator,
+                  ),
+                  AppTextField(
+                    label: 'Target level (optional)',
+                    controller: _target,
+                    keyboardType: TextInputType.number,
+                    validator: _wholeNumberValidator,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                FutureBuilder<List<SupplierOption>>(
+                  future: widget.supplierOptions,
+                  builder: (context, snapshot) {
+                    final options = snapshot.data ?? const <SupplierOption>[];
+                    final keepCurrent = _supplierId != null &&
+                        !options.any((item) => item.id == _supplierId);
+                    return AppDropdown<String?>(
+                      label: 'Preferred supplier',
+                      value: _supplierId,
+                      items: [
+                        const DropdownMenuItem(
+                            value: null, child: Text('None')),
+                        if (keepCurrent)
+                          DropdownMenuItem(
+                              value: _supplierId,
+                              child: const Text('Current supplier')),
+                        for (final supplier in options)
+                          DropdownMenuItem(
+                              value: supplier.id, child: Text(supplier.name)),
+                      ],
+                      onChanged: (value) => setState(() => _supplierId = value),
+                    );
+                  },
                 ),
                 const SizedBox(height: 10),
                 AppTextField(
@@ -651,6 +801,13 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
           loading: _busy,
           onPressed: () {
             if (!_formKey.currentState!.validate()) return;
+            final reorderLevel = int.tryParse(_reorder.text.trim()) ?? 10;
+            final targetText = _target.text.trim();
+            final targetLevel = targetText.isEmpty
+                ? (widget.initial?.targetLevel != null
+                    ? null
+                    : reorderLevel * 2)
+                : int.tryParse(targetText) ?? reorderLevel * 2;
             Navigator.pop(context, {
               if (widget.initial == null) 'id': _newMedicineId,
               'name': _name.text.trim(),
@@ -669,7 +826,9 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
                   : _manufacturer.text.trim(),
               'cost_price': parseMoney(_cost.text) ?? 0,
               'selling_price': parseMoney(_price.text) ?? 0,
-              'reorder_level': int.parse(_reorder.text),
+              'reorder_level': reorderLevel,
+              'preferred_supplier_id': _supplierId,
+              'target_level': targetLevel,
               'storage_notes':
                   _storage.text.trim().isEmpty ? null : _storage.text.trim(),
               'vat_applicable': _vat,

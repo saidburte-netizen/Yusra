@@ -7,6 +7,7 @@ import '../../../core/state/app_cache.dart';
 import '../../../core/supabase_client.dart';
 import 'inventory_models.dart';
 import 'inventory_repository.dart';
+import 'reorder_models.dart';
 
 final inventoryRepositoryProvider =
     Provider<InventoryRepository>((ref) => InventoryRepository());
@@ -74,6 +75,12 @@ final movementsProvider = FutureProvider.family<List<StockMovement>,
         type: filter.type,
       );
 });
+
+final reorderSuggestionsProvider =
+    FutureProvider.family.autoDispose<List<ReorderSuggestion>, String?>(
+  (ref, branchId) async =>
+      ref.read(inventoryRepositoryProvider).reorderSuggestions(branchId),
+);
 
 /// `expiry_alert_days` from app_settings, with the seeded default of 90.
 final expiryAlertDaysProvider = FutureProvider<int>((ref) async {

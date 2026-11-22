@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/supabase_client.dart';
 import 'inventory_models.dart';
+import 'reorder_models.dart';
 
 /// All reads and writes for Agent B. Stock mutations always go through the
 /// database RPCs; nothing here updates stock_batches directly.
@@ -30,8 +31,11 @@ class InventoryRepository {
   Future<void> setCategoryActive(String id, bool active) =>
       _db.from('categories').update({'is_active': active}).eq('id', id);
 
-  Future<List<Medicine>> medicines(
-      {String query = '', String? categoryId}) async {
+  Future<List<Medicine>> medicines({
+    String query = '',
+    String? categoryId,
+    int limit = 200,
+  }) async {
     var request = _db.from('medicines').select();
     if (query.trim().isNotEmpty) {
       final q = query.trim().replaceAll(RegExp(r'[,()]'), ' ');
@@ -39,7 +43,7 @@ class InventoryRepository {
           'name.ilike.%$q%,generic_name.ilike.%$q%,barcode.ilike.%$q%,sku.ilike.%$q%');
     }
     if (categoryId != null) request = request.eq('category_id', categoryId);
-    final rows = await request.order('name').limit(200) as List;
+    final rows = await request.order('name').limit(limit) as List;
     return rows
         .map((row) => Medicine.fromJson(Map<String, dynamic>.from(row as Map)))
         .toList();
@@ -178,6 +182,8 @@ class InventoryRepository {
     }).toList();
   }
 
+  /// Adds one batch through the 8-argument RPC and returns the stored batch
+  /// number (auto-generated when [batchNo] is blank), not the batch id.
   Future<String> addStock({
     required String branchId,
     required String medicineId,
@@ -186,6 +192,7 @@ class InventoryRepository {
     required int quantity,
     required double cost,
     String? supplierId,
+    String source = 'opening',
   }) async {
     final result = await _db.rpc('add_stock_batch', params: {
       'p_branch': branchId,
@@ -195,8 +202,52 @@ class InventoryRepository {
       'p_quantity': quantity,
       'p_cost': cost,
       'p_supplier': supplierId,
+      'p_source': source,
     });
-    return result as String;
+    final batchId = result.toString();
+    final saved = await _db
+        .from('stock_batches')
+        .select('batch_no')
+        .eq('id', batchId)
+        .maybeSingle();
+    return (saved?['batch_no'] as String?) ?? batchNo;
+  }
+
+  /// Registers several opening-stock rows in one all-or-nothing RPC call.
+  Future<int> addOpeningStock({
+    required String branchId,
+    required List<OpeningStockRowInput> rows,
+  }) async {
+    final result = await _db.rpc('add_opening_stock', params: {
+      'p_branch': branchId,
+      'p_rows': rows.map((row) => row.toJson()).toList(),
+    });
+    return result is num
+        ? result.toInt()
+        : int.tryParse('$result') ?? rows.length;
+  }
+
+  Future<List<ReorderSuggestion>> reorderSuggestions(String? branchId) async {
+    var query = _db.from('v_reorder_suggestions').select();
+    if (branchId != null) query = query.eq('branch_id', branchId);
+    final rows = await query.order('name') as List;
+    return rows
+        .map((row) =>
+            ReorderSuggestion.fromJson(Map<String, dynamic>.from(row as Map)))
+        .toList();
+  }
+
+  /// Creates one draft PO per supplier and returns their ids.
+  Future<List<String>> createDraftPurchaseOrders({
+    required String branchId,
+    required List<Map<String, dynamic>> lines,
+  }) async {
+    final result = await _db.rpc('create_draft_purchase_orders', params: {
+      'p_branch': branchId,
+      'p_lines': lines,
+    });
+    if (result is! List) return const <String>[];
+    return result.map((id) => id.toString()).toList();
   }
 
   Future<void> adjustStock({

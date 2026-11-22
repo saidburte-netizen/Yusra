@@ -18,6 +18,7 @@ import 'package:yusra_pharmacy/core/supabase_client.dart';
 import 'package:yusra_pharmacy/features/customers/data/customers.dart';
 import 'package:yusra_pharmacy/features/dashboard/dashboard_metrics.dart';
 import 'package:yusra_pharmacy/features/inventory/data/inventory_repository.dart';
+import 'package:yusra_pharmacy/features/inventory/data/reorder_models.dart';
 import 'package:yusra_pharmacy/features/prescriptions/data/prescriptions.dart';
 import 'package:yusra_pharmacy/features/purchasing/data/purchasing.dart';
 import 'package:yusra_pharmacy/features/reports/data/reports.dart';
@@ -605,5 +606,485 @@ void main() {
 
       stdout.writeln('[e2e] ALL e2e-api CHECKS PASSED');
     }, timeout: const Timeout(Duration(minutes: 8)));
+
+    test('opening stock, reorder suggestions and draft purchase order flow',
+        () async {
+      final runId = E2eEnv.runId;
+      stdout.writeln('[e2e] opening stock -> reorder -> draft POs');
+
+      // --- Admin identity, branch and users ------------------------------
+      final adminId = await createUserViaSql(
+          role: 'super_admin', branchId: '', label: 'reorder-admin');
+      useUser(adminId);
+      var admin = SupabaseService.client;
+
+      final branchRow = await api(
+          'create reorder branch',
+          () => admin
+              .from('branches')
+              .insert({
+                'name': 'E2E Reorder Branch $runId',
+                'code': 'E2ER$runId',
+                'address': 'E2E reorder address',
+              })
+              .select('id')
+              .single());
+      final branchId = branchRow['id'] as String;
+
+      final storeKeeperId = await createUserViaSql(
+          role: 'store_keeper', branchId: branchId, label: 'reorder-keeper');
+      final cashierId = await createUserViaSql(
+          role: 'cashier', branchId: branchId, label: 'reorder-cashier');
+
+      // --- Catalogue with preferred suppliers and reorder targets --------
+      final inventory = InventoryRepository();
+      final categoryName = 'E2E Reorder Category $runId';
+      await api('save reorder category',
+          () => inventory.saveCategory({'name': categoryName}));
+      final category =
+          (await api('reorder categories', () => inventory.categories()))
+              .firstWhere((item) => item.name == categoryName);
+
+      final suppliers = SupplierRepository();
+      final supplierAName = 'E2E Supplier A $runId';
+      final supplierBName = 'E2E Supplier B $runId';
+      await api(
+          'save supplier A',
+          () =>
+              suppliers.save({'name': supplierAName, 'contact_person': 'E2E'}));
+      await api(
+          'save supplier B',
+          () =>
+              suppliers.save({'name': supplierBName, 'contact_person': 'E2E'}));
+      final supplierRows =
+          await api('reorder suppliers', () => suppliers.list());
+      final supplierAId =
+          supplierRows.firstWhere((item) => item.name == supplierAName).id;
+      final supplierBId =
+          supplierRows.firstWhere((item) => item.name == supplierBName).id;
+
+      final skuA = 'E2EA$runId';
+      final skuB = 'E2EB$runId';
+      final noSupplierName = 'E2E No Supplier $runId';
+      await api(
+          'save reorder medicine A',
+          () => inventory.saveMedicine({
+                'name': 'E2E Reorder A $runId',
+                'sku': skuA,
+                'category_id': category.id,
+                'cost_price': 5.0,
+                'selling_price': 9.0,
+                'unit': 'Pack',
+                'reorder_level': 10,
+                'target_level': 30,
+                'preferred_supplier_id': supplierAId,
+                'vat_applicable': false,
+              }));
+      await api(
+          'save reorder medicine B',
+          () => inventory.saveMedicine({
+                'name': 'E2E Reorder B $runId',
+                'sku': skuB,
+                'category_id': category.id,
+                'cost_price': 4.0,
+                'selling_price': 8.0,
+                'unit': 'Pack',
+                'reorder_level': 4,
+                'target_level': 12,
+                'preferred_supplier_id': supplierBId,
+                'vat_applicable': false,
+              }));
+      // C is the golden-path medicine: no supplier, no SKU supplied by the
+      // form (the database generates one), and no barcode or category needed.
+      await api(
+          'save no-supplier medicine',
+          () => inventory.saveMedicine({
+                'name': noSupplierName,
+                'cost_price': 5.0,
+                'selling_price': 9.0,
+                'unit': 'Tablet',
+                'reorder_level': 10,
+                'target_level': 20,
+                'vat_applicable': false,
+              }));
+      final medA = (await api(
+              'reorder medicine A', () => inventory.medicines(query: skuA)))
+          .single;
+      final medB = (await api(
+              'reorder medicine B', () => inventory.medicines(query: skuB)))
+          .single;
+      final medC = (await api('no-supplier medicine',
+              () => inventory.medicines(query: noSupplierName)))
+          .single;
+      expect(medC.preferredSupplierId, isNull,
+          reason: 'a medicine must be usable without a preferred supplier');
+      expect(medC.sku, matches(RegExp(r'^YP-\d{6}$')),
+          reason: 'SKU must be auto-generated when the form leaves it blank');
+
+      final batchesBefore = (await api(
+              'batches before opening stock',
+              () => admin
+                  .from('stock_batches')
+                  .select('id')
+                  .eq('branch_id', branchId)))
+          .length;
+
+      // --- Store keeper registers opening stock in one atomic RPC --------
+      useUser(storeKeeperId);
+      final saved = await api(
+          'add opening stock',
+          () => inventory.addOpeningStock(
+                branchId: branchId,
+                rows: [
+                  OpeningStockRowInput(
+                    medicineId: medA.id,
+                    quantity: 8,
+                    expiry:
+                        DateTime.now().toUtc().add(const Duration(days: 60)),
+                    batchNo: 'OPEN-A-$runId',
+                    unitCost: 5.0,
+                  ),
+                  OpeningStockRowInput(
+                    medicineId: medB.id,
+                    quantity: 3,
+                    expiry:
+                        DateTime.now().toUtc().add(const Duration(days: 10)),
+                    unitCost: 4.0,
+                  ),
+                  OpeningStockRowInput(
+                    medicineId: medC.id,
+                    quantity: 12,
+                    expiry:
+                        DateTime.now().toUtc().add(const Duration(days: 60)),
+                    batchNo: 'OPEN-C-$runId',
+                    unitCost: 5.0,
+                  ),
+                ],
+              ));
+      expect(saved, 3, reason: 'all opening-stock rows must be registered');
+
+      await expectApiError('past expiry aborts opening stock', () async {
+        await inventory.addOpeningStock(
+          branchId: branchId,
+          rows: [
+            OpeningStockRowInput(
+              medicineId: medA.id,
+              quantity: 1,
+              expiry: DateTime.now().toUtc().subtract(const Duration(days: 1)),
+            ),
+          ],
+        );
+      });
+
+      // --- Cashiers must not be able to register stock or create POs ------
+      useUser(cashierId);
+      final cashierClient = SupabaseService.client;
+      expect(
+          await api('cashier role', () => cashierClient.rpc<String>('my_role')),
+          'cashier');
+      await expectApiError('cashier cannot add opening stock', () async {
+        await inventory.addOpeningStock(
+          branchId: branchId,
+          rows: [
+            OpeningStockRowInput(
+              medicineId: medA.id,
+              quantity: 1,
+              expiry: DateTime.now().toUtc().add(const Duration(days: 30)),
+            ),
+          ],
+        );
+      });
+      await expectApiError('cashier cannot create draft POs', () async {
+        await inventory.createDraftPurchaseOrders(
+          branchId: branchId,
+          lines: [
+            {
+              'supplier_id': supplierAId,
+              'medicine_id': medA.id,
+              'quantity': 1,
+              'unit_cost': 5.0,
+            },
+          ],
+        );
+      });
+      await expectApiError('cashier cannot add a stock batch', () async {
+        await inventory.addStock(
+          branchId: branchId,
+          medicineId: medA.id,
+          batchNo: 'CASHIER-$runId',
+          expiry: DateTime.now().toUtc().add(const Duration(days: 30)),
+          quantity: 1,
+          cost: 1.0,
+        );
+      });
+
+      // --- Admin verifies auto-batches, stock and reorder suggestions ----
+      useUser(adminId);
+      admin = SupabaseService.client;
+      final batches = await api(
+          'batches after opening stock',
+          () => admin
+              .from('stock_batches')
+              .select('id, batch_no, medicine_id, quantity, expiry_date')
+              .eq('branch_id', branchId));
+      expect(batches, hasLength(batchesBefore + 3),
+          reason: 'failed calls must not write partial batches');
+      final autoBatch =
+          batches.firstWhere((row) => row['medicine_id'] == medB.id);
+      expect(autoBatch['batch_no'], matches(RegExp(r'^OPEN-\d{8}-\d{3}$')),
+          reason: 'a blank batch number gets an OPEN-YYYYMMDD-NNN value');
+      expect(autoBatch['quantity'], 3);
+      expect(autoBatch['expiry_date'], _dateIn(10));
+      final explicitBatch = batches.firstWhere((row) =>
+          row['medicine_id'] == medA.id && row['batch_no'] == 'OPEN-A-$runId');
+      expect(explicitBatch['expiry_date'], _dateIn(60));
+      final goldenBatch = batches.firstWhere((row) =>
+          row['medicine_id'] == medC.id && row['batch_no'] == 'OPEN-C-$runId');
+      expect(goldenBatch['quantity'], 12);
+
+      final stock = await api(
+          'reorder stock summary', () => inventory.stockSummary(branchId));
+      expect(
+          stock.firstWhere((row) => row.medicineId == medA.id).availableQty, 8);
+      expect(
+          stock.firstWhere((row) => row.medicineId == medB.id).availableQty, 3);
+      expect(stock.firstWhere((row) => row.medicineId == medC.id).availableQty,
+          12);
+
+      final suggestions = await api(
+          'reorder suggestions', () => inventory.reorderSuggestions(branchId));
+      final below =
+          suggestions.firstWhere((item) => item.medicineId == medA.id);
+      final expiring =
+          suggestions.firstWhere((item) => item.medicineId == medB.id);
+      expect(below.availableQty, 8);
+      expect(below.reorderLevel, 10);
+      expect(below.targetLevel, 30);
+      expect(below.suggestedOrderQty, 22);
+      expect(below.preferredSupplierId, supplierAId);
+      expect(below.preferredSupplierName, supplierAName);
+      expect(below.reason, 'Below reorder level');
+      expect(expiring.onHand, 3);
+      expect(expiring.availableQty, 0);
+      expect(expiring.expiringQty, 3);
+      expect(expiring.suggestedOrderQty, 12);
+      expect(expiring.preferredSupplierId, supplierBId);
+      expect(expiring.preferredSupplierName, supplierBName);
+      expect(expiring.reason, contains('stock expiring within 30 days'));
+
+      // --- Draft POs: one per supplier, supplier required on every line ---
+      final poCountBefore = (await api(
+              'PO count before invalid draft',
+              () => admin
+                  .from('purchase_orders')
+                  .select('id')
+                  .eq('branch_id', branchId)))
+          .length;
+      await expectApiError('blank supplier aborts draft POs', () async {
+        await admin.rpc('create_draft_purchase_orders', params: {
+          'p_branch': branchId,
+          'p_lines': [
+            {
+              'supplier_id': null,
+              'medicine_id': medA.id,
+              'quantity': 1,
+              'unit_cost': 5.0,
+            },
+          ],
+        });
+      });
+      expect(
+          (await api(
+                  'PO count after invalid draft',
+                  () => admin
+                      .from('purchase_orders')
+                      .select('id')
+                      .eq('branch_id', branchId)))
+              .length,
+          poCountBefore,
+          reason: 'a bad line must abort the whole draft-PO batch');
+
+      final purchase = PurchaseRepository();
+      final poIds = await api(
+          'create draft POs from suggestions',
+          () => inventory.createDraftPurchaseOrders(
+                branchId: branchId,
+                lines: [
+                  {
+                    'supplier_id': supplierAId,
+                    'medicine_id': medA.id,
+                    'quantity': below.suggestedOrderQty,
+                    'unit_cost': 5.0,
+                  },
+                  {
+                    'supplier_id': supplierBId,
+                    'medicine_id': medB.id,
+                    'quantity': expiring.suggestedOrderQty,
+                    'unit_cost': 4.0,
+                  },
+                ],
+              ));
+      expect(poIds, hasLength(2));
+      final poSuppliers = <String>{};
+      for (final poId in poIds) {
+        final order = await api('draft PO $poId', () => purchase.order(poId));
+        expect(order.status, 'draft');
+        expect(order.branchId, branchId);
+        expect(order.notes, 'Created from reorder suggestions');
+        poSuppliers.add(order.supplierId);
+        final lines =
+            await api('draft PO lines $poId', () => purchase.items(poId));
+        expect(lines, hasLength(1));
+      }
+      expect(poSuppliers, {supplierAId, supplierBId},
+          reason: 'each supplier gets its own draft PO');
+
+      // --- The 8-argument add_stock_batch keeps source and supplier -------
+      final purchaseBatch = await api(
+          'purchase source batch',
+          () => inventory.addStock(
+                branchId: branchId,
+                medicineId: medA.id,
+                batchNo: 'PUR-A-$runId',
+                expiry: DateTime.now().toUtc().add(const Duration(days: 90)),
+                quantity: 2,
+                cost: 5.5,
+                supplierId: supplierAId,
+                source: 'purchase',
+              ));
+      expect(purchaseBatch, 'PUR-A-$runId');
+      final purchaseBatchRow = await api(
+          'purchase batch row',
+          () => admin
+              .from('stock_batches')
+              .select('id, supplier_id, expiry_date')
+              .eq('branch_id', branchId)
+              .eq('batch_no', purchaseBatch)
+              .single());
+      expect(purchaseBatchRow['supplier_id'], supplierAId);
+      expect(purchaseBatchRow['expiry_date'], _dateIn(90));
+      final movement = await api(
+          'purchase movement',
+          () => admin
+              .from('stock_movements')
+              .select('movement_type')
+              .eq('batch_id', purchaseBatchRow['id'] as String));
+      expect(movement.single['movement_type'], 'purchase');
+      await expectApiError('invalid stock source rejected', () async {
+        await inventory.addStock(
+          branchId: branchId,
+          medicineId: medA.id,
+          batchNo: 'BAD-$runId',
+          expiry: DateTime.now().toUtc().add(const Duration(days: 90)),
+          quantity: 1,
+          cost: 1.0,
+          source: 'invalid',
+        );
+      });
+
+      // --- Golden path: no-supplier medicine -> sell -> reorder -> PO -----
+      stdout.writeln('[e2e] golden no-supplier medicine -> sale -> reorder');
+      useUser(cashierId);
+      final reorderSales = SalesRepository();
+      final reorderShift = await api(
+          'open reorder shift', () => reorderSales.openShift(branchId, 100));
+      expect(reorderShift, isNotNull);
+      final reorderShiftId = reorderShift!.id;
+      final reorderSale = await api(
+          'sell five no-supplier units',
+          () => reorderSales.createSale(
+                branchId: branchId,
+                shiftId: reorderShiftId,
+                items: [
+                  {'medicine_id': medC.id, 'quantity': 5},
+                ],
+                payments: [
+                  {'method': 'cash', 'amount': 45.0},
+                ],
+                discount: 0.0,
+                note: 'E2E reorder golden path',
+              ));
+      expect(reorderSale, isNotEmpty);
+      final reorderClosed = await api(
+          'close reorder shift',
+          () => reorderSales.closeShift(
+              reorderShiftId, 145, 'E2E reorder close'));
+      expect(reorderClosed.expectedCash, closeTo(145.0, 0.01));
+      expect(reorderClosed.difference, closeTo(0.0, 0.01));
+
+      useUser(adminId);
+      admin = SupabaseService.client;
+      final afterSale = await api(
+          'stock after golden sale', () => inventory.stockSummary(branchId));
+      expect(
+          afterSale.firstWhere((row) => row.medicineId == medC.id).availableQty,
+          7);
+
+      final goldenSuggestion = (await api('golden reorder suggestions',
+              () => inventory.reorderSuggestions(branchId)))
+          .firstWhere((item) => item.medicineId == medC.id);
+      expect(goldenSuggestion.onHand, 7);
+      expect(goldenSuggestion.availableQty, 7);
+      expect(goldenSuggestion.reorderLevel, 10);
+      expect(goldenSuggestion.targetLevel, 20);
+      expect(goldenSuggestion.suggestedOrderQty, 13);
+      expect(goldenSuggestion.preferredSupplierId, isNull,
+          reason: 'a no-supplier medicine lands in the Choose supplier group');
+
+      // The screen requires the user to assign a supplier before creating.
+      final goldenPoIds = await api(
+          'create golden draft PO',
+          () => inventory.createDraftPurchaseOrders(
+                branchId: branchId,
+                lines: [
+                  {
+                    'supplier_id': supplierBId,
+                    'medicine_id': medC.id,
+                    'quantity': goldenSuggestion.suggestedOrderQty,
+                    'unit_cost': 5.0,
+                  },
+                ],
+              ));
+      expect(goldenPoIds, hasLength(1));
+      final goldenPoId = goldenPoIds.single;
+      expect(
+          (await api('golden draft PO', () => purchase.order(goldenPoId)))
+              .status,
+          'draft');
+      final goldenLines =
+          await api('golden draft PO lines', () => purchase.items(goldenPoId));
+      expect(goldenLines, hasLength(1));
+      expect(goldenLines.single.quantityOrdered, 13);
+
+      await api(
+          'approve golden PO', () => purchase.setStatus(goldenPoId, 'ordered'));
+      expect(
+          (await api('golden ordered PO', () => purchase.order(goldenPoId)))
+              .status,
+          'ordered');
+      await api(
+          'receive golden PO',
+          () => purchase.receive(goldenPoId, [
+                {
+                  'po_item_id': goldenLines.single.id,
+                  'quantity': 13,
+                  'batch_no': 'GRN-C-$runId',
+                  'expiry_date': _dateIn(60),
+                },
+              ]));
+      expect(
+          (await api('golden received PO', () => purchase.order(goldenPoId)))
+              .status,
+          'received');
+      final finalStock = await api(
+          'stock after golden receipt', () => inventory.stockSummary(branchId));
+      expect(
+          finalStock
+              .firstWhere((row) => row.medicineId == medC.id)
+              .availableQty,
+          20);
+
+      stdout.writeln('[e2e] ALL opening-stock/reorder CHECKS PASSED');
+    }, timeout: const Timeout(Duration(minutes: 6)));
   });
 }

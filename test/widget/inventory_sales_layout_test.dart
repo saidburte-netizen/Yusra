@@ -6,6 +6,7 @@ import 'package:yusra_pharmacy/core/permissions.dart';
 import 'package:yusra_pharmacy/features/inventory/data/inventory_models.dart';
 import 'package:yusra_pharmacy/features/inventory/data/inventory_providers.dart';
 import 'package:yusra_pharmacy/features/inventory/data/inventory_repository.dart';
+import 'package:yusra_pharmacy/features/inventory/data/reorder_models.dart';
 import 'package:yusra_pharmacy/features/inventory/screens/adjustments_screen.dart';
 import 'package:yusra_pharmacy/features/inventory/screens/alerts_screen.dart';
 import 'package:yusra_pharmacy/features/inventory/screens/batches_screen.dart';
@@ -19,6 +20,7 @@ import 'package:yusra_pharmacy/features/sales/data/sales.dart';
 import 'package:yusra_pharmacy/features/sales/screens/returns_screen.dart';
 import 'package:yusra_pharmacy/features/sales/screens/sale_detail_screen.dart';
 import 'package:yusra_pharmacy/features/sales/screens/sales_screen.dart';
+import 'package:yusra_pharmacy/features/suppliers/data/suppliers.dart';
 
 import 'layout_core_test.dart' as core;
 
@@ -32,6 +34,7 @@ class _FakeInventoryRepository extends InventoryRepository {
   Future<List<Medicine>> medicines({
     String query = '',
     String? categoryId,
+    int limit = 200,
   }) async =>
       [
         const Medicine(
@@ -72,6 +75,13 @@ class _FakeInventoryRepository extends InventoryRepository {
     DateTime? to,
   }) async =>
       const [];
+}
+
+class _FakeSupplierRepository extends SupplierRepository {
+  @override
+  Future<List<Supplier>> list({String query = ''}) async => [
+        const Supplier(id: 'supplier-1', name: 'Ethio Pharma'),
+      ];
 }
 
 const _medicine = Medicine(
@@ -130,6 +140,10 @@ List<Override> _overrides(AppRole role) => [
       ...core.authOverrides(role),
       branchScopeProvider.overrideWith((ref) => 'branch-1'),
       inventoryRepositoryProvider.overrideWithValue(_FakeInventoryRepository()),
+      supplierRepositoryProvider.overrideWithValue(_FakeSupplierRepository()),
+      reorderSuggestionsProvider.overrideWith(
+        (ref, branchId) async => const <ReorderSuggestion>[],
+      ),
       categoriesProvider.overrideWith((ref) async => [
             const Category(id: 'cat-1', name: 'Antibiotics'),
           ]),
