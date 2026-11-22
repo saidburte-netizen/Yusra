@@ -13,6 +13,9 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/money.dart';
 import '../../../core/permissions.dart';
+import '../../../core/state/connectivity.dart';
+import '../../../core/state/idempotency.dart';
+import '../../../core/state/invalidation.dart';
 import '../../../core/strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets.dart';
@@ -52,6 +55,8 @@ class _NeedsOrderingScreenState extends ConsumerState<NeedsOrderingScreen> {
       <String, _EditableReorderRow>{};
   List<SupplierOption> _suppliers = const <SupplierOption>[];
   bool _busy = false;
+  String _draftKey =
+      WriteIdempotency.newKey(Mutation.createDraftPurchaseOrders);
 
   static const List<String> _columns = <String>[
     'medicine',
@@ -203,17 +208,18 @@ class _NeedsOrderingScreenState extends ConsumerState<NeedsOrderingScreen> {
     try {
       final ids =
           await ref.read(inventoryRepositoryProvider).createDraftPurchaseOrders(
-        branchId: branch,
-        lines: [
-          for (final row in selected)
-            {
-              'supplier_id': _edits[row.medicineId]!.supplierId,
-              'medicine_id': row.medicineId,
-              'quantity': quantities[row.medicineId],
-              'unit_cost': row.lastPurchaseCost,
-            },
-        ],
-      );
+                branchId: branch,
+                lines: [
+                  for (final row in selected)
+                    {
+                      'supplier_id': _edits[row.medicineId]!.supplierId,
+                      'medicine_id': row.medicineId,
+                      'quantity': quantities[row.medicineId],
+                      'unit_cost': row.lastPurchaseCost,
+                    },
+                ],
+                idempotencyKey: _draftKey,
+              );
       if (!mounted) return;
       AppSnackbar.success(
         context,
@@ -221,9 +227,9 @@ class _NeedsOrderingScreenState extends ConsumerState<NeedsOrderingScreen> {
             ? 'Created draft purchase orders for ${selected.length} line(s).'
             : 'Created ${ids.length} purchase order(s): ${ids.join(', ')}',
       );
-      invalidateStockProviders(ref);
-      ref.invalidate(reorderSuggestionsProvider);
-      ref.invalidate(purchaseOrdersProvider);
+      setState(() => _draftKey =
+          WriteIdempotency.newKey(Mutation.createDraftPurchaseOrders));
+      ref.applyMutation(Mutation.createDraftPurchaseOrders);
       if (GoRouter.maybeOf(context) != null) {
         context.go('/purchasing/orders');
       }
@@ -574,8 +580,9 @@ class _NeedsOrderingScreenState extends ConsumerState<NeedsOrderingScreen> {
                       label: 'Create purchase order(s)',
                       icon: Icons.shopping_cart_outlined,
                       loading: _busy,
-                      onPressed:
-                          state.hasValue ? () => _createOrders(rows) : null,
+                      onPressed: !state.hasValue || _busy || !writeEnabled(ref)
+                          ? null
+                          : () => _createOrders(rows),
                     ),
                   ),
                   Padding(

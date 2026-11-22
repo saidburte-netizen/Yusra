@@ -266,6 +266,11 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+      - name: Wiring and role-matrix audit checks
+        run: |
+          dart run tool/gen_role_matrix.dart --check
+          dart run tool/wiring_audit.dart --check
+
       - name: Test
         # The PostgREST-backed suite lives in test_e2e and is tagged e2e-api.
         # It is exercised by its own job with real services; here it must not
