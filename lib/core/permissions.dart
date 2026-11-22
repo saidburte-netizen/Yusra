@@ -128,7 +128,7 @@ const Map<String, Map<AppRole, Perm>> permissionMatrix = {
     AppRole.admin: _e,
     AppRole.pharmacist: _e,
     AppRole.cashier: _v,
-    AppRole.storeKeeper: _e,
+    AppRole.storeKeeper: _v,
     AppRole.accountant: _v,
   },
   Modules.stock: {
@@ -142,7 +142,7 @@ const Map<String, Map<AppRole, Perm>> permissionMatrix = {
   Modules.suppliers: {
     AppRole.superAdmin: _e,
     AppRole.admin: _e,
-    AppRole.pharmacist: _v,
+    AppRole.pharmacist: _e,
     AppRole.cashier: _n,
     AppRole.storeKeeper: _e,
     AppRole.accountant: _v,
@@ -150,7 +150,7 @@ const Map<String, Map<AppRole, Perm>> permissionMatrix = {
   Modules.purchaseOrders: {
     AppRole.superAdmin: _e,
     AppRole.admin: _e,
-    AppRole.pharmacist: _v,
+    AppRole.pharmacist: _e,
     AppRole.cashier: _n,
     AppRole.storeKeeper: _e,
     AppRole.accountant: _v,
