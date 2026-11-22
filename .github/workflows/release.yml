@@ -205,6 +205,19 @@ jobs:
             echo "::warning::No signing secrets; falling back to the default debug key."
           fi
 
+      - name: Verify Supabase secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::Repository secrets SUPABASE_URL and SUPABASE_ANON_KEY are required to build a usable release."
+            exit 1
+          fi
+          echo "SUPABASE_URL_LENGTH=${#SUPABASE_URL}"
+          echo "SUPABASE_ANON_KEY_LENGTH=${#SUPABASE_ANON_KEY}"
+
       - name: Build release APK with bumped build number
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -216,6 +229,27 @@ jobs:
             --build-number="${{ steps.version.outputs.number }}" \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+
+      - name: Verify Supabase keys in APK
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          set -euo pipefail
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          test -f "$APK"
+          HOST="$(python3 -c "from urllib.parse import urlparse; import os; print(urlparse(os.environ['SUPABASE_URL']).hostname or '')")"
+          if [ -z "$HOST" ]; then
+            echo "MISSING"
+            exit 1
+          fi
+          TMP="$(mktemp -d)"
+          unzip -oq "$APK" -d "$TMP"
+          if grep -aFlq "$HOST" "$TMP"/lib/*/libapp.so; then
+            echo "OK"
+          else
+            echo "MISSING"
+            exit 1
+          fi
 
       - name: Build release web zip with correct base href
         env:

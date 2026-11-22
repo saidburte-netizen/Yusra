@@ -135,7 +135,8 @@ jobs:
             echo "::error::Repository secrets SUPABASE_URL and SUPABASE_ANON_KEY are required to build a usable APK."
             exit 1
           fi
-          echo "Supabase build configuration found."
+          echo "SUPABASE_URL_LENGTH=${#SUPABASE_URL}"
+          echo "SUPABASE_ANON_KEY_LENGTH=${#SUPABASE_ANON_KEY}"
 
       - name: Build release APK
         env:
@@ -145,6 +146,27 @@ jobs:
           flutter build apk --release \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+
+      - name: Verify Supabase keys in APK
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          set -euo pipefail
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          test -f "$APK"
+          HOST="$(python3 -c "from urllib.parse import urlparse; import os; print(urlparse(os.environ['SUPABASE_URL']).hostname or '')")"
+          if [ -z "$HOST" ]; then
+            echo "MISSING"
+            exit 1
+          fi
+          TMP="$(mktemp -d)"
+          unzip -oq "$APK" -d "$TMP"
+          if grep -aFlq "$HOST" "$TMP"/lib/*/libapp.so; then
+            echo "OK"
+          else
+            echo "MISSING"
+            exit 1
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

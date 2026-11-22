@@ -299,7 +299,32 @@ jobs:
             echo "No keystore secrets found; using the default debug signing."
           fi
 
+      - name: Verify Supabase secrets
+        id: supabase_secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          IS_PR: ${{ github.event_name == 'pull_request' }}
+          IS_FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "SUPABASE_URL_LENGTH=${#SUPABASE_URL}"
+            echo "SUPABASE_ANON_KEY_LENGTH=${#SUPABASE_ANON_KEY}"
+            exit 0
+          fi
+          if [ "$IS_FORK" = "true" ] || [ "$ACTOR" = "dependabot[bot]" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::SUPABASE_URL/SUPABASE_ANON_KEY unavailable for fork/Dependabot PR; skipping APK/web build and upload."
+            exit 0
+          fi
+          echo "::error::Repository secrets SUPABASE_URL and SUPABASE_ANON_KEY are required to build a usable APK/web bundle."
+          exit 1
+
       - name: Build release APK
+        if: steps.supabase_secrets.outputs.available == 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
@@ -308,7 +333,30 @@ jobs:
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 
+      - name: Verify Supabase keys in APK
+        if: steps.supabase_secrets.outputs.available == 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          set -euo pipefail
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          test -f "$APK"
+          HOST="$(python3 -c "from urllib.parse import urlparse; import os; print(urlparse(os.environ['SUPABASE_URL']).hostname or '')")"
+          if [ -z "$HOST" ]; then
+            echo "MISSING"
+            exit 1
+          fi
+          TMP="$(mktemp -d)"
+          unzip -oq "$APK" -d "$TMP"
+          if grep -aFlq "$HOST" "$TMP"/lib/*/libapp.so; then
+            echo "OK"
+          else
+            echo "MISSING"
+            exit 1
+          fi
+
       - name: Build release web
+        if: steps.supabase_secrets.outputs.available == 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
@@ -319,6 +367,7 @@ jobs:
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 
       - name: Upload APK artifact
+        if: steps.supabase_secrets.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: yusra-pharmacy-apk
@@ -327,6 +376,7 @@ jobs:
           retention-days: 30
 
       - name: Upload web artifact
+        if: steps.supabase_secrets.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: yusra-pharmacy-web

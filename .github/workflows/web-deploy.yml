@@ -68,15 +68,25 @@ jobs:
           flutter pub get
           flutter analyze
 
-      - name: Build release web
+      - name: Verify Supabase secrets
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           set -euo pipefail
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "::warning::SUPABASE_URL / SUPABASE_ANON_KEY are not configured; the bundle will be built without Supabase configuration."
+            echo "::error::Repository secrets SUPABASE_URL and SUPABASE_ANON_KEY are required to build a usable web bundle."
+            exit 1
           fi
+          echo "SUPABASE_URL_LENGTH=${#SUPABASE_URL}"
+          echo "SUPABASE_ANON_KEY_LENGTH=${#SUPABASE_ANON_KEY}"
+
+      - name: Build release web
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
           flutter build web --release \
             --base-href="${{ steps.base_href.outputs.value }}" \
             --build-number="${{ github.run_number }}" \
