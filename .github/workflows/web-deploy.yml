@@ -123,7 +123,7 @@ jobs:
 
       - name: Download web artifact
         if: steps.host_secrets.outputs.available == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: yusra-pharmacy-web
           path: build/web
