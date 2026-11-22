@@ -295,8 +295,9 @@ List<String> _files(String root, List<String> extensions) {
 String _rel(String root, String path) {
   final normalized = path.replaceAll(r'\', '/');
   final prefix = root.replaceAll(r'\', '/');
-  if (normalized.startsWith('$prefix/'))
+  if (normalized.startsWith('$prefix/')) {
     return normalized.substring(prefix.length + 1);
+  }
   return normalized;
 }
 
@@ -647,7 +648,7 @@ WiringInventory _extract(String root) {
         final field = fieldMatch?.group(1) ?? '<field>';
         // The source query is resolved from the snapshot field assignment in
         // DashboardSnapshot.load; see _resolveTileSource below.
-        final source = '<unresolved>';
+        const source = '<unresolved>';
         dashboardTiles.add(DashboardTile(
           label: label,
           field: field,
@@ -943,9 +944,7 @@ const Map<String, String> _dashboardFieldSources = {
 // ---------------------------------------------------------------------------
 
 class WiringAudit {
-  WiringAudit(String root)
-      : inventory = _extract(root),
-        root = root {
+  WiringAudit(this.root) : inventory = _extract(root) {
     gaps = _check();
     _waiverTargets = <String>{};
     for (final waiver in _waivers) {
@@ -1178,8 +1177,8 @@ class WiringAudit {
       }
     }
     for (final edge in inv.edgeFunctions) {
-      final referenced = inv.libFiles
-          .any((path) => _read('$root/$path').contains('${edge.name}'));
+      final referenced =
+          inv.libFiles.any((path) => _read('$root/$path').contains(edge.name));
       if (!referenced) {
         result.add(Gap('backward/edge_function_used', edge.name,
             'Edge Function `${edge.name}` is not referenced by lib/', edge.ref,
