@@ -278,7 +278,7 @@ jobs:
         # The only step that needs a token: it uses the automatic GITHUB_TOKEN
         # granted to the workflow (contents: write). No user-managed secret is
         # read, echoed or stored.
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: Yusra Pharmacy ${{ steps.version.outputs.name }}
