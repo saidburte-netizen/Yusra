@@ -266,8 +266,7 @@ class PurchaseRepository {
 }
 
 final purchaseRepositoryProvider = Provider<PurchaseRepository>((ref) {
-  return PurchaseRepository(
-      coordinator: ref.read(writeCoordinatorProvider));
+  return PurchaseRepository(coordinator: ref.read(writeCoordinatorProvider));
 });
 
 final purchaseOrdersProvider = FutureProvider<List<PurchaseOrder>>((ref) async {

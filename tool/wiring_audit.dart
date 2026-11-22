@@ -258,22 +258,6 @@ const List<Waiver> _waivers = [
     deferredCodeFix: true,
   ),
   Waiver(
-    'backward/schema_check_coverage|write_activity_log',
-    'Migration declares write_activity_log() but schema_check.sql does not '
-        'expect it. Add (\'write_activity_log\', 0) to expected_functions.',
-    'supabase/migrations/0017_activity_audit.sql:28; '
-        'supabase/checks/schema_check.sql:26-44',
-    deferredCodeFix: true,
-  ),
-  Waiver(
-    'backward/schema_check_coverage|rls_activity_read',
-    'Migration creates policy rls_activity_read but schema_check.sql does not '
-        'expect it. Add it to expected_policies.',
-    'supabase/migrations/0017_activity_audit.sql:97; '
-        'supabase/checks/schema_check.sql:60-76',
-    deferredCodeFix: true,
-  ),
-  Waiver(
     'backward/dashboard_tile_reconciliation|grossProfitToday',
     'Dashboard gross profit uses line_total - cost_price * quantity, while '
         'the report views subtract discount_share and returned_qty. Align the '
