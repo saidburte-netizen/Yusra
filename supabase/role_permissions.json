@@ -1389,7 +1389,7 @@
       "label": "Edit medicine",
       "kind": "edit",
       "gate": "can(medicines,edit)",
-      "evidence": "lib/features/inventory/screens/medicines_screen.dart:205",
+      "evidence": "lib/features/inventory/screens/medicines_screen.dart:212",
       "db_operation": "rls.medicines.write",
       "ui_roles": [
         "super_admin",
@@ -1402,7 +1402,7 @@
       "label": "Deactivate / reactivate medicine",
       "kind": "deactivate",
       "gate": "can(medicines,edit)",
-      "evidence": "lib/features/inventory/screens/medicines_screen.dart:212",
+      "evidence": "lib/features/inventory/screens/medicines_screen.dart:219",
       "db_operation": "rls.medicines.write",
       "ui_roles": [
         "super_admin",
