@@ -95,10 +95,22 @@ jobs:
         with:
           deno-version: v2.x
 
+      - name: Set up Node and Playwright
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
       - name: STEP 0 — print every pinned version
         run: |
           set -euo pipefail
           chmod +x tool/ci_psql.sh
+          npm install -g playwright@1.48.2
+          npx playwright install --with-deps chromium
           echo "=== Flutter / Dart ==="
           flutter --version
           dart --version
@@ -112,6 +124,12 @@ jobs:
             grep -E 'platforms;android-34|build-tools;34.0.0|platform-tools'
           echo "=== Deno ==="
           deno --version
+          echo "=== Node / Playwright ==="
+          node --version
+          npm --version
+          npx playwright --version
+          echo "=== Supabase CLI ==="
+          supabase --version
           echo "=== PostgreSQL 16 ==="
           bash tool/ci_psql.sh --version
           bash tool/ci_psql.sh -d postgres -Atc 'select version();'
@@ -128,9 +146,12 @@ jobs:
           java -version 2>&1 | head -1 | grep -q '"17\.'
           grep -q 'Gradle 8\.3' /tmp/gradle-version.txt
           deno --version | head -1 | grep -q '^deno '
+          node --version | grep -q '^v20\.'
+          npx playwright --version | grep -q 'Version '
+          supabase --version | grep -q '.'
           bash tool/ci_psql.sh --version | grep -q ' 16\.'
           docker version --format '{{.Server.Version}}' | grep -q '.'
-          echo "STEP 0 PASSED: Flutter 3.24.5, Dart 3, Java 17, Gradle 8.3, Android SDK 34/34.0.0, Deno, PostgreSQL 16, Docker, $POSTGREST_IMAGE."
+          echo "STEP 0 PASSED: Flutter 3.24.5, Dart 3, Java 17, Gradle 8.3, Android SDK 34/34.0.0, Deno, Node 20, Playwright, Supabase CLI, PostgreSQL 16, Docker, $POSTGREST_IMAGE."
 
   build:
     name: Analyze, test, build APK and web
