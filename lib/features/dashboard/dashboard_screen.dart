@@ -587,10 +587,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         const SizedBox(height: 6),
                         Text(
                           '${formatDate(nowAddisAbaba())} · ${S.appName}',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: AppColors.onDarkMuted,
-                                fontWeight: FontWeight.w600,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: AppColors.onDarkMuted,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                         ),
                         const SizedBox(height: 14),
                         Container(
@@ -628,7 +629,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           data: Theme.of(context).copyWith(
                             inputDecorationTheme:
                                 Theme.of(context).inputDecorationTheme.copyWith(
-                                      fillColor: AppColors.plum900.withOpacity(0.35),
+                                      fillColor:
+                                          AppColors.plum900.withOpacity(0.35),
                                       labelStyle: const TextStyle(
                                         color: AppColors.onDarkMuted,
                                         fontWeight: FontWeight.w700,
@@ -646,12 +648,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             decoration: const InputDecoration(
                               labelText: S.timeRange,
                               enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.all(Radius.circular(14)),
-                                borderSide: BorderSide(color: Color(0x59C9A227)),
+                                borderRadius:
+                                    BorderRadius.all(Radius.circular(14)),
+                                borderSide:
+                                    BorderSide(color: Color(0x59C9A227)),
                               ),
                               focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.all(Radius.circular(14)),
-                                borderSide: BorderSide(color: AppColors.gold500),
+                                borderRadius:
+                                    BorderRadius.all(Radius.circular(14)),
+                                borderSide:
+                                    BorderSide(color: AppColors.gold500),
                               ),
                             ),
                             items: [
@@ -709,7 +715,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('Some sections could not be loaded:'),
+                                const Text(
+                                    'Some sections could not be loaded:'),
                                 const SizedBox(height: 4),
                                 SelectableText(
                                   _data!.failedSections
@@ -717,7 +724,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                       .join('\n'),
                                 ),
                                 const SizedBox(height: 4),
-                                const Text('The numbers shown may be incomplete.'),
+                                const Text(
+                                    'The numbers shown may be incomplete.'),
                               ],
                             ),
                           ),

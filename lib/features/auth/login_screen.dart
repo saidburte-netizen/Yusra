@@ -147,7 +147,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             label: S.password,
                             controller: _password,
                             obscureText: _obscure,
-                            prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                            prefixIcon:
+                                const Icon(Icons.lock_outline, size: 20),
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscure
@@ -179,7 +180,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           const SizedBox(height: 20),
                           Text(
                             'Yusra Pharmacy · ${S.tagline}',
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
                                   color: AppColors.muted,
                                   fontWeight: FontWeight.w700,
                                 ),

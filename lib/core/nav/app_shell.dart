@@ -74,7 +74,8 @@ class AppShell extends ConsumerWidget {
                     color: AppColors.plum900.withOpacity(0.35),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const YusraLogo(variant: YusraLogoVariant.mark, size: 44),
+                  child:
+                      const YusraLogo(variant: YusraLogoVariant.mark, size: 44),
                 ),
               ),
               destinations: [
@@ -145,7 +146,8 @@ class AppShell extends ConsumerWidget {
               Divider(color: AppColors.gold500.withOpacity(0.35)),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   children: [
                     for (final item in items)
                       Padding(

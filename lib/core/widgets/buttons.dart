@@ -124,9 +124,8 @@ class SecondaryButton extends StatelessWidget {
         onPressed: onPressed,
         style: ButtonStyle(
           foregroundColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.pressed)
-                ? AppColors.gold700
-                : fg,
+            (states) =>
+                states.contains(WidgetState.pressed) ? AppColors.gold700 : fg,
           ),
           side: WidgetStateProperty.resolveWith(
             (states) => BorderSide(
