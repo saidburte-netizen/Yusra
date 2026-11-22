@@ -5,6 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/state/connectivity.dart';
+import '../../../core/state/idempotency.dart';
+import '../../../core/state/invalidation.dart';
+
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/dates.dart';
 import '../../../core/errors/app_error.dart';
@@ -40,6 +44,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   HeldCartStore? _heldStore;
   bool _busy = false;
   bool _showCart = false;
+  String _saleKey = WriteIdempotency.newKey(Mutation.createSale);
 
   @override
   void initState() {
@@ -142,6 +147,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
             payments: payments.map((payment) => payment.toJson()).toList(),
             discount: _cart.discount,
             note: _cart.note,
+            idempotencyKey: _saleKey,
           );
       final sale = await ref.read(salesRepositoryProvider).sale(saleId);
       final items = await ref.read(salesRepositoryProvider).saleItems(saleId);
@@ -161,12 +167,10 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         _customerId = null;
         _prescriptionId = null;
         _showCart = false;
+        _saleKey = WriteIdempotency.newKey(Mutation.createSale);
       });
       await _heldStore?.clearDraft();
-      ref.invalidate(stockSummaryProvider);
-      ref.invalidate(myOpenShiftProvider);
-      ref.invalidate(salesProvider);
-      ref.invalidate(prescriptionsProvider);
+      ref.applyMutation(Mutation.createSale);
       if (mounted) {
         AppSnackbar.success(context, 'Sale complete  •  ${sale.invoiceNo}');
       }
@@ -994,10 +998,13 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                     label: _busy ? 'Saving…' : 'Pay ${formatMoney(total)}',
                     icon: Icons.payment,
                     loading: _busy,
-                    onPressed:
-                        shift == null || _cart.isEmpty || !canSell || _busy
-                            ? null
-                            : () => _checkout(shift, settings),
+                    onPressed: shift == null ||
+                            _cart.isEmpty ||
+                            !canSell ||
+                            _busy ||
+                            !writeEnabled(ref)
+                        ? null
+                        : () => _checkout(shift, settings),
                   ),
                 ),
               ],

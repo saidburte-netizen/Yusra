@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
 import 'core/auth/auth_controller.dart';
 import 'core/errors/error_reporter.dart';
 import 'core/permissions.dart';
-import 'core/state/app_cache.dart';
+import 'core/state/cache_policy.dart';
+import 'core/state/connectivity.dart';
+import 'core/state/invalidation.dart';
+import 'core/nav/app_shell.dart';
 import 'core/supabase_client.dart';
+import 'features/inventory/data/inventory_providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,22 +21,47 @@ Future<void> main() async {
   // shows a readable configuration message instead of crashing.
   await SupabaseService.initialize();
 
-  final container = ProviderContainer();
+  // Seed the persisted catalogue snapshot before the first frame so cold
+  // starts render the last known catalogue while revalidating in background.
+  SharedPrefsCacheSnapshotStore? snapshotStore;
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    snapshotStore = SharedPrefsCacheSnapshotStore(prefs);
+  } catch (_) {
+    // A storage failure must not block startup; the in-memory cache still works.
+  }
+
+  final container = ProviderContainer(overrides: [
+    if (snapshotStore != null)
+      cacheSnapshotStoreProvider.overrideWithValue(snapshotStore),
+  ]);
+  await restoreCatalogueSnapshot(
+      container.read(appCacheProvider), snapshotStore);
   await container.read(authProvider.notifier).bootstrap();
+
   // Never carry reference data from one signed-in user into the next.
   String? cacheKey = _identityKey(container.read(authProvider));
   container.listen(authProvider, (_, next) {
     final key = _identityKey(next);
     if (key != cacheKey) {
       cacheKey = key;
-      container.read(appCacheProvider).clear();
+      SessionReset.onIdentityChanged(container);
+    }
+  });
+
+  // Branch switch resets branch-scoped providers and drops branch ledgers.
+  String? branchId = container.read(selectedBranchProvider);
+  container.listen(selectedBranchProvider, (_, next) {
+    if (next != branchId) {
+      branchId = next;
+      SessionReset.onBranchChanged(container);
     }
   });
 
   runApp(
     UncontrolledProviderScope(
       container: container,
-      child: const AuthRefreshOnResume(child: YusraApp()),
+      child: const OfflineScope(child: AuthRefreshOnResume(child: YusraApp())),
     ),
   );
 }

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../auth/auth_controller.dart';
 import '../permissions.dart';
 import '../strings.dart';
+import '../state/connectivity.dart';
 import '../supabase_client.dart';
 import '../theme/app_colors.dart';
 import '../widgets.dart';

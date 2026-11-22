@@ -20,12 +20,13 @@ class AppErrorReporter {
     _installed = true;
 
     FlutterError.onError = (details) {
-      FlutterError.presentError(details);
-      debugPrint('Uncaught Flutter error: ${details.exception}');
+      // Local logging only. Never interpolate the exception itself: Supabase
+      // and socket errors can contain emails, names and tokens (PII).
+      debugPrint('Uncaught Flutter error: ${_safe(details.exception)}');
     };
 
     PlatformDispatcher.instance.onError = (error, stack) {
-      debugPrint('Uncaught async error: $error');
+      debugPrint('Uncaught async error: ${_safe(error)}');
       return true; // prevent the process from being torn down
     };
 
@@ -35,6 +36,19 @@ class AppErrorReporter {
 
   /// Convenience for repository boundaries that should not throw raw errors.
   static AppError guard(Object error) => AppErrorMapper.from(error);
+
+  /// Maps then logs a stable, PII-free line (kind + short code only).
+  /// Use this in catch blocks that intentionally swallow an error.
+  static AppError logAndMap(Object error) {
+    final mapped = AppErrorMapper.from(error);
+    debugPrint('Handled error: ${mapped.sanitizedLogLine}');
+    return mapped;
+  }
+
+  /// Maps any exception to a stable `kind:code` string without touching its
+  /// message, stack trace or `toString()` (which may contain PII).
+  static String _safe(Object error) =>
+      AppErrorMapper.from(error).sanitizedLogLine;
 }
 
 class _FatalErrorView extends StatelessWidget {

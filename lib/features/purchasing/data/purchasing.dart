@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/errors/app_error.dart';
+import '../../../core/state/idempotency.dart';
+import '../../../core/state/invalidation.dart';
 import '../../../core/supabase_client.dart';
 import '../../inventory/data/inventory_models.dart';
 import '../../inventory/data/inventory_providers.dart';
@@ -108,6 +110,11 @@ class PurchaseOrderItem {
 }
 
 class PurchaseRepository {
+  PurchaseRepository({WriteCoordinator? coordinator})
+      : _coordinator = coordinator ?? const WriteCoordinator();
+
+  final WriteCoordinator _coordinator;
+
   SupabaseClient get _db => SupabaseService.client;
 
   Future<List<PurchaseOrder>> orders(String? branchId) async {
@@ -237,18 +244,31 @@ class PurchaseRepository {
         );
   }
 
-  Future<void> receive(String poId, List<Map<String, dynamic>> items) =>
-      _db.rpc('receive_purchase_order', params: {
-        'p_po': poId,
-        'p_items': items,
-      });
+  Future<void> receive(
+    String poId,
+    List<Map<String, dynamic>> items, {
+    String? idempotencyKey,
+  }) =>
+      _coordinator.run<void>(
+        operation: Mutation.receivePurchaseOrder,
+        key: idempotencyKey ??
+            WriteIdempotency.newKey(Mutation.receivePurchaseOrder),
+        action: () async {
+          await _db.rpc('receive_purchase_order', params: {
+            'p_po': poId,
+            'p_items': items,
+          });
+        },
+      );
 
   static String _date(DateTime value) =>
       '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
 }
 
-final purchaseRepositoryProvider =
-    Provider<PurchaseRepository>((ref) => PurchaseRepository());
+final purchaseRepositoryProvider = Provider<PurchaseRepository>((ref) {
+  return PurchaseRepository(
+      coordinator: ref.read(writeCoordinatorProvider));
+});
 
 final purchaseOrdersProvider = FutureProvider<List<PurchaseOrder>>((ref) async {
   if (!SupabaseService.isReady) return const <PurchaseOrder>[];
