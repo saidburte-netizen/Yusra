@@ -515,14 +515,20 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           selectedColor: AppColors.pink600,
           leading: CircleAvatar(
             radius: 13,
-            backgroundColor:
-                index == _selected ? AppColors.pink600 : AppColors.pink50,
+            backgroundColor: index == _selected
+                ? AppColors.pink600
+                : (Theme.of(context).brightness == Brightness.dark
+                    ? AppColors.darkElevated
+                    : AppColors.pink50),
             child: Text('${index + 1}',
                 style: TextStyle(
                     fontSize: 10,
+                    fontWeight: FontWeight.w700,
                     color: index == _selected
-                        ? AppColors.white
-                        : AppColors.pink600)),
+                        ? Colors.white
+                        : (Theme.of(context).brightness == Brightness.dark
+                            ? AppColors.darkPink
+                            : AppColors.pink600))),
           ),
           title: Text(_reports[index].title),
           onTap: () => _select(index),

@@ -236,7 +236,6 @@ class _TeamAccessScreenState extends ConsumerState<TeamAccessScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text(S.teamAccess)),
       body: _loading
           ? const LoadingSkeleton(lines: 6)
           : SingleChildScrollView(

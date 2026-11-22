@@ -329,7 +329,9 @@ class _NeedsOrderingScreenState extends ConsumerState<NeedsOrderingScreen> {
   Widget _metric(String label, String value) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: AppColors.blush,
+          color: Theme.of(context).brightness == Brightness.dark
+              ? AppColors.darkSurface
+              : AppColors.blush,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Column(

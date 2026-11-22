@@ -568,7 +568,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               ),
             if (shift == null)
               Card(
-                color: AppColors.pink50,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppColors.darkElevated
+                    : AppColors.pink50,
                 child: Padding(
                   padding: const EdgeInsets.all(14),
                   child: Wrap(
@@ -867,7 +869,10 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                       children: [
                         for (final line in _cart.lines)
                           Card(
-                            color: AppColors.pink50,
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
+                                    ? AppColors.darkElevated
+                                    : AppColors.pink50,
                             child: Padding(
                               padding: const EdgeInsets.all(8),
                               child: Row(

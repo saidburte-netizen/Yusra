@@ -103,10 +103,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: AppColors.blush,
+                              color: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? AppColors.darkSurface
+                                  : AppColors.blush,
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: AppColors.gold300.withOpacity(0.55),
+                                color: (Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? AppColors.darkGold
+                                        : AppColors.gold300)
+                                    .withOpacity(0.55),
                               ),
                             ),
                             child: const YusraLogo(

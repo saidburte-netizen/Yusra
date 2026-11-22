@@ -87,7 +87,9 @@ class LoadingSkeleton extends StatelessWidget {
           Container(
             height: cardHeight,
             decoration: BoxDecoration(
-              color: AppColors.pink50,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? AppColors.darkElevated
+                  : AppColors.pink50,
               borderRadius: BorderRadius.circular(AppColors.radius),
             ),
           ),

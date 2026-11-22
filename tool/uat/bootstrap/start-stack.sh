@@ -11,8 +11,7 @@
 # is exported to GITHUB_ENV when running in Actions.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-REPO="$(cd "$ROOT/../.." && pwd)"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO"
 
 for tool in supabase docker flutter jq curl; do
@@ -40,8 +39,13 @@ if [[ -z "$DB_CONTAINER" ]]; then
   echo "UAT: no supabase_db_* container found." >&2
   exit 1
 fi
+OWNER_SQL="$REPO/supabase/all_owner_sql.sql"
+if [[ ! -f "$OWNER_SQL" ]]; then
+  echo "UAT: missing $OWNER_SQL" >&2
+  exit 1
+fi
 docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q \
-  < supabase/all_owner_sql.sql > /tmp/uat-owner-sql.log 2>&1 || {
+  < "$OWNER_SQL" > /tmp/uat-owner-sql.log 2>&1 || {
   cat /tmp/uat-owner-sql.log >&2
   exit 1
 }
@@ -60,9 +64,15 @@ nohup supabase functions serve --env-file "$FUNCTIONS_ENV" \
 echo "$!" > /tmp/uat-functions.pid
 
 echo "== UAT: seeding branches, users and catalogue fixtures =="
-bash tool/uat/bootstrap/seed.sh
-# seed.sh runs in a child shell; mirror the exact fixture names here so the
-# parent (and therefore GITHUB_ENV below) can pass them to Playwright.
+# Source so seeded IDs are available to this shell and to GITHUB_ENV below.
+# shellcheck disable=SC1091
+source tool/uat/bootstrap/seed.sh
+export UAT_BRANCH_A_ID="${BRANCH_A:-}"
+export UAT_BRANCH_B_ID="${BRANCH_B:-}"
+export UAT_SUPPLIER_ID="${SUPPLIER_ID:-}"
+export UAT_NORMAL_MEDICINE_ID="${NORMAL_ID:-}"
+export UAT_RX_MEDICINE_ID="${RX_ID:-}"
+export UAT_CATEGORY_ID="${CATEGORY_ID:-}"
 export UAT_SUPPLIER_NAME="UAT Supplier $UAT_RUN_ID"
 export UAT_NORMAL_MEDICINE_NAME="UAT Paracetamol 500mg $UAT_RUN_ID"
 export UAT_RX_MEDICINE_NAME="UAT Amoxicillin 500mg $UAT_RUN_ID"
@@ -70,12 +80,22 @@ export UAT_RX_MEDICINE_NAME="UAT Amoxicillin 500mg $UAT_RUN_ID"
 echo "== UAT: building Flutter web (HTML renderer + local anon key) =="
 flutter build web --release \
   --web-renderer html \
+  --pwa-strategy=none \
   --dart-define=SUPABASE_URL="$UAT_SUPABASE_URL" \
   --dart-define=SUPABASE_ANON_KEY="$UAT_ANON_KEY" \
   > /tmp/uat-flutter-build.log 2>&1 || {
   tail -100 /tmp/uat-flutter-build.log >&2
   exit 1
 }
+# Disable service worker in served build to avoid CI activation hangs.
+python3 - <<'PYBOOT'
+import re, pathlib
+p = pathlib.Path('build/web/flutter_bootstrap.js')
+if p.exists():
+    t = p.read_text()
+    t = re.sub(r"serviceWorkerSettings\s*:\s*\{[^}]*\}", "serviceWorkerSettings: null", t)
+    p.write_text(t)
+PYBOOT
 echo "   flutter build web: OK"
 
 if [[ -n "${GITHUB_ENV:-}" ]]; then

@@ -4,4 +4,5 @@ export 'widgets/data_table_plus.dart';
 export 'widgets/display.dart';
 export 'widgets/feedback.dart';
 export 'widgets/inputs.dart';
+export 'widgets/theme_mode_toggle.dart';
 export 'widgets/yusra_logo.dart';

@@ -23,9 +23,11 @@ updates:
       prefix: "chore(deps)"
     ignore:
       # Blocked by pinned Flutter 3.24.5 / Dart 3.5.4 toolchain.
+      # Ignore majors and minors: many minor releases require Dart > 3.5.4.
       - dependency-name: "*"
         update-types:
           - "version-update:semver-major"
+          - "version-update:semver-minor"
 
   # Node packages. Becomes active once a package.json is committed (for
   # example to pin the Playwright version used by the e2e CI job).

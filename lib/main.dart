@@ -12,6 +12,7 @@ import 'core/state/connectivity.dart';
 import 'core/state/invalidation.dart';
 import 'core/nav/app_shell.dart';
 import 'core/supabase_client.dart';
+import 'core/theme/theme_mode_controller.dart';
 import 'features/inventory/data/inventory_providers.dart';
 
 Future<void> main() async {
@@ -38,6 +39,7 @@ Future<void> main() async {
   ]);
   await restoreCatalogueSnapshot(
       container.read(appCacheProvider), snapshotStore);
+  await container.read(themeModeProvider.notifier).load();
   await container.read(authProvider.notifier).bootstrap();
 
   // Never carry reference data from one signed-in user into the next.

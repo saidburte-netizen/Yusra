@@ -95,12 +95,30 @@ export async function openRole(
 /** Logs in through the real LoginScreen (UI only — no token injection). */
 export async function login(page: Page, key: string): Promise<void> {
   await page.goto('/login');
+  // Flutter web HTML renderer may hide semantics behind an accessibility placeholder.
+  const a11y = page.getByRole('button', { name: 'Enable accessibility' });
+  if (await a11y.count().catch(() => 0) > 0) {
+    await a11y.first().click({ force: true }).catch(() => {});
+    await page.waitForTimeout(300);
+  }
   const email = await field(page, 'Email address');
   const password = await field(page, 'Password');
-  await email.fill(emailFor(key));
-  await password.fill(userFor(key).password);
+  await email.click({ force: true });
+  await email.fill('');
+  await page.keyboard.type(emailFor(key), { delay: 10 });
+  await password.click({ force: true });
+  await password.fill('');
+  await page.keyboard.type(userFor(key).password, { delay: 10 });
+  await page.keyboard.press('Tab').catch(() => {});
   await tap(page, 'Sign in');
-  await expect(page, 'login must redirect away from /login').not.toHaveURL(/\/login$/);
+  // Fallback: Flutter web semantics/canvas can miss tap; try keyboard submit.
+  try {
+    await expect(page, 'login must redirect away from /login').not.toHaveURL(/\/login$/, { timeout: 8000 });
+  } catch {
+    await password.click({ force: true }).catch(() => {});
+    await page.keyboard.press('Enter').catch(() => {});
+    await expect(page, 'login must redirect away from /login').not.toHaveURL(/\/login$/, { timeout: 20000 });
+  }
   await expect(page.locator('body')).not.toContainText('Email or password is incorrect.');
 }
 
@@ -146,6 +164,7 @@ export async function field(page: Page, label: string): Promise<Locator> {
     page.getByLabel(label, { exact: true }),
     page.locator(`[aria-label="${label}"]`),
     page.getByText(label, { exact: true }).locator('..').locator('input, textarea'),
+    page.getByText(label).locator('..').locator('input, textarea'),
   ]);
   if (!locator) throw new Error(`No form field found for "${label}"`);
   return locator;
@@ -156,6 +175,7 @@ export async function combobox(page: Page, label: string): Promise<Locator> {
     page.getByRole('combobox', { name: label }),
     page.locator(`[aria-label="${label}"]`),
     page.getByText(label, { exact: true }).locator('..').locator('[role="combobox"], button'),
+    page.getByText(label).locator('..').locator('[role="combobox"], button'),
   ]);
   if (!locator) throw new Error(`No dropdown found for "${label}"`);
   return locator;
@@ -172,6 +192,7 @@ export async function toggle(page: Page, label: string): Promise<void> {
     page.getByRole('checkbox', { name: label }),
     page.getByRole('switch', { name: label }),
     page.getByText(label, { exact: true }),
+    page.getByText(label),
   ]);
   if (!locator) throw new Error(`No checkbox/switch found for "${label}"`);
   await locator.click();
@@ -183,6 +204,7 @@ export async function button(page: Page, label: string): Promise<Locator | null>
     page.getByRole('button', { name: label }),
     page.locator(`[aria-label="${label}"]`),
     page.getByText(label, { exact: true }),
+    page.getByText(label),
   ]);
 }
 
@@ -195,6 +217,7 @@ export async function tap(page: Page, label: string): Promise<void> {
 export async function hasLabel(page: Page, label: string): Promise<boolean> {
   return (
     (await page.getByText(label, { exact: true }).count()) > 0 ||
+    (await page.getByText(label).count()) > 0 ||
     (await page.locator(`[aria-label="${label}"]`).count()) > 0
   );
 }

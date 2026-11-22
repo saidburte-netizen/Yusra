@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -322,6 +323,76 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    Text('Appearance',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Choose light, dark, or system theme. Your choice is saved on this device.',
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    const ThemeModeToggle(),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            if (role == AppRole.superAdmin) ...[
+                              Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Security & Passwords',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Change your own password or reset passwords for staff accounts you manage.',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Wrap(
+                                        spacing: 12,
+                                        runSpacing: 12,
+                                        children: [
+                                          SecondaryButton(
+                                            label: 'Change my password',
+                                            icon: Icons.lock_reset_outlined,
+                                            width: 220,
+                                            onPressed: () =>
+                                                context.go('/profile'),
+                                          ),
+                                          SecondaryButton(
+                                            label: 'Manage staff passwords',
+                                            icon:
+                                                Icons.manage_accounts_outlined,
+                                            width: 220,
+                                            onPressed: () =>
+                                                context.go('/admin/users'),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+                            Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
                                     Text(S.pharmacyName,
                                         style: Theme.of(context)
                                             .textTheme
@@ -331,7 +402,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       children: [
                                         CircleAvatar(
                                           radius: 38,
-                                          backgroundColor: AppColors.pink50,
+                                          backgroundColor:
+                                              Theme.of(context).brightness ==
+                                                      Brightness.dark
+                                                  ? AppColors.darkElevated
+                                                  : AppColors.pink50,
                                           backgroundImage: _logoBytes != null
                                               ? MemoryImage(_logoBytes!)
                                               : (_logoUrl.isNotEmpty

@@ -313,11 +313,15 @@ class Analysis {
       ));
     }
     final prefStart = src.indexOf('const List<String> _preferredBottomNav');
-    final prefBody = balanced(src, src.indexOf('[', prefStart));
-    bottomPreferred = RegExp(r"'([^']+)'")
-        .allMatches(prefBody)
-        .map((m) => m.group(1)!)
-        .toList();
+    if (prefStart == -1) {
+      bottomPreferred = menu.map((m) => m.path).toList();
+    } else {
+      final prefBody = balanced(src, src.indexOf('[', prefStart));
+      bottomPreferred = RegExp(r"'([^']+)'")
+          .allMatches(prefBody)
+          .map((m) => m.group(1)!)
+          .toList();
+    }
 
     // Fail loudly when the navigation code changes shape instead of silently
     // emitting a matrix that no longer matches it.

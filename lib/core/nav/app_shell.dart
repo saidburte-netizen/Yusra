@@ -43,6 +43,7 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final auth = ref.watch(authProvider);
     final role = auth.profile?.role ?? AppRole.cashier;
     final items = menuFor(role);
@@ -60,18 +61,23 @@ class AppShell extends ConsumerWidget {
               extended: MediaQuery.sizeOf(context).width >= 1400,
               selectedIndex: _selectedIndex(items, location),
               onDestinationSelected: (index) => context.go(items[index].path),
-              backgroundColor: AppColors.plum800,
-              indicatorColor: AppColors.gold500.withOpacity(0.22),
+              backgroundColor: dark ? AppColors.darkSurface : AppColors.plum800,
+              indicatorColor: (dark ? AppColors.darkGold : AppColors.gold500)
+                  .withOpacity(0.22),
               indicatorShape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
-                side: BorderSide(color: AppColors.gold500.withOpacity(0.35)),
+                side: BorderSide(
+                  color: (dark ? AppColors.darkGold : AppColors.gold500)
+                      .withOpacity(0.35),
+                ),
               ),
               leading: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: AppColors.plum900.withOpacity(0.35),
+                    color: (dark ? AppColors.darkBase : AppColors.plum900)
+                        .withOpacity(0.35),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child:
@@ -82,7 +88,10 @@ class AppShell extends ConsumerWidget {
                 for (final item in items)
                   NavigationRailDestination(
                     icon: Icon(item.icon),
-                    selectedIcon: Icon(item.icon, color: AppColors.gold300),
+                    selectedIcon: Icon(
+                      item.icon,
+                      color: dark ? AppColors.darkGold : AppColors.gold300,
+                    ),
                     label: Text(
                       item.label,
                       style: const TextStyle(fontWeight: FontWeight.w700),
@@ -93,7 +102,8 @@ class AppShell extends ConsumerWidget {
             VerticalDivider(
               width: 1,
               thickness: 1,
-              color: AppColors.gold500.withOpacity(0.35),
+              color: (dark ? AppColors.darkGold : AppColors.gold500)
+                  .withOpacity(0.35),
             ),
             Expanded(
               child: Column(
@@ -110,16 +120,38 @@ class AppShell extends ConsumerWidget {
     }
 
     final bottom = bottomNavItems(role);
+    final selectedBottom = _selectedIndex(bottom, location);
     return Scaffold(
       appBar: TopBar(title: title, narrow: narrowTopBar),
       body: child,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex(bottom, location),
-        onDestinationSelected: (index) => context.go(bottom[index].path),
-        destinations: [
-          for (final item in bottom)
-            NavigationDestination(icon: Icon(item.icon), label: item.label),
-        ],
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          decoration: BoxDecoration(
+            color: dark ? AppColors.darkSurface : AppColors.plum800,
+            border: Border(
+              top: BorderSide(
+                color: (dark ? AppColors.darkGold : AppColors.gold500)
+                    .withOpacity(0.35),
+              ),
+            ),
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Row(
+              children: [
+                for (var i = 0; i < bottom.length; i++)
+                  _BottomNavItem(
+                    item: bottom[i],
+                    selected: i == selectedBottom,
+                    dark: dark,
+                    onTap: () => context.go(bottom[i].path),
+                  ),
+              ],
+            ),
+          ),
+        ),
       ),
       endDrawer: Drawer(
         child: SafeArea(
@@ -130,10 +162,12 @@ class AppShell extends ConsumerWidget {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.plum800.withOpacity(0.6),
+                    color: (dark ? AppColors.darkSurface : AppColors.plum800)
+                        .withOpacity(0.6),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: AppColors.gold500.withOpacity(0.35),
+                      color: (dark ? AppColors.darkGold : AppColors.gold500)
+                          .withOpacity(0.35),
                     ),
                   ),
                   child: const YusraLogo(
@@ -143,7 +177,9 @@ class AppShell extends ConsumerWidget {
                   ),
                 ),
               ),
-              Divider(color: AppColors.gold500.withOpacity(0.35)),
+              Divider(
+                  color: (dark ? AppColors.darkGold : AppColors.gold500)
+                      .withOpacity(0.35)),
               Expanded(
                 child: ListView(
                   padding:
@@ -156,26 +192,38 @@ class AppShell extends ConsumerWidget {
                           leading: Icon(
                             item.icon,
                             color: location.startsWith(item.path)
-                                ? AppColors.gold300
-                                : AppColors.onDarkMuted,
+                                ? (dark
+                                    ? AppColors.darkGold
+                                    : AppColors.gold300)
+                                : (dark
+                                    ? AppColors.darkMuted
+                                    : AppColors.onDarkMuted),
                           ),
                           title: Text(
                             item.label,
                             style: TextStyle(
                               color: location.startsWith(item.path)
-                                  ? AppColors.gold300
-                                  : AppColors.onDark,
+                                  ? (dark
+                                      ? AppColors.darkGold
+                                      : AppColors.gold300)
+                                  : (dark
+                                      ? AppColors.darkText
+                                      : AppColors.onDark),
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                           selected: location.startsWith(item.path),
                           selectedTileColor:
-                              AppColors.gold500.withOpacity(0.18),
+                              (dark ? AppColors.darkGold : AppColors.gold500)
+                                  .withOpacity(0.18),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                             side: BorderSide(
                               color: location.startsWith(item.path)
-                                  ? AppColors.gold500.withOpacity(0.35)
+                                  ? (dark
+                                          ? AppColors.darkGold
+                                          : AppColors.gold500)
+                                      .withOpacity(0.35)
                                   : Colors.transparent,
                             ),
                           ),
@@ -430,6 +478,66 @@ class _NotificationBell extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _BottomNavItem extends StatelessWidget {
+  const _BottomNavItem({
+    required this.item,
+    required this.selected,
+    required this.dark,
+    required this.onTap,
+  });
+
+  final MenuItem item;
+  final bool selected;
+  final bool dark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = selected
+        ? (dark ? AppColors.darkGold : AppColors.gold300)
+        : (dark ? AppColors.darkMuted : AppColors.onDarkMuted);
+    final bg = selected
+        ? (dark ? AppColors.darkGold : AppColors.gold500).withOpacity(0.18)
+        : Colors.transparent;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected
+                  ? (dark ? AppColors.darkGold : AppColors.gold500)
+                      .withOpacity(0.35)
+                  : Colors.transparent,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(item.icon, size: 22, color: fg),
+              const SizedBox(height: 4),
+              Text(
+                item.label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: fg,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -1334,7 +1334,7 @@
       "label": "Needs ordering — Create purchase order(s)",
       "kind": "create",
       "gate": "can(stock,edit)",
-      "evidence": "lib/features/inventory/screens/needs_ordering_screen.dart:579",
+      "evidence": "lib/features/inventory/screens/needs_ordering_screen.dart:581",
       "db_operation": "rpc.create_draft_purchase_orders",
       "ui_roles": [
         "super_admin",
@@ -1348,7 +1348,7 @@
       "label": "Needs ordering — Export / share CSV",
       "kind": "export",
       "gate": "can(stock,edit)",
-      "evidence": "lib/features/inventory/screens/needs_ordering_screen.dart:590",
+      "evidence": "lib/features/inventory/screens/needs_ordering_screen.dart:592",
       "db_operation": "views.reorder",
       "ui_roles": [
         "super_admin",
@@ -1362,7 +1362,7 @@
       "label": "Needs ordering — Export / share PDF",
       "kind": "export",
       "gate": "can(stock,edit)",
-      "evidence": "lib/features/inventory/screens/needs_ordering_screen.dart:598",
+      "evidence": "lib/features/inventory/screens/needs_ordering_screen.dart:600",
       "db_operation": "views.reorder",
       "ui_roles": [
         "super_admin",
@@ -1662,7 +1662,7 @@
       "label": "X report / Z report (print)",
       "kind": "print",
       "gate": "can(pos,edit)",
-      "evidence": "lib/features/shifts/screens/shifts_screen.dart:308",
+      "evidence": "lib/features/shifts/screens/shifts_screen.dart:310",
       "db_operation": "rpc.shift_expected_cash",
       "ui_roles": [
         "super_admin",
@@ -1851,7 +1851,7 @@
       "label": "Export report PDF / CSV",
       "kind": "export",
       "gate": "can(reports,view)",
-      "evidence": "lib/features/reports/reports_screen.dart:559",
+      "evidence": "lib/features/reports/reports_screen.dart:565",
       "db_operation": "views.reports",
       "ui_roles": [
         "super_admin",
@@ -1900,7 +1900,7 @@
       "label": "Share admin access",
       "kind": "edit",
       "gate": "can(teamAccess,edit)",
-      "evidence": "lib/features/admin/team_access_screen.dart:274",
+      "evidence": "lib/features/admin/team_access_screen.dart:273",
       "db_operation": "rpc.share_admin_access",
       "ui_roles": [
         "super_admin"
@@ -1922,7 +1922,7 @@
       "label": "Save setting / upload branding",
       "kind": "edit",
       "gate": "can(settings,edit)",
-      "evidence": "lib/features/admin/settings_screen.dart:283",
+      "evidence": "lib/features/admin/settings_screen.dart:284",
       "db_operation": "rls.settings.write",
       "ui_roles": [
         "super_admin",
@@ -1934,7 +1934,7 @@
       "label": "Publish settings",
       "kind": "approve",
       "gate": "can(settings,edit)",
-      "evidence": "lib/features/admin/settings_screen.dart:297",
+      "evidence": "lib/features/admin/settings_screen.dart:298",
       "db_operation": "rpc.publish_app_settings",
       "ui_roles": [
         "super_admin",

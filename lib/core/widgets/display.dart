@@ -80,7 +80,7 @@ class StatCard extends StatelessWidget {
                             .textTheme
                             .headlineMedium
                             ?.copyWith(
-                          color: AppColors.plum800,
+                          color: Theme.of(context).colorScheme.onSurface,
                           fontWeight: FontWeight.w800,
                           fontFeatures: const [FontFeature.tabularFigures()],
                         ),
