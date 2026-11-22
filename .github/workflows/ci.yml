@@ -61,7 +61,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Java 17 (Temurin)
         uses: actions/setup-java@v6
@@ -161,7 +161,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Java 17 (Temurin)
         uses: actions/setup-java@v6
@@ -415,7 +415,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # STEP 0 for SQL: the postgres:16 service image provides both the server
       # and the matching client; print both before applying anything.
@@ -509,7 +509,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Dart
         uses: subosito/flutter-action@v2
@@ -589,7 +589,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Flutter 3.24.5
         uses: subosito/flutter-action@v2
@@ -648,7 +648,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Check deploy secrets
         id: deploy_secrets
