@@ -1,11 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 512" width="1120" height="512" role="img" aria-label="Yusra Pharmacy monochrome">
   <title>Yusra Pharmacy monochrome</title>
-  <circle cx="256" cy="256" r="196" fill="none" stroke="#3B1F2B" stroke-width="8"/>
-  <g fill="#3B1F2B">
-    <rect x="218" y="146" width="76" height="220" rx="26"/>
-    <rect x="146" y="218" width="220" height="76" rx="26"/>
-  </g>
-  <path d="M322 158 C 350 112, 392 106, 404 118 C 400 158, 366 184, 326 176 Z" fill="#3B1F2B"/>
-  <text x="500" y="278" font-family="Playfair Display, Georgia, serif" font-size="150" font-weight="600" fill="#3B1F2B">Yusra</text>
-  <text x="506" y="350" font-family="Inter, Arial, sans-serif" font-size="52" letter-spacing="16" fill="#3B1F2B">PHARMACY</text>
+  <circle cx="256" cy="256" r="214" fill="none" stroke="#2D0A1E" stroke-width="18"/>
+  <path d="M150 132 L204 132 L256 228 L308 132 L362 132 L286 262 L286 380 L226 380 L226 262 Z" fill="#2D0A1E"/>
+  <path d="M312 148 C344 118, 386 120, 398 142 C390 176, 352 194, 320 182 C330 170, 332 158, 312 148 Z" fill="#2D0A1E"/>
+  <text x="500" y="286" font-family="Playfair Display, Georgia, serif" font-size="148" font-weight="700" fill="#2D0A1E">Yusra</text>
+  <text x="506" y="350" font-family="Inter, Arial, sans-serif" font-size="50" font-weight="700" letter-spacing="14" fill="#2D0A1E">PHARMACY</text>
 </svg>

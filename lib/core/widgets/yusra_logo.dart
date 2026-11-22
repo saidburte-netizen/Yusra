@@ -14,11 +14,13 @@ class YusraLogo extends StatelessWidget {
     this.variant = YusraLogoVariant.full,
     this.size = 220,
     this.showTagline = false,
+    this.onDark = false,
   });
 
   final YusraLogoVariant variant;
   final double size;
   final bool showTagline;
+  final bool onDark;
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +50,21 @@ class YusraLogo extends StatelessWidget {
   }
 
   Widget _wordmark({required bool mono, required double markSize}) {
-    final color = mono ? AppColors.ink : AppColors.pink600;
+    final brandColor = mono
+        ? AppColors.ink
+        : onDark
+            ? Colors.white
+            : AppColors.pink600;
+    final pharmacyColor = mono
+        ? AppColors.ink
+        : onDark
+            ? AppColors.gold300
+            : AppColors.gold500;
+    final taglineColor = mono
+        ? AppColors.ink
+        : onDark
+            ? AppColors.onDarkMuted
+            : AppColors.muted;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -65,7 +81,7 @@ class YusraLogo extends StatelessWidget {
                     width: markSize,
                     height: markSize,
                     child: _mark(mono: mono)),
-                SizedBox(width: markSize * 0.12),
+                SizedBox(width: markSize * 0.14),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -73,19 +89,20 @@ class YusraLogo extends StatelessWidget {
                     Text(
                       'Yusra',
                       style: GoogleFonts.playfairDisplay(
-                        fontSize: markSize * 0.62,
+                        fontSize: markSize * 0.64,
                         fontWeight: FontWeight.w700,
-                        color: color,
-                        height: 1.05,
+                        color: brandColor,
+                        height: 1.0,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       'PHARMACY',
                       style: GoogleFonts.inter(
-                        fontSize: markSize * 0.17,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: markSize * 0.055,
-                        color: mono ? AppColors.ink : AppColors.gold700,
+                        fontSize: markSize * 0.18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: markSize * 0.07,
+                        color: pharmacyColor,
                       ),
                     ),
                   ],
@@ -95,12 +112,13 @@ class YusraLogo extends StatelessWidget {
           ),
         ),
         if (showTagline) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Text(
             S.tagline,
             style: GoogleFonts.inter(
               fontSize: markSize * 0.19,
-              color: mono ? AppColors.ink : AppColors.muted,
+              fontWeight: FontWeight.w600,
+              color: taglineColor,
               fontStyle: FontStyle.italic,
             ),
           ),

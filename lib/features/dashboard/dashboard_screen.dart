@@ -526,6 +526,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   String _countOrDash(int? value) => value == null ? '—' : '$value';
 
+  String _greeting() {
+    final hour = nowAddisAbaba().hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
@@ -538,92 +545,217 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final role = auth.profile?.role ?? AppRole.cashier;
     final ownOnly = isOwnOnly(role, Modules.sales);
     final screenWidth = MediaQuery.sizeOf(context).width;
-    // Phones get a full-width range filter; desktop keeps the compact size.
-    final rangeWidth = screenWidth < 600 ? screenWidth - 40 : 180.0;
+    final rangeWidth = screenWidth < 600 ? screenWidth - 40 : 190.0;
+    final name = auth.profile?.fullName.trim();
+    final greetingName = (name == null || name.isEmpty) ? '' : ', $name';
 
     return Scaffold(
       body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              PageHeader(
-                title: ownOnly ? S.backToDashboard : S.dashboard,
-                subtitle: '${formatDate(nowAddisAbaba())} · ${S.appName}',
-                actions: [
-                  SizedBox(
-                    width: rangeWidth,
-                    child: AppDropdown<ActivityRange>(
-                      label: S.timeRange,
-                      value: _range,
-                      items: [
-                        for (final r in ActivityRange.values)
-                          DropdownMenuItem(value: r, child: Text(r.label)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              margin: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: AppColors.darkGradient,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: AppColors.gold500.withOpacity(0.35)),
+                boxShadow: const [AppColors.cardShadow],
+              ),
+              child: Wrap(
+                spacing: 16,
+                runSpacing: 16,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${_greeting()}$greetingName',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineMedium
+                              ?.copyWith(
+                                color: AppColors.onDark,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '${formatDate(nowAddisAbaba())} · ${S.appName}',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: AppColors.onDarkMuted,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.gold500.withOpacity(0.14),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: AppColors.gold500.withOpacity(0.35),
+                            ),
+                          ),
+                          child: Text(
+                            ownOnly ? S.mySalesToday : S.dashboard,
+                            style: const TextStyle(
+                              color: AppColors.gold300,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
                       ],
-                      onChanged: (v) {
-                        setState(() => _range = v ?? ActivityRange.all);
-                        _load();
-                      },
                     ),
                   ),
-                  IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
-                ],
-              ),
-              if (!_loading &&
-                  _error == null &&
-                  _data?.failedSections.isNotEmpty == true)
-                Container(
-                  margin: const EdgeInsets.only(top: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.warning.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      const Icon(Icons.info_outline,
-                          size: 18, color: AppColors.warning),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Some sections could not be loaded:'),
-                            const SizedBox(height: 4),
-                            SelectableText(
-                              _data!.failedSections
-                                  .map((section) => '• $section')
-                                  .join('\n'),
+                      SizedBox(
+                        width: rangeWidth,
+                        child: Theme(
+                          data: Theme.of(context).copyWith(
+                            inputDecorationTheme:
+                                Theme.of(context).inputDecorationTheme.copyWith(
+                                      fillColor:
+                                          AppColors.plum900.withOpacity(0.35),
+                                      labelStyle: const TextStyle(
+                                        color: AppColors.onDarkMuted,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                          ),
+                          child: DropdownButtonFormField<ActivityRange>(
+                            value: _range,
+                            dropdownColor: AppColors.plum900,
+                            style: const TextStyle(
+                              color: AppColors.onDark,
+                              fontWeight: FontWeight.w700,
                             ),
-                            const SizedBox(height: 4),
-                            const Text('The numbers shown may be incomplete.'),
-                          ],
+                            iconEnabledColor: AppColors.gold300,
+                            decoration: const InputDecoration(
+                              labelText: S.timeRange,
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius:
+                                    BorderRadius.all(Radius.circular(14)),
+                                borderSide:
+                                    BorderSide(color: Color(0x59C9A227)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius:
+                                    BorderRadius.all(Radius.circular(14)),
+                                borderSide:
+                                    BorderSide(color: AppColors.gold500),
+                              ),
+                            ),
+                            items: [
+                              for (final r in ActivityRange.values)
+                                DropdownMenuItem(
+                                  value: r,
+                                  child: Text(r.label),
+                                ),
+                            ],
+                            onChanged: (v) {
+                              setState(() => _range = v ?? ActivityRange.all);
+                              _load();
+                            },
+                          ),
                         ),
                       ),
-                      TextButton(
+                      IconButton.filled(
                         onPressed: _load,
-                        child: const Text(S.retry),
+                        style: IconButton.styleFrom(
+                          backgroundColor: AppColors.gold500.withOpacity(0.18),
+                          foregroundColor: AppColors.gold300,
+                        ),
+                        icon: const Icon(Icons.refresh),
                       ),
                     ],
                   ),
-                ),
-              if (_loading)
-                const Center(child: CircularProgressIndicator())
-              else if (_error != null)
-                ErrorState(message: _error!, onRetry: _load)
-              else
-                _DashboardBody(
-                  data: _data!,
-                  role: role,
-                  ownOnly: ownOnly,
-                  money: _moneyOrDash,
-                  count: _countOrDash,
-                  range: _range,
-                ),
-            ],
-          ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (!_loading &&
+                      _error == null &&
+                      _data?.failedSections.isNotEmpty == true)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.warning.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: AppColors.warning.withOpacity(0.35),
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.info_outline,
+                              size: 18, color: AppColors.warning),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                    'Some sections could not be loaded:'),
+                                const SizedBox(height: 4),
+                                SelectableText(
+                                  _data!.failedSections
+                                      .map((section) => '• $section')
+                                      .join('\n'),
+                                ),
+                                const SizedBox(height: 4),
+                                const Text(
+                                    'The numbers shown may be incomplete.'),
+                              ],
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _load,
+                            child: const Text(S.retry),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (_loading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 48),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_error != null)
+                    ErrorState(message: _error!, onRetry: _load)
+                  else
+                    _DashboardBody(
+                      data: _data!,
+                      role: role,
+                      ownOnly: ownOnly,
+                      money: _moneyOrDash,
+                      count: _countOrDash,
+                      range: _range,
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -891,14 +1023,64 @@ class _DashboardBody extends StatelessWidget {
                           style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 10),
                       Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
+                        spacing: 10,
+                        runSpacing: 10,
                         children: [
                           for (final item in shortcuts)
-                            ActionChip(
-                              avatar: Icon(item.icon, size: 16),
-                              label: Text(item.label),
-                              onPressed: () => context.go(item.path),
+                            InkWell(
+                              onTap: () => context.go(item.path),
+                              borderRadius: BorderRadius.circular(14),
+                              child: Container(
+                                width: 120,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 14,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: AppColors.gold300.withOpacity(0.55),
+                                  ),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Color(0x0F4A1230),
+                                      blurRadius: 10,
+                                      offset: Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 38,
+                                      height: 38,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.pink50,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(
+                                        item.icon,
+                                        size: 20,
+                                        color: AppColors.plum800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Text(
+                                      item.label,
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.plum800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                         ],
                       ),
