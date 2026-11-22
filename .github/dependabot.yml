@@ -15,7 +15,7 @@ updates:
       day: "monday"
       time: "06:00"
       timezone: "Africa/Addis_Ababa"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 0
     labels:
       - "dependencies"
       - "dart"
@@ -54,7 +54,7 @@ updates:
       day: "monday"
       time: "06:00"
       timezone: "Africa/Addis_Ababa"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     labels:
       - "dependencies"
       - "ci"
