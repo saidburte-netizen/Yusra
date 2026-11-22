@@ -4,6 +4,10 @@
 version: 2
 updates:
   # Flutter / Dart packages (pubspec.yaml, pubspec.lock).
+  # This project is pinned to Flutter 3.24.5 / Dart 3.5.4 (see pubspec.yaml
+  # environment.sdk and CI toolchain). Major bumps and releases that require a
+  # newer SDK than Dart 3.5.4 must not be proposed automatically; bump the
+  # Flutter/Dart pin first, then revisit these ignores.
   - package-ecosystem: "pub"
     directory: "/"
     schedule:
@@ -11,19 +15,17 @@ updates:
       day: "monday"
       time: "06:00"
       timezone: "Africa/Addis_Ababa"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
     labels:
       - "dependencies"
       - "dart"
     commit-message:
       prefix: "chore(deps)"
-    groups:
-      flutter-sdk:
-        patterns:
-          - "flutter*"
-      dart-packages:
-        patterns:
-          - "*"
+    ignore:
+      # Blocked by pinned Flutter 3.24.5 / Dart 3.5.4 toolchain.
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
 
   # Node packages. Becomes active once a package.json is committed (for
   # example to pin the Playwright version used by the e2e CI job).
