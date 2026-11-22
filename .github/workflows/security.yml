@@ -1,0 +1,84 @@
+name: Security pentest
+
+# Workstream 5 owns this file. The job id/name is literally `security`.
+# Repository admins must add `security` to the required status checks for the
+# protected branch; a workflow file cannot set branch protection itself.
+# See docs/SECURITY.md -> "Making the check required".
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    name: security
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: pentest
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d pentest"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Local throwaway database only. Not a Supabase secret or token.
+      PENTEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pentest
+      PENTEST_ARTIFACTS_DIR: ${{ github.workspace }}/artifacts
+
+    steps:
+      - name: Checkout (full history for git-history scans)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure psql client
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+
+      - name: Apply Supabase stubs, migrations, helpers and fixtures
+        run: |
+          set -euo pipefail
+          for f in tool/supabase_stubs.sql supabase/migrations/*.sql \
+                   tool/pentest/lib/pentest_helpers.sql \
+                   tool/pentest/sql/fixtures.sql; do
+            echo "Applying $f"
+            psql "$PENTEST_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -f "$f"
+          done
+
+      - name: Run pentest automation
+        run: bash tool/pentest/run_all.sh
+
+      - name: Upload reports artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: artifacts/reports/**
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload screenshots artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-screenshots
+          path: artifacts/screenshots/**
+          if-no-files-found: warn
+          retention-days: 30
