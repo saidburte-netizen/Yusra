@@ -67,7 +67,7 @@ jobs:
 
       - name: Upload reports artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: security-reports
           path: artifacts/reports/**
@@ -76,7 +76,7 @@ jobs:
 
       - name: Upload screenshots artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: security-screenshots
           path: artifacts/screenshots/**
