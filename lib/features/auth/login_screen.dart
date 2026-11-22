@@ -60,101 +60,132 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final size = MediaQuery.sizeOf(context);
     return Scaffold(
       body: Container(
-        color: AppColors.blush,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF2D0A1E), Color(0xFF4A1230), Color(0xFF7A1E4D)],
+          ),
+        ),
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Card(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: size.width < 400 ? 20 : 36,
-                    vertical: 32,
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x4D000000),
+                      blurRadius: 36,
+                      offset: Offset(0, 18),
+                    ),
+                  ],
+                ),
+                child: Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    side: BorderSide(
+                      color: AppColors.gold500.withOpacity(0.45),
+                    ),
                   ),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const YusraLogo(
-                            variant: YusraLogoVariant.full, size: 200),
-                        const SizedBox(height: 8),
-                        Text(
-                          S.tagline,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    fontStyle: FontStyle.italic,
-                                    color: AppColors.muted,
-                                  ),
-                        ),
-                        const SizedBox(height: 28),
-                        if (!Env.isConfigured) ...[
-                          const _Notice(
-                            text: S.configurationMissing,
-                            color: AppColors.warning,
-                          ),
-                          const SizedBox(height: 16),
-                        ],
-                        if (_error != null) ...[
-                          _Notice(text: _error!, color: AppColors.danger),
-                          const SizedBox(height: 16),
-                        ],
-                        AppTextField(
-                          label: S.email,
-                          controller: _email,
-                          keyboardType: TextInputType.emailAddress,
-                          prefixIcon:
-                              const Icon(Icons.email_outlined, size: 20),
-                          textInputAction: TextInputAction.next,
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return S.emailRequired;
-                            }
-                            if (!value.contains('@')) return S.emailInvalid;
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        AppTextField(
-                          label: S.password,
-                          controller: _password,
-                          obscureText: _obscure,
-                          prefixIcon: const Icon(Icons.lock_outline, size: 20),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscure
-                                  ? Icons.visibility_outlined
-                                  : Icons.visibility_off_outlined,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: size.width < 400 ? 20 : 36,
+                      vertical: 32,
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.blush,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: AppColors.gold300.withOpacity(0.55),
+                              ),
                             ),
-                            onPressed: () =>
-                                setState(() => _obscure = !_obscure),
+                            child: const YusraLogo(
+                              variant: YusraLogoVariant.full,
+                              size: 210,
+                              showTagline: true,
+                            ),
                           ),
-                          validator: (value) => value == null || value.isEmpty
-                              ? S.passwordRequired
-                              : null,
-                        ),
-                        const SizedBox(height: 6),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () => context.go('/forgot-password'),
-                            child: const Text(S.forgotPassword),
+                          const SizedBox(height: 28),
+                          if (!Env.isConfigured) ...[
+                            const _Notice(
+                              text: S.configurationMissing,
+                              color: AppColors.warning,
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                          if (_error != null) ...[
+                            _Notice(text: _error!, color: AppColors.danger),
+                            const SizedBox(height: 16),
+                          ],
+                          AppTextField(
+                            label: S.email,
+                            controller: _email,
+                            keyboardType: TextInputType.emailAddress,
+                            prefixIcon:
+                                const Icon(Icons.email_outlined, size: 20),
+                            textInputAction: TextInputAction.next,
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return S.emailRequired;
+                              }
+                              if (!value.contains('@')) return S.emailInvalid;
+                              return null;
+                            },
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        PrimaryButton(
-                          label: S.signIn,
-                          loading: _submitting,
-                          onPressed: _signIn,
-                          icon: Icons.login,
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'Yusra Pharmacy · ${S.tagline}',
-                          style: Theme.of(context).textTheme.labelSmall,
-                        ),
-                      ],
+                          const SizedBox(height: 16),
+                          AppTextField(
+                            label: S.password,
+                            controller: _password,
+                            obscureText: _obscure,
+                            prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscure
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                              ),
+                              onPressed: () =>
+                                  setState(() => _obscure = !_obscure),
+                            ),
+                            validator: (value) => value == null || value.isEmpty
+                                ? S.passwordRequired
+                                : null,
+                          ),
+                          const SizedBox(height: 6),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () => context.go('/forgot-password'),
+                              child: const Text(S.forgotPassword),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          PrimaryButton(
+                            label: S.signIn,
+                            loading: _submitting,
+                            onPressed: _signIn,
+                            icon: Icons.login,
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            'Yusra Pharmacy · ${S.tagline}',
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: AppColors.muted,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

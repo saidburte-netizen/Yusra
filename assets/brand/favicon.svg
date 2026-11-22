@@ -1,9 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="64" height="64" role="img" aria-label="Yusra">
-  <rect width="512" height="512" rx="96" fill="#FFF5F8"/>
-  <circle cx="256" cy="256" r="186" fill="#FFFFFF" stroke="#D4AF37" stroke-width="10"/>
-  <g fill="#D63384">
-    <rect x="220" y="154" width="72" height="204" rx="24"/>
-    <rect x="154" y="220" width="204" height="72" rx="24"/>
-  </g>
-  <path d="M324 164 C 350 122, 388 116, 400 128 C 396 164, 364 188, 328 180 Z" fill="#D4AF37"/>
+  <defs>
+    <linearGradient id="yGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#D63384"/>
+      <stop offset="100%" stop-color="#7A1E4D"/>
+    </linearGradient>
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E8D48B"/>
+      <stop offset="50%" stop-color="#C9A227"/>
+      <stop offset="100%" stop-color="#9A7B1A"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#4A1230"/>
+  <circle cx="256" cy="256" r="196" fill="#FFF7FA"/>
+  <circle cx="256" cy="256" r="196" fill="none" stroke="url(#ringGrad)" stroke-width="16"/>
+  <path d="M158 140 L208 140 L256 228 L304 140 L354 140 L284 258 L284 372 L228 372 L228 258 Z" fill="url(#yGrad)" stroke="#4A1230" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M308 154 C338 126, 378 128, 388 148 C380 180, 346 196, 316 184 C326 172, 328 162, 308 154 Z" fill="#C9A227"/>
 </svg>

@@ -60,19 +60,40 @@ class AppShell extends ConsumerWidget {
               extended: MediaQuery.sizeOf(context).width >= 1400,
               selectedIndex: _selectedIndex(items, location),
               onDestinationSelected: (index) => context.go(items[index].path),
-              leading: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: YusraLogo(variant: YusraLogoVariant.mark, size: 44),
+              backgroundColor: AppColors.plum800,
+              indicatorColor: AppColors.gold500.withOpacity(0.22),
+              indicatorShape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: AppColors.gold500.withOpacity(0.35)),
+              ),
+              leading: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.plum900.withOpacity(0.35),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const YusraLogo(variant: YusraLogoVariant.mark, size: 44),
+                ),
               ),
               destinations: [
                 for (final item in items)
                   NavigationRailDestination(
                     icon: Icon(item.icon),
-                    label: Text(item.label),
+                    selectedIcon: Icon(item.icon, color: AppColors.gold300),
+                    label: Text(
+                      item.label,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
               ],
             ),
-            const VerticalDivider(width: 1),
+            VerticalDivider(
+              width: 1,
+              thickness: 1,
+              color: AppColors.gold500.withOpacity(0.35),
+            ),
             Expanded(
               child: Column(
                 children: [
@@ -103,23 +124,64 @@ class AppShell extends ConsumerWidget {
         child: SafeArea(
           child: Column(
             children: [
-              const Padding(
-                padding: EdgeInsets.all(20),
-                child: YusraLogo(variant: YusraLogoVariant.full, size: 180),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.plum800.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: AppColors.gold500.withOpacity(0.35),
+                    ),
+                  ),
+                  child: const YusraLogo(
+                    variant: YusraLogoVariant.full,
+                    size: 180,
+                    onDark: true,
+                  ),
+                ),
               ),
-              const Divider(),
+              Divider(color: AppColors.gold500.withOpacity(0.35)),
               Expanded(
                 child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   children: [
                     for (final item in items)
-                      ListTile(
-                        leading: Icon(item.icon),
-                        title: Text(item.label),
-                        selected: location.startsWith(item.path),
-                        onTap: () {
-                          Navigator.pop(context);
-                          context.go(item.path);
-                        },
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: ListTile(
+                          leading: Icon(
+                            item.icon,
+                            color: location.startsWith(item.path)
+                                ? AppColors.gold300
+                                : AppColors.onDarkMuted,
+                          ),
+                          title: Text(
+                            item.label,
+                            style: TextStyle(
+                              color: location.startsWith(item.path)
+                                  ? AppColors.gold300
+                                  : AppColors.onDark,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          selected: location.startsWith(item.path),
+                          selectedTileColor:
+                              AppColors.gold500.withOpacity(0.18),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            side: BorderSide(
+                              color: location.startsWith(item.path)
+                                  ? AppColors.gold500.withOpacity(0.35)
+                                  : Colors.transparent,
+                            ),
+                          ),
+                          onTap: () {
+                            Navigator.pop(context);
+                            context.go(item.path);
+                          },
+                        ),
                       ),
                   ],
                 ),
@@ -178,8 +240,8 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
           padding: const EdgeInsets.all(8),
           child: CircleAvatar(
             radius: 18,
-            backgroundColor: AppColors.pink50,
-            foregroundColor: AppColors.pink600,
+            backgroundColor: AppColors.gold500.withOpacity(0.22),
+            foregroundColor: AppColors.gold300,
             child: profile == null
                 ? const Icon(Icons.person, size: 18)
                 : Text(
@@ -187,7 +249,7 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
                         ? '?'
                         : profile.fullName[0].toUpperCase(),
                     style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.bold),
+                        fontSize: 14, fontWeight: FontWeight.w800),
                   ),
           ),
         ),
@@ -201,7 +263,15 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              title,
+              style: Theme.of(context).appBarTheme.titleTextStyle ??
+                  const TextStyle(
+                    color: AppColors.onDark,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 4,
@@ -277,6 +347,7 @@ class _BranchSwitcherState extends ConsumerState<_BranchSwitcher> {
           return TextButton.icon(
             icon: const Icon(Icons.add_business_outlined, size: 18),
             label: const Text(S.addBranch),
+            style: TextButton.styleFrom(foregroundColor: AppColors.gold300),
             onPressed: () => context.go('/admin/branches'),
           );
         }
@@ -287,7 +358,18 @@ class _BranchSwitcherState extends ConsumerState<_BranchSwitcher> {
           child: DropdownButton<String?>(
             value: _selected,
             isExpanded: true,
-            hint: const Text(S.allBranchesViewOnly),
+            dropdownColor: AppColors.plum900,
+            iconEnabledColor: AppColors.gold300,
+            underline: const SizedBox.shrink(),
+            style: const TextStyle(
+              color: AppColors.onDark,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+            hint: const Text(
+              S.allBranchesViewOnly,
+              style: TextStyle(color: AppColors.onDarkMuted),
+            ),
             items: [
               const DropdownMenuItem<String?>(
                 value: null,

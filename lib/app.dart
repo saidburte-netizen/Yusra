@@ -18,13 +18,15 @@ class YusraApp extends ConsumerWidget {
       theme: AppTheme.light,
       routerConfig: ref.watch(appRouterProvider),
       debugShowCheckedModeBanner: false,
-      builder: (context, child) => Column(
-        children: [
-          // Auth screens sit outside AppShell; the shell shows its own banner
-          // for the main app layout. Keep a single top banner globally.
-          const OfflineBanner(),
-          Expanded(child: child ?? const SizedBox.shrink()),
-        ],
+      builder: (context, child) => AppTheme.pageBackground(
+        child: Column(
+          children: [
+            // Auth screens sit outside AppShell; the shell shows its own banner
+            // for the main app layout. Keep a single top banner globally.
+            const OfflineBanner(),
+            Expanded(child: child ?? const SizedBox.shrink()),
+          ],
+        ),
       ),
     );
   }

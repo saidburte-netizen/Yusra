@@ -136,14 +136,14 @@ class _StockOverviewScreenState extends ConsumerState<StockOverviewScreen> {
                             // A single scrolling strip keeps the summary cards
                             // from consuming the phone's short viewport.
                             return SizedBox(
-                              height: 116,
+                              height: 148,
                               child: ListView.separated(
                                 scrollDirection: Axis.horizontal,
                                 itemCount: cards.length,
                                 separatorBuilder: (_, __) =>
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: 10),
                                 itemBuilder: (context, index) => SizedBox(
-                                  width: 190,
+                                  width: 210,
                                   child: cards[index],
                                 ),
                               ),

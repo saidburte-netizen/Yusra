@@ -24,52 +24,80 @@ class StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = color ?? AppColors.pink600;
-    return Card(
-      child: InkWell(
-        onTap: onTap,
+    return Container(
+      decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppColors.radius),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (icon != null) ...[
-                CircleAvatar(
-                  backgroundColor: accent.withOpacity(0.12),
-                  foregroundColor: accent,
-                  child: Icon(icon, size: 20),
-                ),
-                const SizedBox(width: 14),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.bodySmall,
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      value,
-                      style:
-                          Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: accent,
-                        fontWeight: FontWeight.bold,
-                        fontFeatures: const [FontFeature.tabularFigures()],
+        boxShadow: const [AppColors.cardShadow],
+      ),
+      child: Card(
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppColors.radius),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (icon != null) ...[
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          accent.withOpacity(0.18),
+                          AppColors.gold500.withOpacity(0.10),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: AppColors.gold500.withOpacity(0.28),
                       ),
                     ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 4),
-                      Text(subtitle!,
-                          style: Theme.of(context).textTheme.labelSmall),
+                    child: Icon(icon, size: 22, color: accent),
+                  ),
+                  const SizedBox(width: 14),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.muted,
+                            ),
+                        maxLines: 2,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        value,
+                        style:
+                            Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          color: AppColors.plum800,
+                          fontWeight: FontWeight.w800,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          subtitle!,
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: accent,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
