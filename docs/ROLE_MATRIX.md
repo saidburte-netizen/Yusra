@@ -23,20 +23,20 @@ Router gates routes through `moduleForLocation()` + `can(role, module, view)` (l
 
 | Route | Screen | Module (router) | Router allows | Bottom nav | Drawer | Dashboard quick actions | Code |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `/login` | LoginScreen | — | any authenticated | — | — | — | lib/core/router.dart:139 |
-| `/forgot-password` | ForgotPasswordScreen | — | any authenticated | — | — | — | lib/core/router.dart:143 |
-| `/reset-password` | ResetPasswordScreen | — | any authenticated | — | — | — | lib/core/router.dart:147 |
-| `/forbidden` | ForbiddenScreen | — | any authenticated | — | — | — | lib/core/router.dart:151 |
-| `/profile_error` | ProfileErrorScreen | — | any authenticated | — | — | — | lib/core/router.dart:155 |
-| `/dashboard` | DashboardScreen | dashboard | all 6 | all 6 | all 6 | — | lib/core/router.dart:162 |
-| `/profile` | ProfileScreen | — | any authenticated | — | — | — | lib/core/router.dart:166 |
-| `/expenses` | ExpensesScreen | expenses | super_admin, admin, accountant | — | super_admin, admin, accountant | — | lib/core/router.dart:170 |
-| `/reports` | ReportsScreen | reports | super_admin, admin, accountant | — | super_admin, admin, accountant | — | lib/core/router.dart:174 |
-| `/admin/users` | UsersScreen | users | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:178 |
-| `/admin/team` | TeamAccessScreen | teamAccess | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:182 |
-| `/admin/branches` | BranchesScreen | branches | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:186 |
-| `/admin/settings` | SettingsScreen | settings | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:190 |
-| `/admin/audit` | AuditScreen | audit | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:194 |
+| `/login` | LoginScreen | — | any authenticated | — | — | — | lib/core/router.dart:117 |
+| `/forgot-password` | ForgotPasswordScreen | — | any authenticated | — | — | — | lib/core/router.dart:121 |
+| `/reset-password` | ResetPasswordScreen | — | any authenticated | — | — | — | lib/core/router.dart:125 |
+| `/forbidden` | ForbiddenScreen | — | any authenticated | — | — | — | lib/core/router.dart:129 |
+| `/profile_error` | ProfileErrorScreen | — | any authenticated | — | — | — | lib/core/router.dart:133 |
+| `/dashboard` | DashboardScreen | dashboard | all 6 | all 6 | all 6 | — | lib/core/router.dart:140 |
+| `/profile` | ProfileScreen | — | any authenticated | — | — | — | lib/core/router.dart:144 |
+| `/expenses` | ExpensesScreen | expenses | super_admin, admin, accountant | — | super_admin, admin, accountant | — | lib/core/router.dart:148 |
+| `/reports` | ReportsScreen | reports | super_admin, admin, accountant | — | super_admin, admin, accountant | — | lib/core/router.dart:152 |
+| `/admin/users` | UsersScreen | users | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:156 |
+| `/admin/team` | TeamAccessScreen | teamAccess | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:160 |
+| `/admin/branches` | BranchesScreen | branches | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:164 |
+| `/admin/settings` | SettingsScreen | settings | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:168 |
+| `/admin/audit` | AuditScreen | audit | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:172 |
 | `/customers` | CustomersScreen | customers | super_admin, admin, pharmacist, cashier, accountant | — | super_admin, admin, pharmacist, cashier, accountant | — | lib/features/customers/customers_routes.dart:7 |
 | `/customers/:id` | CustomerDetailScreen | customers | super_admin, admin, pharmacist, cashier, accountant | — | — | — | lib/features/customers/customers_routes.dart:11 |
 | `/inventory` | StockOverviewScreen | medicines | all 6 | all 6 | all 6 | all 6 | lib/features/inventory/inventory_routes.dart:18 |
