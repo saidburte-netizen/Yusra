@@ -725,7 +725,7 @@ class Analysis {
           kind: 'create',
           gate: 'can(stock,edit)',
           file: '${s}stock_overview_screen.dart',
-          snippet: "label: 'Add stock',",
+          snippet: "label: const Text('Add stock'),",
           dbKey: 'rpc.add_stock_batch'),
       const ActionSpec(
           id: 'stock.source',
@@ -745,7 +745,7 @@ class Analysis {
           kind: 'navigate',
           gate: 'can(stock,edit)',
           file: '${s}stock_overview_screen.dart',
-          snippet: "label: 'Opening stock',",
+          snippet: "label: const Text('Opening stock'),",
           dbKey: 'rpc.add_opening_stock'),
       const ActionSpec(
           id: 'stock.opening.save',
@@ -772,7 +772,7 @@ class Analysis {
           kind: 'navigate',
           gate: 'can(stock,edit)&&can(purchaseOrders,edit)',
           file: '${s}stock_overview_screen.dart',
-          snippet: "label: 'Needs ordering',",
+          snippet: "label: const Text('Needs ordering'),",
           dbKey: 'rpc.create_draft_purchase_orders',
           note: 'extra purchaseOrders(edit) gate is stricter than the RPC'),
       const ActionSpec(

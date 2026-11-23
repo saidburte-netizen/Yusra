@@ -37,7 +37,8 @@
     "supabase/migrations/0019_hardening_fixes.sql",
     "supabase/migrations/0019_hardening_fixes.sql",
     "supabase/migrations/0022_opening_stock_reorder.sql",
-    "supabase/migrations/0023_review_fixes.sql"
+    "supabase/migrations/0023_review_fixes.sql",
+    "supabase/migrations/0024_staff_fields.sql"
   ],
   "operations": {
     "rls.branches.write": {
@@ -840,6 +841,16 @@
       "internal": true,
       "note": "Database plumbing / trigger helper"
     },
+    "function:update_staff_profile": {
+      "roles": [
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0024_staff_fields.sql:13",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "No UI action mapped"
+    },
     "function:write_activity_log": {
       "roles": [
         "accountant",
@@ -1250,7 +1261,7 @@
       "label": "Add stock",
       "kind": "create",
       "gate": "can(stock,edit)",
-      "evidence": "lib/features/inventory/screens/stock_overview_screen.dart:50",
+      "evidence": "lib/features/inventory/screens/stock_overview_screen.dart:40",
       "db_operation": "rpc.add_stock_batch",
       "ui_roles": [
         "super_admin",
@@ -1264,7 +1275,7 @@
       "label": "Add stock source selector (opening / purchase / other)",
       "kind": "create",
       "gate": "can(stock,edit)",
-      "evidence": "lib/features/inventory/widgets/stock_widgets.dart:133",
+      "evidence": "lib/features/inventory/widgets/stock_widgets.dart:125",
       "db_operation": "rpc.add_stock_batch",
       "ui_roles": [
         "super_admin",
@@ -1278,7 +1289,7 @@
       "label": "Opening stock (entry button)",
       "kind": "navigate",
       "gate": "can(stock,edit)",
-      "evidence": "lib/features/inventory/screens/stock_overview_screen.dart:60",
+      "evidence": "lib/features/inventory/screens/stock_overview_screen.dart:46",
       "db_operation": "rpc.add_opening_stock",
       "ui_roles": [
         "super_admin",
@@ -1320,7 +1331,7 @@
       "label": "Needs ordering (entry button)",
       "kind": "navigate",
       "gate": "can(stock,edit)&&can(purchaseOrders,edit)",
-      "evidence": "lib/features/inventory/screens/stock_overview_screen.dart:70",
+      "evidence": "lib/features/inventory/screens/stock_overview_screen.dart:52",
       "db_operation": "rpc.create_draft_purchase_orders",
       "ui_roles": [
         "super_admin",
@@ -1376,7 +1387,7 @@
       "label": "New medicine",
       "kind": "create",
       "gate": "can(medicines,edit)",
-      "evidence": "lib/features/inventory/screens/medicines_screen.dart:68",
+      "evidence": "lib/features/inventory/screens/medicines_screen.dart:70",
       "db_operation": "rls.medicines.write",
       "ui_roles": [
         "super_admin",
@@ -1389,7 +1400,7 @@
       "label": "Edit medicine",
       "kind": "edit",
       "gate": "can(medicines,edit)",
-      "evidence": "lib/features/inventory/screens/medicines_screen.dart:212",
+      "evidence": "lib/features/inventory/screens/medicines_screen.dart:214",
       "db_operation": "rls.medicines.write",
       "ui_roles": [
         "super_admin",
@@ -1402,7 +1413,7 @@
       "label": "Deactivate / reactivate medicine",
       "kind": "deactivate",
       "gate": "can(medicines,edit)",
-      "evidence": "lib/features/inventory/screens/medicines_screen.dart:219",
+      "evidence": "lib/features/inventory/screens/medicines_screen.dart:221",
       "db_operation": "rls.medicines.write",
       "ui_roles": [
         "super_admin",
@@ -1415,7 +1426,7 @@
       "label": "Upload medicine image",
       "kind": "create",
       "gate": "can(medicines,edit)",
-      "evidence": "lib/features/inventory/screens/medicines_screen.dart:68",
+      "evidence": "lib/features/inventory/screens/medicines_screen.dart:70",
       "db_operation": "storage.medicine-images.write",
       "ui_roles": [
         "super_admin",
@@ -1864,7 +1875,7 @@
       "label": "Create user",
       "kind": "create",
       "gate": "can(users,edit)",
-      "evidence": "lib/features/admin/users_screen.dart:368",
+      "evidence": "lib/features/admin/users_screen.dart:401",
       "db_operation": "edge.admin-create-user",
       "ui_roles": [
         "super_admin",
@@ -1876,7 +1887,7 @@
       "label": "Edit / reset password / deactivate user",
       "kind": "edit",
       "gate": "can(users,edit)",
-      "evidence": "lib/features/admin/users_screen.dart:487",
+      "evidence": "lib/features/admin/users_screen.dart:520",
       "db_operation": "rpc.set_user_access",
       "ui_roles": [
         "super_admin",
@@ -1888,7 +1899,7 @@
       "label": "Reset user password",
       "kind": "edit",
       "gate": "can(users,edit)",
-      "evidence": "lib/features/admin/users_screen.dart:487",
+      "evidence": "lib/features/admin/users_screen.dart:520",
       "db_operation": "edge.admin-reset-password",
       "ui_roles": [
         "super_admin",
