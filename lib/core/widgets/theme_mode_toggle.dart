@@ -5,9 +5,11 @@ import '../theme/app_colors.dart';
 import '../theme/theme_mode_controller.dart';
 
 class ThemeModeToggle extends ConsumerWidget {
-  const ThemeModeToggle({super.key, this.compact = false});
+  const ThemeModeToggle(
+      {super.key, this.compact = false, this.iconOnly = false});
 
   final bool compact;
+  final bool iconOnly;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -16,6 +18,34 @@ class ThemeModeToggle extends ConsumerWidget {
     final bg = dark ? AppColors.darkCard : AppColors.white;
     final border =
         dark ? AppColors.darkBorder : AppColors.gold300.withOpacity(0.6);
+
+    if (iconOnly) {
+      final (icon, label) = switch (mode) {
+        ThemeMode.light => (Icons.light_mode_outlined, 'Light'),
+        ThemeMode.dark => (Icons.dark_mode_outlined, 'Dark'),
+        ThemeMode.system => (Icons.brightness_auto_outlined, 'Auto'),
+      };
+      return PopupMenuButton<ThemeMode>(
+        tooltip: 'Theme: $label',
+        onSelected: (value) =>
+            ref.read(themeModeProvider.notifier).setMode(value),
+        itemBuilder: (_) => const [
+          PopupMenuItem(value: ThemeMode.light, child: Text('Light')),
+          PopupMenuItem(value: ThemeMode.dark, child: Text('Dark')),
+          PopupMenuItem(value: ThemeMode.system, child: Text('Auto')),
+        ],
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: border),
+          ),
+          child: Icon(icon,
+              size: 18, color: dark ? AppColors.darkGold : AppColors.plum800),
+        ),
+      );
+    }
 
     Widget button(ThemeMode value, IconData icon, String label) {
       final selected = mode == value;

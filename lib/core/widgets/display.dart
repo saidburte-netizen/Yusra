@@ -12,6 +12,7 @@ class StatCard extends StatelessWidget {
     this.subtitle,
     this.color,
     this.onTap,
+    this.compact = false,
   });
 
   final String title;
@@ -20,10 +21,28 @@ class StatCard extends StatelessWidget {
   final String? subtitle;
   final Color? color;
   final VoidCallback? onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final accent = color ?? AppColors.pink600;
+    final padding = compact ? 10.0 : 20.0;
+    final iconBox = compact ? 32.0 : 46.0;
+    final iconSize = compact ? 18.0 : 22.0;
+    final iconRadius = compact ? 10.0 : 14.0;
+    final gap = compact ? 10.0 : 14.0;
+    final valueStyle = compact
+        ? Theme.of(context).textTheme.titleLarge?.copyWith(
+            color: Theme.of(context).colorScheme.onSurface,
+            fontWeight: FontWeight.w800,
+            fontSize: 22,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          )
+        : Theme.of(context).textTheme.headlineMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurface,
+            fontWeight: FontWeight.w800,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          );
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppColors.radius),
@@ -34,14 +53,14 @@ class StatCard extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(AppColors.radius),
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(padding),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (icon != null) ...[
                   Container(
-                    width: 46,
-                    height: 46,
+                    width: iconBox,
+                    height: iconBox,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
@@ -51,14 +70,14 @@ class StatCard extends StatelessWidget {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(iconRadius),
                       border: Border.all(
                         color: AppColors.gold500.withOpacity(0.28),
                       ),
                     ),
-                    child: Icon(icon, size: 22, color: accent),
+                    child: Icon(icon, size: iconSize, color: accent),
                   ),
-                  const SizedBox(width: 14),
+                  SizedBox(width: gap),
                 ],
                 Expanded(
                   child: Column(
@@ -70,29 +89,29 @@ class StatCard extends StatelessWidget {
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               fontWeight: FontWeight.w700,
                               color: AppColors.muted,
+                              fontSize: compact ? 11 : null,
                             ),
-                        maxLines: 2,
+                        maxLines: compact ? 1 : 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: compact ? 4 : 8),
                       Text(
                         value,
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineMedium
-                            ?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface,
-                          fontWeight: FontWeight.w800,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
+                        style: valueStyle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       if (subtitle != null) ...[
-                        const SizedBox(height: 6),
+                        SizedBox(height: compact ? 2 : 6),
                         Text(
                           subtitle!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style:
                               Theme.of(context).textTheme.labelSmall?.copyWith(
                                     color: accent,
                                     fontWeight: FontWeight.w700,
+                                    fontSize: compact ? 10 : null,
                                   ),
                         ),
                       ],
@@ -250,16 +269,23 @@ class ResponsiveGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final columns = (width / minTileWidth).floor().clamp(1, 6);
-    return Wrap(
-      spacing: spacing,
-      runSpacing: spacing,
-      children: [
-        for (final child in children)
-          SizedBox(
-              width: (width - spacing * (columns - 1)) / columns, child: child),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final columns = (width / minTileWidth).floor().clamp(1, 6);
+        final tileWidth =
+            columns <= 1 ? width : (width - spacing * (columns - 1)) / columns;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final child in children)
+              SizedBox(width: tileWidth, child: child),
+          ],
+        );
+      },
     );
   }
 }

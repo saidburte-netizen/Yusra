@@ -555,92 +555,57 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              margin: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-              padding: const EdgeInsets.all(24),
+              margin:
+                  EdgeInsets.fromLTRB(16, screenWidth < 600 ? 12 : 20, 16, 0),
+              padding: EdgeInsets.all(screenWidth < 600 ? 12 : 24),
               decoration: BoxDecoration(
                 gradient: AppColors.darkGradient,
-                borderRadius: BorderRadius.circular(22),
+                borderRadius:
+                    BorderRadius.circular(screenWidth < 600 ? 16 : 22),
                 border: Border.all(color: AppColors.gold500.withOpacity(0.35)),
                 boxShadow: const [AppColors.cardShadow],
               ),
-              child: Wrap(
-                spacing: 16,
-                runSpacing: 16,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 520),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              child: screenWidth < 600
+                  ? Row(
                       children: [
-                        Text(
-                          '${_greeting()}$greetingName',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineMedium
-                              ?.copyWith(
-                                color: AppColors.onDark,
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '${formatDate(nowAddisAbaba())} · ${S.appName}',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: AppColors.onDarkMuted,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                        ),
-                        const SizedBox(height: 14),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.gold500.withOpacity(0.14),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: AppColors.gold500.withOpacity(0.35),
-                            ),
-                          ),
-                          child: Text(
-                            ownOnly ? S.mySalesToday : S.dashboard,
-                            style: const TextStyle(
-                              color: AppColors.gold300,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      const SizedBox(
-                        width: 240,
-                        child: ThemeModeToggle(compact: true),
-                      ),
-                      SizedBox(
-                        width: rangeWidth,
-                        child: Theme(
-                          data: Theme.of(context).copyWith(
-                            inputDecorationTheme:
-                                Theme.of(context).inputDecorationTheme.copyWith(
-                                      fillColor:
-                                          AppColors.plum900.withOpacity(0.35),
-                                      labelStyle: const TextStyle(
-                                        color: AppColors.onDarkMuted,
-                                        fontWeight: FontWeight.w700,
-                                      ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${_greeting()}$greetingName',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                      color: AppColors.onDark,
+                                      fontWeight: FontWeight.w800,
                                     ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                formatDate(nowAddisAbaba()),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: AppColors.onDarkMuted,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ],
                           ),
+                        ),
+                        const SizedBox(width: 8),
+                        const ThemeModeToggle(iconOnly: true),
+                        const SizedBox(width: 6),
+                        SizedBox(
+                          width: 118,
                           child: DropdownButtonFormField<ActivityRange>(
                             value: _range,
                             isExpanded: true,
@@ -648,28 +613,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             style: const TextStyle(
                               color: AppColors.onDark,
                               fontWeight: FontWeight.w700,
+                              fontSize: 12,
                             ),
                             iconEnabledColor: AppColors.gold300,
-                            decoration: const InputDecoration(
-                              labelText: S.timeRange,
+                            decoration: InputDecoration(
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 8),
+                              filled: true,
+                              fillColor: AppColors.plum900.withOpacity(0.35),
                               enabledBorder: OutlineInputBorder(
-                                borderRadius:
-                                    BorderRadius.all(Radius.circular(14)),
+                                borderRadius: BorderRadius.circular(10),
                                 borderSide:
-                                    BorderSide(color: Color(0x59C9A227)),
+                                    const BorderSide(color: Color(0x59C9A227)),
                               ),
                               focusedBorder: OutlineInputBorder(
-                                borderRadius:
-                                    BorderRadius.all(Radius.circular(14)),
+                                borderRadius: BorderRadius.circular(10),
                                 borderSide:
-                                    BorderSide(color: AppColors.gold500),
+                                    const BorderSide(color: AppColors.gold500),
                               ),
                             ),
                             items: [
                               for (final r in ActivityRange.values)
                                 DropdownMenuItem(
                                   value: r,
-                                  child: Text(r.label),
+                                  child: Text(r.label,
+                                      overflow: TextOverflow.ellipsis),
                                 ),
                             ],
                             onChanged: (v) {
@@ -678,22 +647,133 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             },
                           ),
                         ),
-                      ),
-                      IconButton.filled(
-                        onPressed: _load,
-                        style: IconButton.styleFrom(
-                          backgroundColor: AppColors.gold500.withOpacity(0.18),
-                          foregroundColor: AppColors.gold300,
+                        const SizedBox(width: 4),
+                        IconButton(
+                          onPressed: _load,
+                          visualDensity: VisualDensity.compact,
+                          style: IconButton.styleFrom(
+                            backgroundColor:
+                                AppColors.gold500.withOpacity(0.18),
+                            foregroundColor: AppColors.gold300,
+                          ),
+                          icon: const Icon(Icons.refresh, size: 20),
                         ),
-                        icon: const Icon(Icons.refresh),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                      ],
+                    )
+                  : Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 520),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${_greeting()}$greetingName',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineMedium
+                                    ?.copyWith(
+                                      color: AppColors.onDark,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                '${formatDate(nowAddisAbaba())} · ${S.appName}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: AppColors.onDarkMuted,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            const SizedBox(
+                              width: 240,
+                              child: ThemeModeToggle(compact: true),
+                            ),
+                            SizedBox(
+                              width: rangeWidth,
+                              child: Theme(
+                                data: Theme.of(context).copyWith(
+                                  inputDecorationTheme: Theme.of(context)
+                                      .inputDecorationTheme
+                                      .copyWith(
+                                        fillColor:
+                                            AppColors.plum900.withOpacity(0.35),
+                                        labelStyle: const TextStyle(
+                                          color: AppColors.onDarkMuted,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                ),
+                                child: DropdownButtonFormField<ActivityRange>(
+                                  value: _range,
+                                  isExpanded: true,
+                                  dropdownColor: AppColors.plum900,
+                                  style: const TextStyle(
+                                    color: AppColors.onDark,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  iconEnabledColor: AppColors.gold300,
+                                  decoration: const InputDecoration(
+                                    labelText: S.timeRange,
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius:
+                                          BorderRadius.all(Radius.circular(14)),
+                                      borderSide:
+                                          BorderSide(color: Color(0x59C9A227)),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius:
+                                          BorderRadius.all(Radius.circular(14)),
+                                      borderSide:
+                                          BorderSide(color: AppColors.gold500),
+                                    ),
+                                  ),
+                                  items: [
+                                    for (final r in ActivityRange.values)
+                                      DropdownMenuItem(
+                                        value: r,
+                                        child: Text(r.label),
+                                      ),
+                                  ],
+                                  onChanged: (v) {
+                                    setState(
+                                        () => _range = v ?? ActivityRange.all);
+                                    _load();
+                                  },
+                                ),
+                              ),
+                            ),
+                            IconButton.filled(
+                              onPressed: _load,
+                              style: IconButton.styleFrom(
+                                backgroundColor:
+                                    AppColors.gold500.withOpacity(0.18),
+                                foregroundColor: AppColors.gold300,
+                              ),
+                              icon: const Icon(Icons.refresh),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
             ),
             Padding(
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.all(screenWidth < 600 ? 12 : 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -797,13 +877,21 @@ class _DashboardBody extends StatelessWidget {
         .take(4)
         .toList();
     final showFinance = can(role, Modules.reports, PermAction.view);
+    final showStaff = role == AppRole.superAdmin || role == AppRole.admin;
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+    final gridMin = narrow ? 150.0 : 260.0;
+    final gridSpacing = narrow ? 10.0 : 14.0;
+    final staffOnShift = data.teamStatus.where((m) => m.hasOpenShift).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ResponsiveGrid(
+          minTileWidth: gridMin,
+          spacing: gridSpacing,
           children: [
             StatCard(
+              compact: narrow,
               title: ownOnly ? S.mySalesToday : S.todaySales,
               value: money(data.todaySales),
               icon: Icons.today_outlined,
@@ -813,6 +901,7 @@ class _DashboardBody extends StatelessWidget {
             ),
             if (showFinance)
               StatCard(
+                compact: narrow,
                 title: S.monthSales,
                 value: money(data.monthSales),
                 icon: Icons.calendar_month_outlined,
@@ -820,12 +909,14 @@ class _DashboardBody extends StatelessWidget {
               ),
             if (showFinance)
               StatCard(
+                compact: narrow,
                 title: S.grossProfitToday,
                 value: money(data.grossProfitToday),
                 icon: Icons.trending_up_outlined,
                 color: AppColors.success,
               ),
             StatCard(
+              compact: narrow,
               title: S.openShifts,
               value: count(data.openShifts),
               icon: Icons.access_time_outlined,
@@ -834,12 +925,33 @@ class _DashboardBody extends StatelessWidget {
                   ? () => context.go('/shifts')
                   : null,
             ),
+            if (showStaff)
+              StatCard(
+                compact: narrow,
+                title: 'Staff count',
+                value: '${data.teamStatus.length}',
+                icon: Icons.groups_outlined,
+                color: AppColors.plum600,
+                onTap: () => context.go('/admin/users'),
+              ),
+            if (showStaff)
+              StatCard(
+                compact: narrow,
+                title: 'On shift',
+                value: '$staffOnShift',
+                icon: Icons.badge_outlined,
+                color: AppColors.success,
+                onTap: () => context.go('/admin/users'),
+              ),
           ],
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: narrow ? 10 : 16),
         ResponsiveGrid(
+          minTileWidth: gridMin,
+          spacing: gridSpacing,
           children: [
             StatCard(
+              compact: narrow,
               title: S.lowStock,
               value: count(data.lowStock),
               icon: Icons.inventory_outlined,
@@ -849,6 +961,7 @@ class _DashboardBody extends StatelessWidget {
                   : null,
             ),
             StatCard(
+              compact: narrow,
               title: S.expiringSoon,
               value: count(data.expiringSoon),
               icon: Icons.event_busy_outlined,
@@ -858,12 +971,14 @@ class _DashboardBody extends StatelessWidget {
                   : null,
             ),
             StatCard(
+              compact: narrow,
               title: S.expired,
               value: count(data.expired),
               icon: Icons.delete_forever_outlined,
               color: AppColors.danger,
             ),
             StatCard(
+              compact: narrow,
               title: S.pendingPrescriptions,
               value: count(data.pendingPrescriptions),
               icon: Icons.description_outlined,

@@ -265,7 +265,7 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
   final bool narrow;
 
   @override
-  Size get preferredSize => Size.fromHeight(narrow ? 132 : 64);
+  Size get preferredSize => const Size.fromHeight(64);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -274,7 +274,7 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
     final isSuperAdmin = profile?.role == AppRole.superAdmin;
 
     final actions = <Widget>[
-      if (isSuperAdmin) const _BranchSwitcher(),
+      if (isSuperAdmin) _BranchSwitcher(compact: narrow),
       const _NotificationBell(),
       PopupMenuButton<String>(
         tooltip: profile?.fullName ?? S.profile,
@@ -287,65 +287,53 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
           PopupMenuItem(value: 'signout', child: Text(S.signOut)),
         ],
         child: Padding(
-          padding: const EdgeInsets.all(8),
+          padding:
+              EdgeInsets.symmetric(horizontal: narrow ? 4 : 8, vertical: 8),
           child: CircleAvatar(
-            radius: 18,
+            radius: narrow ? 16 : 18,
             backgroundColor: AppColors.gold500.withOpacity(0.22),
             foregroundColor: AppColors.gold300,
             child: profile == null
-                ? const Icon(Icons.person, size: 18)
+                ? Icon(Icons.person, size: narrow ? 16 : 18)
                 : Text(
                     profile.fullName.isEmpty
                         ? '?'
                         : profile.fullName[0].toUpperCase(),
-                    style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w800),
+                    style: TextStyle(
+                        fontSize: narrow ? 12 : 14,
+                        fontWeight: FontWeight.w800),
                   ),
           ),
         ),
       ),
     ];
 
-    if (narrow) {
-      return AppBar(
-        toolbarHeight: 132,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              style: Theme.of(context).appBarTheme.titleTextStyle ??
-                  const TextStyle(
-                    color: AppColors.onDark,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 4,
-              runSpacing: 4,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: actions,
-            ),
-          ],
-        ),
-      );
-    }
-
     return AppBar(
-      title: Text(title),
+      toolbarHeight: 64,
+      titleSpacing: narrow ? 0 : null,
+      title: Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: narrow
+            ? const TextStyle(
+                color: AppColors.onDark,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              )
+            : null,
+      ),
       actions: [
         ...actions,
-        const SizedBox(width: 8),
+        SizedBox(width: narrow ? 4 : 8),
       ],
     );
   }
 }
 
 class _BranchSwitcher extends ConsumerStatefulWidget {
-  const _BranchSwitcher();
+  const _BranchSwitcher({this.compact = false});
+  final bool compact;
 
   @override
   ConsumerState<_BranchSwitcher> createState() => _BranchSwitcherState();
@@ -403,18 +391,20 @@ class _BranchSwitcherState extends ConsumerState<_BranchSwitcher> {
         }
         // A max width (not a fixed width) keeps the switcher usable when the
         // top bar wraps into several rows on a phone.
+        final compact = widget.compact;
         return ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 180),
+          constraints: BoxConstraints(maxWidth: compact ? 120 : 180),
           child: DropdownButton<String?>(
             value: _selected,
             isExpanded: true,
             dropdownColor: AppColors.plum900,
             iconEnabledColor: AppColors.gold300,
+            iconSize: compact ? 18 : 24,
             underline: const SizedBox.shrink(),
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.onDark,
               fontWeight: FontWeight.w700,
-              fontSize: 13,
+              fontSize: compact ? 11 : 13,
             ),
             hint: const Text(
               S.allBranchesViewOnly,

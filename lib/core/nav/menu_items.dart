@@ -76,9 +76,14 @@ const List<MenuItem> allMenuItems = [
       path: '/reports',
       module: Modules.reports),
   MenuItem(
-      label: S.users,
-      icon: Icons.manage_accounts_outlined,
+      label: 'Team',
+      icon: Icons.groups_outlined,
       path: '/admin/users',
+      module: Modules.users),
+  MenuItem(
+      label: 'Add staff',
+      icon: Icons.person_add_alt_1_outlined,
+      path: '/admin/users?action=add',
       module: Modules.users),
   MenuItem(
       label: S.teamAccess,
@@ -100,6 +105,11 @@ const List<MenuItem> allMenuItems = [
       icon: Icons.history_outlined,
       path: '/admin/audit',
       module: Modules.audit),
+  MenuItem(
+      label: 'My profile',
+      icon: Icons.person_outline,
+      path: '/profile',
+      module: Modules.dashboard),
 ];
 
 List<MenuItem> menuFor(AppRole role) => allMenuItems

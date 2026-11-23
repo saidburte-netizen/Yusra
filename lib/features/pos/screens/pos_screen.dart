@@ -670,7 +670,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                           await _checkout(shift, settings);
                         },
                   child: Text(
-                    'Cart (${_cart.itemCount} items) · Total ${formatMoney(_cart.total(settings.vatRate))} · Pay',
+                    'Cart (${_cart.itemCount}) · Total ${formatMoney(_cart.total(settings.vatRate))} · Pay',
                   ),
                 ),
               ),
@@ -777,7 +777,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                                   if (available < 1) {
                                     AppSnackbar.error(
                                       context,
-                                      'No stock. Add opening stock in Inventory → Opening stock.',
+                                      'No stock. Add stock in Inventory.',
                                     );
                                     return;
                                   }

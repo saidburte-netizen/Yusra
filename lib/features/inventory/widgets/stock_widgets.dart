@@ -10,7 +10,6 @@ import '../logic/stock_rules.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/strings.dart';
 import '../../../core/theme/app_colors.dart';
-import '../data/inventory_ids.dart';
 import '../screens/medicines_screen.dart' show showMedicineFormDialog;
 import 'responsive_ui.dart';
 
@@ -63,16 +62,9 @@ Widget stockState<T>(
 /// Registers a brand-new medicine from the shared catalogue dialog and returns
 /// the saved row so pickers can select it immediately.
 Future<Medicine?> addNewMedicine(BuildContext context, WidgetRef ref) async {
-  final data = await showMedicineFormDialog(context, ref);
-  if (data == null) return null;
-  final payload = Map<String, dynamic>.from(data);
-  final rawId = payload['id'];
-  final id =
-      rawId is String && rawId.trim().isNotEmpty ? rawId : generateUuidV4();
-  payload['id'] = id;
-  final repository = ref.read(inventoryRepositoryProvider);
-  await repository.saveMedicine(payload);
-  return repository.medicine(id);
+  final id = await showMedicineFormDialog(context, ref);
+  if (id == null) return null;
+  return ref.read(inventoryRepositoryProvider).medicine(id);
 }
 
 /// Shared display string for medicine pickers: name, SKU and barcode.

@@ -183,15 +183,48 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
     setState(() => _loading = true);
     try {
       if (!SupabaseService.isReady) throw const SupabaseNotConfigured();
+      final body = Map<String, dynamic>.from(result);
+      // Edge function compatibility: send both common password keys.
+      if ((body['temporary_password'] as String?)?.isNotEmpty == true) {
+        body['password'] = body['temporary_password'];
+      }
       final response = await SupabaseService.client.functions.invoke(
         'admin-create-user',
-        body: result,
+        body: body,
       );
       final data = _decodeEdgeResponse(response.data);
       final tempPassword = data is Map
           ? (data['temporary_password'] ?? data['temporaryPassword'])
               ?.toString()
           : null;
+      final userId = data is Map
+          ? (data['user_id'] ??
+                  data['id'] ??
+                  (data['user'] is Map ? (data['user'] as Map)['id'] : null))
+              ?.toString()
+          : null;
+      // Persist extra staff fields when possible.
+      if (userId != null) {
+        try {
+          final salaryText = (result['monthly_salary'] ?? '').toString().trim();
+          final salary = salaryText.isEmpty ? null : num.tryParse(salaryText);
+          final hiringDate = (result['hiring_date'] ?? '').toString();
+          await SupabaseService.client.rpc('update_staff_profile', params: {
+            'p_user': userId,
+            'p_full_name': result['full_name'],
+            'p_phone': (result['phone'] ?? '').toString().trim().isEmpty
+                ? null
+                : result['phone'],
+            'p_role': result['role'],
+            'p_branch': result['branch_id'],
+            'p_monthly_salary': salary,
+            'p_hiring_date':
+                hiringDate.isEmpty ? null : hiringDate.split('T').first,
+          });
+        } catch (_) {
+          // Best-effort; profile was created and user can be edited later.
+        }
+      }
       if (!mounted) return;
       setState(() => _loading = false);
       await _load();
@@ -227,7 +260,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
         );
       }
       if (!mounted) return;
-      AppSnackbar.success(context, 'User created.');
+      AppSnackbar.success(context, 'Staff member created.');
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
@@ -542,6 +575,9 @@ class _UserFormDialog extends StatefulWidget {
     this.initialRole,
     this.initialBranch,
     this.initialName,
+    this.initialPhone,
+    this.initialSalary,
+    this.initialHiringDate,
     this.showPasswordFields = true,
   });
 
@@ -550,6 +586,9 @@ class _UserFormDialog extends StatefulWidget {
   final String? initialRole;
   final String? initialBranch;
   final String? initialName;
+  final String? initialPhone;
+  final String? initialSalary;
+  final DateTime? initialHiringDate;
   final bool showPasswordFields;
 
   @override
@@ -560,6 +599,10 @@ class _UserFormDialogState extends State<_UserFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _email;
   late final TextEditingController _name;
+  late final TextEditingController _phone;
+  late final TextEditingController _salary;
+  late final TextEditingController _password;
+  DateTime? _hiringDate;
   String? _role;
   String? _branch;
 
@@ -568,6 +611,10 @@ class _UserFormDialogState extends State<_UserFormDialog> {
     super.initState();
     _email = TextEditingController();
     _name = TextEditingController(text: widget.initialName ?? '');
+    _phone = TextEditingController(text: widget.initialPhone ?? '');
+    _salary = TextEditingController(text: widget.initialSalary ?? '');
+    _password = TextEditingController();
+    _hiringDate = widget.initialHiringDate;
     _role = widget.initialRole;
     _branch = widget.initialBranch;
     if (_role != null &&
@@ -580,60 +627,110 @@ class _UserFormDialogState extends State<_UserFormDialog> {
   void dispose() {
     _email.dispose();
     _name.dispose();
+    _phone.dispose();
+    _salary.dispose();
+    _password.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.showPasswordFields ? S.createUser : S.edit),
+      title: Text(widget.showPasswordFields ? 'Add staff' : S.edit),
       content: SizedBox(
-        width: 420,
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (widget.showPasswordFields)
+        width: 460,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 AppTextField(
-                  label: S.email,
-                  controller: _email,
-                  keyboardType: TextInputType.emailAddress,
+                  label: S.fullName,
+                  controller: _name,
                   validator: (v) =>
-                      v == null || !v.contains('@') ? S.emailInvalid : null,
+                      v == null || v.trim().isEmpty ? S.required : null,
                 ),
-              if (widget.showPasswordFields) const SizedBox(height: 12),
-              AppTextField(
-                label: S.fullName,
-                controller: _name,
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? S.required : null,
-              ),
-              const SizedBox(height: 12),
-              AppDropdown<String>(
-                label: S.role,
-                value: _role,
-                items: [
-                  for (final r in widget.allowedRoles)
-                    DropdownMenuItem(value: r.dbName, child: Text(r.label)),
-                ],
-                onChanged: (v) => setState(() => _role = v),
-                validator: (v) => v == null ? S.required : null,
-              ),
-              const SizedBox(height: 12),
-              AppDropdown<String>(
-                label: S.branch,
-                value: _branch,
-                items: [
-                  for (final b in widget.branches)
-                    DropdownMenuItem(
-                      value: b['id'] as String?,
-                      child: Text((b['name'] as String?) ?? '—'),
+                const SizedBox(height: 12),
+                AppTextField(
+                  label: 'Phone',
+                  controller: _phone,
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 12),
+                AppDropdown<String>(
+                  label: S.role,
+                  value: _role,
+                  items: [
+                    for (final r in widget.allowedRoles)
+                      DropdownMenuItem(value: r.dbName, child: Text(r.label)),
+                  ],
+                  onChanged: (v) => setState(() => _role = v),
+                  validator: (v) => v == null ? S.required : null,
+                ),
+                const SizedBox(height: 12),
+                AppTextField(
+                  label: 'Monthly salary',
+                  controller: _salary,
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _hiringDate ?? DateTime.now(),
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime(2100),
+                    );
+                    if (picked != null) setState(() => _hiringDate = picked);
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Hiring date',
+                      border: OutlineInputBorder(),
                     ),
+                    child: Text(
+                      _hiringDate == null
+                          ? 'Select date'
+                          : '${_hiringDate!.year}-${_hiringDate!.month.toString().padLeft(2, '0')}-${_hiringDate!.day.toString().padLeft(2, '0')}',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                AppDropdown<String>(
+                  label: S.branch,
+                  value: _branch,
+                  items: [
+                    for (final b in widget.branches)
+                      DropdownMenuItem(
+                        value: b['id'] as String?,
+                        child: Text((b['name'] as String?) ?? '—'),
+                      ),
+                  ],
+                  onChanged: (v) => setState(() => _branch = v),
+                ),
+                if (widget.showPasswordFields) ...[
+                  const SizedBox(height: 12),
+                  AppTextField(
+                    label: S.email,
+                    controller: _email,
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (v) =>
+                        v == null || !v.contains('@') ? S.emailInvalid : null,
+                  ),
+                  const SizedBox(height: 12),
+                  AppTextField(
+                    label: 'Temporary password',
+                    controller: _password,
+                    obscureText: true,
+                    validator: (v) => (v == null || v.trim().length < 6)
+                        ? 'Min 6 characters'
+                        : null,
+                  ),
                 ],
-                onChanged: (v) => setState(() => _branch = v),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -647,8 +744,12 @@ class _UserFormDialogState extends State<_UserFormDialog> {
             Navigator.pop(context, <String, dynamic>{
               'email': _email.text.trim(),
               'full_name': _name.text.trim(),
+              'phone': _phone.text.trim(),
               'role': _role,
               'branch_id': _branch,
+              'monthly_salary': _salary.text.trim(),
+              'hiring_date': _hiringDate?.toIso8601String(),
+              'temporary_password': _password.text.trim(),
             });
           },
           child: const Text(S.save),

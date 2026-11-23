@@ -14,10 +14,12 @@ import '../../../core/widgets.dart';
 import '../data/inventory_ids.dart';
 import '../data/inventory_models.dart';
 import '../data/inventory_providers.dart';
+import '../data/reorder_models.dart';
 import '../logic/medicine_csv.dart';
 import '../widgets/stock_widgets.dart';
 import '../../../core/errors/app_error.dart';
 import '../widgets/responsive_ui.dart';
+import '../../pos/screens/pos_screen.dart' show posMedicinesProvider;
 
 class MedicinesScreen extends ConsumerStatefulWidget {
   const MedicinesScreen({super.key});
@@ -249,21 +251,11 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
   }
 
   Future<void> _edit(Medicine? medicine) async {
-    final result =
+    final savedId =
         await showMedicineFormDialog(context, ref, initial: medicine);
-    if (result == null) return;
-    try {
-      await ref.read(inventoryRepositoryProvider).saveMedicine(
-            result,
-            id: medicine?.id,
-          );
-      if (!mounted) return;
-      AppSnackbar.success(context, 'Medicine saved.');
-      ref.invalidate(
-          medicinesProvider((query: _query, categoryId: _categoryId)));
-    } catch (e) {
-      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
-    }
+    if (savedId == null) return;
+    ref.invalidate(medicinesProvider((query: _query, categoryId: _categoryId)));
+    ref.invalidate(stockSummaryProvider);
   }
 
   Future<void> _toggleActive(Medicine medicine) async {
@@ -408,16 +400,14 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
 
 /// Shows the medicine registration/edit dialog.
 ///
-/// Public and top-level so other features can reuse the same minimal form.
-/// The returned map uses database column names and already contains a fresh
-/// uuid in `id` for new medicines only.
-Future<Map<String, dynamic>?> showMedicineFormDialog(
+/// Returns the saved medicine id, or null if cancelled.
+Future<String?> showMedicineFormDialog(
   BuildContext context,
   WidgetRef ref, {
   Medicine? initial,
 }) {
   final supplierOptions = SupplierOption.load(ref);
-  return showDialog<Map<String, dynamic>>(
+  return showDialog<String?>(
     context: context,
     builder: (_) => _MedicineFormDialog(
       initial: initial,
@@ -454,15 +444,21 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
   late final TextEditingController _reorder;
   late final TextEditingController _target;
   late final TextEditingController _storage;
+  late final TextEditingController _quantity;
+  DateTime _dateAdded = DateTime.now();
   String? _categoryId;
   String? _supplierId;
   bool _vat = false;
   bool _rx = false;
   bool _controlled = false;
   String? _imageUrl;
+  bool _moreDetails = false;
+  String? _lastSavedId;
   // New medicines need an id before the photo can be uploaded into its folder.
-  late final String _newMedicineId = generateUuidV4();
+  late String _newMedicineId = generateUuidV4();
   var _busy = false;
+
+  bool get _isNew => widget.initial == null;
 
   @override
   void initState() {
@@ -475,22 +471,27 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
     _strength = TextEditingController(text: item?.strength ?? '');
     _unit = TextEditingController(text: item?.unit ?? 'Pack');
     _manufacturer = TextEditingController(text: item?.manufacturer ?? '');
-    _cost = TextEditingController(text: '${item?.costPrice ?? 0}');
-    _price = TextEditingController(text: '${item?.sellingPrice ?? 0}');
+    _cost = TextEditingController(
+        text: item == null ? '' : item.costPrice.toStringAsFixed(2));
+    _price = TextEditingController(
+        text: item == null ? '' : item.sellingPrice.toStringAsFixed(2));
     _reorder = TextEditingController(text: '${item?.reorderLevel ?? 10}');
-    _target = TextEditingController(text: item?.targetLevel?.toString() ?? '');
+    _target = TextEditingController(
+        text: item?.targetLevel == null ? '' : '${item!.targetLevel}');
     _storage = TextEditingController(text: item?.storageNotes ?? '');
+    _quantity = TextEditingController(text: '');
     _categoryId = item?.categoryId;
     _supplierId = item?.preferredSupplierId;
     _vat = item?.vatApplicable ?? false;
     _rx = item?.requiresPrescription ?? false;
     _controlled = item?.isControlled ?? false;
     _imageUrl = item?.imageUrl;
+    _moreDetails = !_isNew;
   }
 
   @override
   void dispose() {
-    for (final controller in [
+    for (final controller in <TextEditingController>[
       _name,
       _generic,
       _barcode,
@@ -503,6 +504,7 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
       _reorder,
       _target,
       _storage,
+      _quantity,
     ]) {
       controller.dispose();
     }
@@ -546,9 +548,8 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
           child: Form(
             key: formKey,
             child: AppTextField(
-              label: 'Name',
+              label: 'Category name',
               controller: name,
-              autofocus: true,
               validator: (value) =>
                   (value ?? '').trim().isEmpty ? 'Required' : null,
             ),
@@ -556,33 +557,153 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
           ResponsivePrimaryButton(
             label: 'Save',
             onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.pop(context, true);
-              }
+              if (!formKey.currentState!.validate()) return;
+              Navigator.pop(context, true);
             },
           ),
         ],
       ),
     );
-    final value = name.text.trim();
-    name.dispose();
-    if (saved != true || !mounted) return;
+    if (saved != true) return;
+    try {
+      await ref.read(inventoryRepositoryProvider).saveCategory({
+        'name': name.text.trim(),
+      });
+      ref.invalidate(categoriesProvider);
+      if (mounted) AppSnackbar.success(context, 'Category added.');
+    } catch (e) {
+      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
+    }
+  }
+
+  String _generateSku() {
+    final base = _name.text
+        .trim()
+        .toUpperCase()
+        .replaceAll(RegExp(r'[^A-Z0-9]+'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
+    final prefix =
+        base.isEmpty ? 'MED' : (base.length > 8 ? base.substring(0, 8) : base);
+    final suffix =
+        DateTime.now().millisecondsSinceEpoch.toString().substring(7);
+    return '$prefix-$suffix';
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
     setState(() => _busy = true);
     try {
-      await ref.read(inventoryRepositoryProvider).saveCategory({'name': value});
-      ref.invalidate(categoriesProvider);
-      final categories = await ref.read(categoriesProvider.future);
+      final repo = ref.read(inventoryRepositoryProvider);
+      final reorderLevel = int.tryParse(_reorder.text.trim()) ?? 10;
+      final targetText = _target.text.trim();
+      final targetLevel = targetText.isEmpty
+          ? (widget.initial?.targetLevel != null ? null : reorderLevel * 2)
+          : int.tryParse(targetText) ?? reorderLevel * 2;
+      final cost = parseMoney(_cost.text) ?? 0;
+      final price = parseMoney(_price.text) ?? 0;
+      final qty = int.tryParse(_quantity.text.trim()) ?? 0;
+      final id = widget.initial?.id ?? _newMedicineId;
+      final sku = (widget.initial?.sku.trim().isNotEmpty ?? false)
+          ? widget.initial!.sku
+          : _generateSku();
+
+      final payload = <String, dynamic>{
+        'id': id,
+        'name': _name.text.trim(),
+        'sku': sku,
+        'generic_name':
+            _generic.text.trim().isEmpty ? null : _generic.text.trim(),
+        'barcode': _barcode.text.trim().isEmpty ? null : _barcode.text.trim(),
+        'category_id': _categoryId,
+        'dosage_form': _form.text.trim().isEmpty ? null : _form.text.trim(),
+        'strength':
+            _strength.text.trim().isEmpty ? null : _strength.text.trim(),
+        'unit': _unit.text.trim().isEmpty ? 'Pack' : _unit.text.trim(),
+        'manufacturer': _manufacturer.text.trim().isEmpty
+            ? null
+            : _manufacturer.text.trim(),
+        'cost_price': cost,
+        'selling_price': price,
+        'reorder_level': reorderLevel,
+        'preferred_supplier_id': _supplierId,
+        'target_level': targetLevel,
+        'storage_notes':
+            _storage.text.trim().isEmpty ? null : _storage.text.trim(),
+        'vat_applicable': _vat,
+        'requires_prescription': _rx,
+        'is_controlled': _controlled,
+        'image_url': _imageUrl,
+      };
+
+      await repo.saveMedicine(payload, id: widget.initial?.id);
+
+      if (_isNew && qty > 0) {
+        final branchId = ref.read(branchScopeProvider);
+        if (branchId == null) {
+          throw Exception('Select a branch before adding opening stock.');
+        }
+        final expiry =
+            DateTime(_dateAdded.year + 2, _dateAdded.month, _dateAdded.day);
+        final batch =
+            'OPENING-${_dateAdded.year.toString().padLeft(4, '0')}${_dateAdded.month.toString().padLeft(2, '0')}${_dateAdded.day.toString().padLeft(2, '0')}';
+        await repo.addOpeningStock(
+          branchId: branchId,
+          rows: [
+            OpeningStockRowInput(
+              medicineId: id,
+              quantity: qty,
+              expiry: expiry,
+              batchNo: batch,
+              unitCost: cost,
+            ),
+          ],
+        );
+      }
+
+      ref.invalidate(medicinesProvider);
+      ref.invalidate(stockSummaryProvider);
+      ref.invalidate(posMedicinesProvider);
+      ref.invalidate(reorderSuggestionsProvider);
+
       if (!mounted) return;
-      final created = categories
-          .where((item) => item.name.toLowerCase() == value.toLowerCase())
-          .firstOrNull;
-      if (created != null) setState(() => _categoryId = created.id);
+      _lastSavedId = id;
+      if (_isNew) {
+        AppSnackbar.success(context, 'Medicine added with $qty in stock');
+        _formKey.currentState?.reset();
+        setState(() {
+          _name.clear();
+          _generic.clear();
+          _barcode.clear();
+          _form.clear();
+          _strength.clear();
+          _unit.text = 'Pack';
+          _manufacturer.clear();
+          _cost.clear();
+          _price.clear();
+          _reorder.text = '10';
+          _target.clear();
+          _storage.clear();
+          _quantity.clear();
+          _dateAdded = DateTime.now();
+          _categoryId = null;
+          _supplierId = null;
+          _vat = false;
+          _rx = false;
+          _controlled = false;
+          _imageUrl = null;
+          _moreDetails = false;
+          _newMedicineId = generateUuidV4();
+        });
+      } else {
+        AppSnackbar.success(context, 'Medicine saved.');
+        Navigator.pop(context, id);
+      }
     } catch (e) {
       if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
     } finally {
@@ -590,216 +711,199 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
     }
   }
 
-  String? _wholeNumberValidator(String? value) {
-    final text = (value ?? '').trim();
-    if (text.isEmpty) return null;
-    final parsed = int.tryParse(text);
-    return parsed != null && parsed >= 0 ? null : 'Whole number required';
-  }
-
-  /// Two side-by-side fields on wide dialogs, stacked on a phone.
-  Widget _pair(Widget left, Widget right) {
-    final narrow = MediaQuery.sizeOf(context).width < 520;
-    if (narrow) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [left, const SizedBox(height: 10), right],
-      );
-    }
-    return Row(children: [
-      Expanded(child: left),
-      const SizedBox(width: 10),
-      Expanded(child: right),
-    ]);
-  }
-
   @override
   Widget build(BuildContext context) {
-    final categories =
-        ref.watch(categoriesProvider).valueOrNull ?? const <Category>[];
+    final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+    final isNew = _isNew;
     return AlertDialog(
-      title: Text(widget.initial == null ? 'New medicine' : 'Edit medicine'),
+      title: Text(isNew ? 'Add medicine' : 'Edit medicine'),
       content: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: dialogContentWidth(context, maxWidth: 560),
-          maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+          maxWidth: dialogContentWidth(context, maxWidth: 680),
         ),
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                AppTextField(
-                  label: 'Name',
-                  controller: _name,
-                  validator: (value) =>
-                      (value ?? '').trim().isEmpty ? 'Required' : null,
-                ),
-                const SizedBox(height: 10),
-                AppTextField(label: 'Generic name', controller: _generic),
-                const SizedBox(height: 10),
-                Builder(builder: (context) {
-                  final w = dialogContentWidth(context, maxWidth: 560);
-                  return Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: w < 420 ? w : w - 52,
-                        child: AppTextField(
-                            label: 'Barcode', controller: _barcode),
-                      ),
-                      BarcodeScanButton(
-                        compact: true,
-                        onDetected: (code) =>
-                            setState(() => _barcode.text = code),
-                      ),
-                    ],
-                  );
-                }),
-                const SizedBox(height: 10),
-                Builder(
-                  builder: (context) {
-                    final w = dialogContentWidth(context, maxWidth: 560);
-                    return Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: w < 420 ? w : w - 140,
-                          child: AppDropdown<String?>(
-                            label: 'Category',
-                            value: _categoryId,
-                            items: [
-                              const DropdownMenuItem(
-                                  value: null, child: Text('None')),
-                              if (_categoryId != null &&
-                                  !categories
-                                      .any((item) => item.id == _categoryId))
-                                DropdownMenuItem(
-                                  value: _categoryId,
-                                  child: const Text('Current category'),
-                                ),
-                              for (final category in categories)
-                                DropdownMenuItem(
-                                    value: category.id,
-                                    child: Text(category.name)),
-                            ],
-                            onChanged: (value) =>
-                                setState(() => _categoryId = value),
-                          ),
-                        ),
-                        TextButton.icon(
-                          onPressed: _busy ? null : _addCategory,
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Add category'),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 10),
-                _pair(
-                  AppTextField(label: 'Dosage form', controller: _form),
-                  AppTextField(label: 'Strength', controller: _strength),
-                ),
-                const SizedBox(height: 10),
                 _pair(
                   AppTextField(
-                    label: 'Unit',
-                    controller: _unit,
+                    label: 'Medicine name',
+                    controller: _name,
                     validator: (value) =>
                         (value ?? '').trim().isEmpty ? 'Required' : null,
                   ),
                   AppTextField(
-                      label: 'Manufacturer', controller: _manufacturer),
+                    label: 'Size / strength',
+                    controller: _strength,
+                  ),
                 ),
                 const SizedBox(height: 10),
-                _pair(
-                  MoneyField(
-                    label: 'Cost price',
-                    controller: _cost,
-                    validator: (value) => (value ?? 0) >= 0 ? null : 'Invalid',
+                if (isNew)
+                  _pair(
+                    AppTextField(
+                      label: 'Quantity',
+                      controller: _quantity,
+                      keyboardType: TextInputType.number,
+                      validator: _wholeNumberValidator,
+                    ),
+                    InkWell(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _dateAdded,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime(2100),
+                        );
+                        if (picked != null) setState(() => _dateAdded = picked);
+                      },
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Date added',
+                          border: OutlineInputBorder(),
+                        ),
+                        child: Text(
+                          '${_dateAdded.year}-${_dateAdded.month.toString().padLeft(2, '0')}-${_dateAdded.day.toString().padLeft(2, '0')}',
+                        ),
+                      ),
+                    ),
                   ),
+                if (isNew) const SizedBox(height: 10),
+                _pair(
                   MoneyField(
                     label: 'Selling price',
                     controller: _price,
-                    validator: (value) => (value ?? 0) >= 0 ? null : 'Invalid',
+                    validator: (value) =>
+                        (value == null || value <= 0) ? 'Required' : null,
                   ),
+                  isNew
+                      ? const SizedBox.shrink()
+                      : MoneyField(
+                          label: 'Cost price',
+                          controller: _cost,
+                          validator: (value) =>
+                              (value ?? 0) >= 0 ? null : 'Invalid',
+                        ),
                 ),
-                const SizedBox(height: 10),
-                _pair(
-                  AppTextField(
-                    label: 'Reorder level',
-                    controller: _reorder,
-                    keyboardType: TextInputType.number,
-                    validator: _wholeNumberValidator,
-                  ),
-                  AppTextField(
-                    label: 'Target level (optional)',
-                    controller: _target,
-                    keyboardType: TextInputType.number,
-                    validator: _wholeNumberValidator,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                FutureBuilder<List<SupplierOption>>(
-                  future: widget.supplierOptions,
-                  builder: (context, snapshot) {
-                    final options = snapshot.data ?? const <SupplierOption>[];
-                    final keepCurrent = _supplierId != null &&
-                        !options.any((item) => item.id == _supplierId);
-                    return AppDropdown<String?>(
-                      label: 'Preferred supplier',
-                      value: _supplierId,
-                      items: [
-                        const DropdownMenuItem(
-                            value: null, child: Text('None')),
-                        if (keepCurrent)
-                          DropdownMenuItem(
-                              value: _supplierId,
-                              child: const Text('Current supplier')),
-                        for (final supplier in options)
-                          DropdownMenuItem(
-                              value: supplier.id, child: Text(supplier.name)),
-                      ],
-                      onChanged: (value) => setState(() => _supplierId = value),
-                    );
-                  },
-                ),
-                const SizedBox(height: 10),
-                AppTextField(
-                    label: 'Storage notes', controller: _storage, maxLines: 2),
                 const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  children: [
-                    SwitchListTile(
-                      title: const Text('VAT applies'),
-                      value: _vat,
-                      onChanged: (value) => setState(() => _vat = value),
+                InkWell(
+                  onTap: () => setState(() => _moreDetails = !_moreDetails),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        Icon(_moreDetails
+                            ? Icons.expand_less
+                            : Icons.expand_more),
+                        const SizedBox(width: 6),
+                        const Text('More details',
+                            style: TextStyle(fontWeight: FontWeight.w600)),
+                      ],
                     ),
-                    SwitchListTile(
-                      title: const Text('Requires prescription'),
-                      value: _rx,
-                      onChanged: (value) => setState(() => _rx = value),
-                    ),
-                    SwitchListTile(
-                      title: const Text('Controlled drug'),
-                      value: _controlled,
-                      onChanged: (value) => setState(() => _controlled = value),
-                    ),
-                  ],
+                  ),
                 ),
-                OutlinedButton.icon(
-                  onPressed: _busy ? null : _pickPhoto,
-                  icon: const Icon(Icons.image_outlined),
-                  label: Text(
-                      _imageUrl == null ? 'Upload photo' : 'Replace photo'),
-                ),
+                if (_moreDetails) ...[
+                  const SizedBox(height: 6),
+                  _pair(
+                    AppTextField(
+                      label: 'Generic name',
+                      controller: _generic,
+                    ),
+                    _categoryField(categories),
+                  ),
+                  const SizedBox(height: 10),
+                  _pair(
+                    AppTextField(label: 'Barcode', controller: _barcode),
+                    AppTextField(label: 'Form', controller: _form),
+                  ),
+                  const SizedBox(height: 10),
+                  _pair(
+                    AppTextField(label: 'Unit', controller: _unit),
+                    AppTextField(
+                        label: 'Manufacturer', controller: _manufacturer),
+                  ),
+                  const SizedBox(height: 10),
+                  if (isNew)
+                    MoneyField(
+                      label: 'Cost price',
+                      controller: _cost,
+                      validator: (value) =>
+                          (value ?? 0) >= 0 ? null : 'Invalid',
+                    ),
+                  if (isNew) const SizedBox(height: 10),
+                  _pair(
+                    AppTextField(
+                      label: 'Reorder level',
+                      controller: _reorder,
+                      keyboardType: TextInputType.number,
+                      validator: _wholeNumberValidator,
+                    ),
+                    AppTextField(
+                      label: 'Target level (optional)',
+                      controller: _target,
+                      keyboardType: TextInputType.number,
+                      validator: _wholeNumberValidator,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  FutureBuilder<List<SupplierOption>>(
+                    future: widget.supplierOptions,
+                    builder: (context, snapshot) {
+                      final options = snapshot.data ?? const <SupplierOption>[];
+                      final keepCurrent = _supplierId != null &&
+                          !options.any((item) => item.id == _supplierId);
+                      return AppDropdown<String?>(
+                        label: 'Preferred supplier',
+                        value: _supplierId,
+                        items: [
+                          const DropdownMenuItem(
+                              value: null, child: Text('None')),
+                          if (keepCurrent)
+                            DropdownMenuItem(
+                                value: _supplierId,
+                                child: const Text('Current supplier')),
+                          for (final supplier in options)
+                            DropdownMenuItem(
+                                value: supplier.id, child: Text(supplier.name)),
+                        ],
+                        onChanged: (value) =>
+                            setState(() => _supplierId = value),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  AppTextField(
+                      label: 'Storage notes',
+                      controller: _storage,
+                      maxLines: 2),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('VAT applies'),
+                    value: _vat,
+                    onChanged: (value) => setState(() => _vat = value),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Requires prescription'),
+                    value: _rx,
+                    onChanged: (value) => setState(() => _rx = value),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Controlled drug'),
+                    value: _controlled,
+                    onChanged: (value) => setState(() => _controlled = value),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : _pickPhoto,
+                    icon: const Icon(Icons.image_outlined),
+                    label: Text(
+                        _imageUrl == null ? 'Upload photo' : 'Replace photo'),
+                  ),
+                ],
               ],
             ),
           ),
@@ -807,52 +911,65 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          onPressed: () => Navigator.pop(context, _lastSavedId),
+          child: Text(isNew ? 'Close' : 'Cancel'),
         ),
         ResponsivePrimaryButton(
           label: 'Save',
           loading: _busy,
-          onPressed: () {
-            if (!_formKey.currentState!.validate()) return;
-            final reorderLevel = int.tryParse(_reorder.text.trim()) ?? 10;
-            final targetText = _target.text.trim();
-            final targetLevel = targetText.isEmpty
-                ? (widget.initial?.targetLevel != null
-                    ? null
-                    : reorderLevel * 2)
-                : int.tryParse(targetText) ?? reorderLevel * 2;
-            Navigator.pop(context, {
-              if (widget.initial == null) 'id': _newMedicineId,
-              'name': _name.text.trim(),
-              'generic_name':
-                  _generic.text.trim().isEmpty ? null : _generic.text.trim(),
-              'barcode':
-                  _barcode.text.trim().isEmpty ? null : _barcode.text.trim(),
-              'category_id': _categoryId,
-              'dosage_form':
-                  _form.text.trim().isEmpty ? null : _form.text.trim(),
-              'strength':
-                  _strength.text.trim().isEmpty ? null : _strength.text.trim(),
-              'unit': _unit.text.trim().isEmpty ? 'Pack' : _unit.text.trim(),
-              'manufacturer': _manufacturer.text.trim().isEmpty
-                  ? null
-                  : _manufacturer.text.trim(),
-              'cost_price': parseMoney(_cost.text) ?? 0,
-              'selling_price': parseMoney(_price.text) ?? 0,
-              'reorder_level': reorderLevel,
-              'preferred_supplier_id': _supplierId,
-              'target_level': targetLevel,
-              'storage_notes':
-                  _storage.text.trim().isEmpty ? null : _storage.text.trim(),
-              'vat_applicable': _vat,
-              'requires_prescription': _rx,
-              'is_controlled': _controlled,
-              'image_url': _imageUrl,
-            });
-          },
+          onPressed: _save,
         ),
       ],
     );
+  }
+
+  Widget _categoryField(List<Category> categories) {
+    final value =
+        categories.any((item) => item.id == _categoryId) ? _categoryId : null;
+    return Row(
+      children: [
+        Expanded(
+          child: AppDropdown<String?>(
+            label: 'Category',
+            value: value,
+            items: [
+              const DropdownMenuItem(value: null, child: Text('None')),
+              for (final category in categories)
+                DropdownMenuItem(
+                    value: category.id, child: Text(category.name)),
+            ],
+            onChanged: (value) => setState(() => _categoryId = value),
+          ),
+        ),
+        IconButton(
+          tooltip: 'Add category',
+          onPressed: _addCategory,
+          icon: const Icon(Icons.add_circle_outline),
+        ),
+      ],
+    );
+  }
+
+  Widget _pair(Widget left, Widget right) {
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < 520) {
+        return Column(children: [left, const SizedBox(height: 10), right]);
+      }
+      return Row(
+        children: [
+          Expanded(child: left),
+          const SizedBox(width: 10),
+          Expanded(child: right),
+        ],
+      );
+    });
+  }
+
+  String? _wholeNumberValidator(String? value) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) return null;
+    final n = int.tryParse(text);
+    if (n == null || n < 0) return 'Invalid number';
+    return null;
   }
 }
