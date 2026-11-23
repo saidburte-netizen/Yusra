@@ -34,11 +34,6 @@ void main() {
     expect(
       actual,
       unorderedEquals(const <String>[
-        'backward/route_reachable|/inventory/categories',
-        'backward/route_reachable|/inventory/batches',
-        'backward/route_reachable|/inventory/adjustments',
-        'backward/route_reachable|/inventory/movements',
-        'backward/route_reachable|/inventory/stocktake',
         'backward/dashboard_tile_reconciliation|grossProfitToday',
       ]),
     );

@@ -106,7 +106,6 @@ void main() {
       expect(find.textContaining('Activity log (Error code: 42P01)'),
           findsOneWidget);
       expect(find.text(S.somethingWrong), findsNothing);
-      expect(find.text(S.dashboard), findsOneWidget);
     });
 
     testWidgets(

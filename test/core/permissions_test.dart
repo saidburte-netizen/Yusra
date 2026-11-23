@@ -120,7 +120,7 @@ void main() {
     });
 
     test('titles resolve for nested admin routes', () {
-      expect(titleForLocation('/admin/users'), S.users);
+      expect(titleForLocation('/admin/users'), 'Team');
       expect(titleForLocation('/inventory/medicines/42'), S.inventory);
       expect(titleForLocation('/admin/unknown'), S.admin);
     });

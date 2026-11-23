@@ -455,7 +455,7 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
   bool _moreDetails = false;
   String? _lastSavedId;
   // New medicines need an id before the photo can be uploaded into its folder.
-  late String _newMedicineId = generateUuidV4();
+  late final String _newMedicineId = generateUuidV4();
   var _busy = false;
 
   bool get _isNew => widget.initial == null;
@@ -675,31 +675,7 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
       _lastSavedId = id;
       if (_isNew) {
         AppSnackbar.success(context, 'Medicine added with $qty in stock');
-        _formKey.currentState?.reset();
-        setState(() {
-          _name.clear();
-          _generic.clear();
-          _barcode.clear();
-          _form.clear();
-          _strength.clear();
-          _unit.text = 'Pack';
-          _manufacturer.clear();
-          _cost.clear();
-          _price.clear();
-          _reorder.text = '10';
-          _target.clear();
-          _storage.clear();
-          _quantity.clear();
-          _dateAdded = DateTime.now();
-          _categoryId = null;
-          _supplierId = null;
-          _vat = false;
-          _rx = false;
-          _controlled = false;
-          _imageUrl = null;
-          _moreDetails = false;
-          _newMedicineId = generateUuidV4();
-        });
+        Navigator.pop(context, id);
       } else {
         AppSnackbar.success(context, 'Medicine saved.');
         Navigator.pop(context, id);

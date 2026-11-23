@@ -271,6 +271,6 @@ void main() {
     expect(fakeSales.lastShiftId, 'shift-1');
     expect(fakeSales.lastItems, isNotEmpty);
     // Cart cleared - Pay button should be disabled / cart empty (0 items)
-    expect(find.textContaining('Cart (0 items)'), findsOneWidget);
+    expect(find.textContaining('Cart (0)'), findsOneWidget);
   });
 }

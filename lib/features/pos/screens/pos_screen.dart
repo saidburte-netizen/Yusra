@@ -669,8 +669,11 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                           setState(() => _showCart = true);
                           await _checkout(shift, settings);
                         },
-                  child: Text(
-                    'Cart (${_cart.itemCount}) · Total ${formatMoney(_cart.total(settings.vatRate))} · Pay',
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'Cart (${_cart.itemCount}) · ${formatMoney(_cart.total(settings.vatRate))} · Pay',
+                    ),
                   ),
                 ),
               ),

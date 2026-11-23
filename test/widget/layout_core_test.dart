@@ -88,7 +88,7 @@ void main() {
       expect(titleRect.height, lessThan(100));
     });
 
-    testWidgets('TopBar wraps title and actions at ${viewport.name}',
+    testWidgets('TopBar keeps title and actions on one row at ${viewport.name}',
         (tester) async {
       setTestSize(tester, viewport.size);
       final errors = captureFlutterErrors();
@@ -110,7 +110,9 @@ void main() {
       expect(find.text('Sales history'), findsOneWidget);
       final titleRect = tester.getRect(find.text('Sales history'));
       final bellRect = tester.getRect(find.byTooltip(S.alerts));
-      expect(titleRect.bottom, lessThanOrEqualTo(bellRect.top));
+      // Single-row top bar: title and actions share the same row.
+      expect(titleRect.top, lessThan(bellRect.bottom));
+      expect(titleRect.bottom, greaterThan(bellRect.top));
     });
 
     testWidgets('ResponsiveGrid does not overflow at ${viewport.name}',
