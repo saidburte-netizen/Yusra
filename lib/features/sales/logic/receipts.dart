@@ -104,7 +104,12 @@ abstract final class Receipts {
           pw.Divider(color: PdfColors.black),
           ...[
             for (final payment in payments)
-              _row(_methodLabel(payment.method), payment.amount),
+              _row(
+                payment.reference != null && payment.reference!.isNotEmpty
+                    ? '${_methodLabel(payment.method)} (${payment.reference})'
+                    : _methodLabel(payment.method),
+                payment.amount,
+              ),
           ],
           _row('Change', sale.changeDue),
           pw.SizedBox(height: 8),
@@ -252,7 +257,7 @@ abstract final class Receipts {
 
   static String _methodLabel(String method) => switch (method) {
         'cash' => 'Cash',
-        'mobile_money' => 'Mobile money',
+        'mobile_money' => 'Mobile banking',
         'card' => 'Card',
         'bank_transfer' => 'Bank transfer',
         _ => method,

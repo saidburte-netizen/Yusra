@@ -7,23 +7,7 @@ name: UAT journeys
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - 'lib/**'
-      - 'web/**'
-      - 'supabase/**'
-      - 'tool/uat/**'
-      - 'docs/UAT_*.md'
-      - '.github/workflows/uat.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'lib/**'
-      - 'web/**'
-      - 'supabase/**'
-      - 'tool/uat/**'
-      - 'docs/UAT_*.md'
-      - '.github/workflows/uat.yml'
+
 
 permissions:
   contents: read

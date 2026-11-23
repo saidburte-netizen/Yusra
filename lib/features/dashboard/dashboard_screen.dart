@@ -671,6 +671,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   RealtimeChannel? _channel;
   ActivityRange _range = ActivityRange.today;
   String? _branchId;
+  DateTime? _lastLoadAt;
+  bool _wasVisible = false;
 
   @override
   void initState() {
@@ -693,6 +695,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       SupabaseService.client.removeChannel(channel);
     }
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final visible = GoRouterState.of(context).uri.path == '/dashboard';
+    if (visible && !_wasVisible) {
+      final stale = _lastLoadAt == null ||
+          DateTime.now().difference(_lastLoadAt!) > const Duration(seconds: 5);
+      if (stale && !_loading) _load();
+    }
+    _wasVisible = visible;
   }
 
   /// Counters must stay live while the screen is open: a sale or a stock
@@ -763,6 +777,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       setState(() {
         _data = data;
         _loading = false;
+        _lastLoadAt = DateTime.now();
       });
     } catch (e) {
       if (!mounted) return;
@@ -1545,50 +1560,6 @@ class _DashboardBody extends StatelessWidget {
           runSpacing: 16,
           crossAxisAlignment: WrapCrossAlignment.start,
           children: [
-            _Panel(
-              width: 520,
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text('${S.activity} · ${range.label}',
-                                style: Theme.of(context).textTheme.titleMedium),
-                          ),
-                          if (can(role, Modules.audit, PermAction.view))
-                            TextButton(
-                              onPressed: () => context.go('/admin/audit'),
-                              child: const Text(S.view),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      if (data.recentActivityLog.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 20),
-                          child: Center(child: Text(S.noActivity)),
-                        )
-                      else
-                        ...data.recentActivityLog.take(6).map(
-                              (entry) => ListTile(
-                                dense: true,
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(entry.displayAction),
-                                subtitle:
-                                    Text('${entry.email} · ${entry.role}'),
-                                trailing: Text(
-                                    formatDateTime(entry.createdAt.toUtc())),
-                              ),
-                            ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
             _Panel(
               width: 420,
               child: Card(

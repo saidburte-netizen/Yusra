@@ -1,6 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/customers/data/customers.dart';
+import '../../features/dashboard/dashboard_screen.dart'
+    show
+        dashboardExpectedExpensesProvider,
+        dashboardPharmacyValueProvider,
+        dashboardRefreshProvider;
 import '../../features/inventory/data/inventory_providers.dart';
 import '../../features/prescriptions/data/prescriptions.dart';
 import '../../features/purchasing/data/purchasing.dart';
@@ -33,6 +38,8 @@ abstract final class Mutation {
   static const saveCustomer = 'save_customer';
   static const saveSupplier = 'save_supplier';
   static const savePrescription = 'save_prescription';
+  static const createExpense = 'create_expense';
+  static const deleteExpense = 'delete_expense';
 }
 
 typedef InvalidateFn = void Function(ProviderOrFamily provider);
@@ -99,6 +106,9 @@ const branchScopedTags = <String>[
 /// listed mutation. A mutation never relies on the user reloading a screen.
 final mutationDependents = <String, List<ProviderOrFamily>>{
   Mutation.createSale: <ProviderOrFamily>[
+    dashboardRefreshProvider,
+    dashboardPharmacyValueProvider,
+    dashboardExpectedExpensesProvider,
     salesProvider,
     saleProvider,
     saleItemsProvider,
@@ -113,6 +123,9 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
     activityProvider,
   ],
   Mutation.processSaleReturn: <ProviderOrFamily>[
+    dashboardRefreshProvider,
+    dashboardPharmacyValueProvider,
+    dashboardExpectedExpensesProvider,
     saleReturnsProvider,
     salesProvider,
     saleProvider,
@@ -123,6 +136,9 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
     activityProvider,
   ],
   Mutation.voidSale: <ProviderOrFamily>[
+    dashboardRefreshProvider,
+    dashboardPharmacyValueProvider,
+    dashboardExpectedExpensesProvider,
     salesProvider,
     saleProvider,
     saleReturnsProvider,
@@ -131,6 +147,9 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
     activityProvider,
   ],
   Mutation.receivePurchaseOrder: <ProviderOrFamily>[
+    dashboardRefreshProvider,
+    dashboardPharmacyValueProvider,
+    dashboardExpectedExpensesProvider,
     purchaseOrdersProvider,
     purchaseOrderProvider,
     purchaseItemsProvider,
@@ -149,6 +168,9 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
     activityProvider,
   ],
   Mutation.addOpeningStock: <ProviderOrFamily>[
+    dashboardRefreshProvider,
+    dashboardPharmacyValueProvider,
+    dashboardExpectedExpensesProvider,
     stockSummaryProvider,
     batchesProvider,
     lowStockProvider,
@@ -159,16 +181,25 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
     activityProvider,
   ],
   Mutation.openShift: <ProviderOrFamily>[
+    dashboardRefreshProvider,
+    dashboardPharmacyValueProvider,
+    dashboardExpectedExpensesProvider,
     myOpenShiftProvider,
     shiftsProvider,
     activityProvider,
   ],
   Mutation.closeShift: <ProviderOrFamily>[
+    dashboardRefreshProvider,
+    dashboardPharmacyValueProvider,
+    dashboardExpectedExpensesProvider,
     myOpenShiftProvider,
     shiftsProvider,
     activityProvider,
   ],
   Mutation.adjustStock: <ProviderOrFamily>[
+    dashboardRefreshProvider,
+    dashboardPharmacyValueProvider,
+    dashboardExpectedExpensesProvider,
     stockSummaryProvider,
     batchesProvider,
     lowStockProvider,
@@ -177,6 +208,9 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
     activityProvider,
   ],
   Mutation.saveMedicine: <ProviderOrFamily>[
+    dashboardRefreshProvider,
+    dashboardPharmacyValueProvider,
+    dashboardExpectedExpensesProvider,
     medicinesProvider,
     categoriesProvider,
     stockSummaryProvider,
@@ -208,6 +242,18 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
     prescriptionsProvider,
     activityProvider,
   ],
+  Mutation.createExpense: <ProviderOrFamily>[
+    dashboardRefreshProvider,
+    dashboardPharmacyValueProvider,
+    dashboardExpectedExpensesProvider,
+    activityProvider,
+  ],
+  Mutation.deleteExpense: <ProviderOrFamily>[
+    dashboardRefreshProvider,
+    dashboardPharmacyValueProvider,
+    dashboardExpectedExpensesProvider,
+    activityProvider,
+  ],
 };
 
 /// Cache groups dropped by each mutation. Catalogue is invalidated only by
@@ -228,6 +274,8 @@ final mutationCacheTags = <String, Set<String>>{
   Mutation.saveCustomer: <String>{CacheTag.customers},
   Mutation.saveSupplier: <String>{CacheTag.customers},
   Mutation.savePrescription: <String>{CacheTag.prescriptions},
+  Mutation.createExpense: <String>{CacheTag.reports},
+  Mutation.deleteExpense: <String>{CacheTag.reports},
 };
 
 /// Applies the graph through any invalidate function. Keeping this a free
@@ -236,6 +284,7 @@ final mutationCacheTags = <String, Set<String>>{
 void refreshAfterMutation(InvalidateFn invalidate, String mutation) {
   for (final provider
       in mutationDependents[mutation] ?? const <ProviderOrFamily>[]) {
+    if (provider == dashboardRefreshProvider) continue;
     invalidate(provider);
   }
 }
@@ -255,12 +304,23 @@ void clearMutationCache(Ref ref, String mutation) {
   if (tags != null) ref.read(appCacheProvider).invalidateAll(tags);
 }
 
+void _bumpDashboardIfNeeded(dynamic ref, String mutation) {
+  final deps = mutationDependents[mutation] ?? const <ProviderOrFamily>[];
+  if (deps.contains(dashboardRefreshProvider)) {
+    try {
+      final n = (ref as dynamic).read(dashboardRefreshProvider);
+      (ref as dynamic).read(dashboardRefreshProvider.notifier).state = n + 1;
+    } catch (_) {}
+  }
+}
+
 extension RefInvalidationGraph on Ref {
   /// Call once after a successful write: refreshes every dependent provider
   /// and drops the affected cache groups — no manual reload required.
   void applyMutation(String mutation) {
     clearMutationCache(this, mutation);
     refreshAfterMutation(invalidate, mutation);
+    _bumpDashboardIfNeeded(this, mutation);
   }
 }
 
@@ -269,6 +329,7 @@ extension WidgetRefInvalidationGraph on WidgetRef {
     read(appCacheProvider)
         .invalidateAll(mutationCacheTags[mutation] ?? const <String>{});
     refreshAfterMutation(invalidate, mutation);
+    _bumpDashboardIfNeeded(this, mutation);
   }
 }
 

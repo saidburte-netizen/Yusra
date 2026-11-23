@@ -10,6 +10,7 @@ import '../../core/state/app_cache.dart';
 import '../../core/strings.dart';
 import '../../core/supabase_client.dart';
 import '../../core/widgets.dart';
+import '../dashboard/dashboard_screen.dart' show dashboardRefreshProvider;
 
 class UsersScreen extends ConsumerStatefulWidget {
   const UsersScreen({
@@ -275,6 +276,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
         );
       }
       if (!mounted) return;
+      ref.read(dashboardRefreshProvider.notifier).state++;
       AppSnackbar.success(context, 'Staff member created.');
     } catch (e) {
       if (!mounted) return;
@@ -313,6 +315,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       if (!mounted) return;
       await _afterUserMutation(user['id']);
       if (!mounted) return;
+      ref.read(dashboardRefreshProvider.notifier).state++;
       AppSnackbar.success(context, 'User access updated.');
       await _load();
     } catch (e) {
@@ -342,6 +345,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       if (!mounted) return;
       await _afterUserMutation(user['id']);
       if (!mounted) return;
+      ref.read(dashboardRefreshProvider.notifier).state++;
       AppSnackbar.success(
           context, active ? 'User reactivated.' : 'User deactivated.');
       await _load();

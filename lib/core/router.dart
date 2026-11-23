@@ -16,6 +16,7 @@ import '../features/auth/profile_error_screen.dart';
 import '../features/auth/profile_screen.dart';
 import '../features/auth/reset_password_screen.dart';
 import '../features/customers/customers_routes.dart';
+import '../features/dashboard/activity_log_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
 import '../features/dashboard/expected_expenses_screen.dart';
 import '../features/dashboard/pharmacy_value_screen.dart';
@@ -167,6 +168,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/settings/theme',
             builder: (context, state) => const ThemeScreen(),
+          ),
+          GoRoute(
+            path: '/activity',
+            builder: (context, state) => const ActivityLogScreen(),
           ),
           GoRoute(
             path: '/expenses',

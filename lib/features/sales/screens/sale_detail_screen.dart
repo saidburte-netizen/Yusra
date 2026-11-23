@@ -140,7 +140,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                       items: const [
                         DropdownMenuItem(value: 'cash', child: Text('Cash')),
                         DropdownMenuItem(
-                            value: 'mobile_money', child: Text('Mobile money')),
+                            value: 'mobile_money', child: Text('Mobile banking')),
                         DropdownMenuItem(value: 'card', child: Text('Card')),
                         DropdownMenuItem(
                             value: 'bank_transfer',
@@ -360,7 +360,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                             rows: [
                               for (final payment in rows)
                                 DataTablePlusRow(cells: [
-                                  payment.method.replaceAll('_', ' '),
+                                  payment.method == 'mobile_money' ? 'Mobile banking' : payment.method.replaceAll('_', ' '),
                                   payment.reference ?? '—',
                                   formatMoney(payment.amount),
                                 ]),

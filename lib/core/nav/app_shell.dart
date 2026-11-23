@@ -269,6 +269,8 @@ class _AppDrawer extends ConsumerWidget {
             item('Purchasing', Icons.shopping_cart_outlined,
                 '/purchasing/orders',
                 visible: _can(Modules.purchaseOrders)),
+            item('Activity log', Icons.history, '/activity',
+                visible: _can(Modules.audit)),
             section('Money'),
             item('Expenses', Icons.account_balance_wallet_outlined, '/expenses',
                 visible: _can(Modules.expenses)),

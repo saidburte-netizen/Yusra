@@ -285,7 +285,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                       DropdownMenuItem(value: null, child: Text('All methods')),
                       DropdownMenuItem(value: 'cash', child: Text('Cash')),
                       DropdownMenuItem(
-                          value: 'mobile_money', child: Text('Mobile money')),
+                          value: 'mobile_money', child: Text('Mobile banking')),
                       DropdownMenuItem(value: 'card', child: Text('Card')),
                       DropdownMenuItem(
                           value: 'bank_transfer', child: Text('Bank transfer')),

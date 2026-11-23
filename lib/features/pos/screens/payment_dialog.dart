@@ -11,10 +11,15 @@ double _paymentDialogWidth(BuildContext context) =>
 
 const _methods = [
   ('cash', 'Cash', Icons.money),
-  ('mobile_money', 'Mobile money', Icons.phone_android),
+  ('mobile_money', 'Mobile banking', Icons.phone_android),
   ('card', 'Card', Icons.credit_card),
   ('bank_transfer', 'Bank transfer', Icons.account_balance),
 ];
+
+bool _needsReference(String method) =>
+    method == 'mobile_money' || method == 'card' || method == 'bank_transfer';
+bool _requiresReference(String method) =>
+    method == 'mobile_money' || method == 'bank_transfer';
 
 /// Returns the payments to send to create_sale. Split payments are allowed;
 /// only cash may produce change (the RPC enforces the same rule).
@@ -29,13 +34,25 @@ Future<List<CartPayment>?> showPaymentDialog(
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setState) {
-        final paid = paidTotal(rows.map((row) => row.toPayment()).toList());
-        final change = changeDue(
-            total: total,
-            payments: rows.map((row) => row.toPayment()).toList());
+        final payments = rows.map((row) => row.toPayment()).toList();
+        final paid = paidTotal(payments);
+        final change = changeDue(total: total, payments: payments);
         final hasCash = rows.any((row) => row.method == 'cash');
-        final canSubmit =
-            rows.isNotEmpty && paid >= total && (paid == total || hasCash);
+        final missingRef = rows.any((r) =>
+            _requiresReference(r.method) &&
+            r.referenceController.text.trim().isEmpty);
+        final hasInvalidAmount = rows.any((r) => r.toPayment().amount <= 0);
+        String? amountError;
+        if (hasInvalidAmount) {
+          amountError = 'Enter a valid amount for each payment.';
+        } else if (paid < total) {
+          amountError = 'Paid amount is less than total.';
+        } else if (paid > total && !hasCash) {
+          amountError = 'Only cash can produce change. Add cash or adjust amounts.';
+        } else if (missingRef) {
+          amountError = 'Reference is required for mobile banking and bank transfer.';
+        }
+        final canSubmit = amountError == null;
 
         return AlertDialog(
           title: Text('Payment  •  ${formatMoney(total)}'),
@@ -46,8 +63,7 @@ Future<List<CartPayment>?> showPaymentDialog(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Quick cash',
-                      style: Theme.of(context).textTheme.labelLarge),
+                  Text('Quick cash', style: Theme.of(context).textTheme.labelLarge),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -57,10 +73,7 @@ Future<List<CartPayment>?> showPaymentDialog(
                           label: Text(formatMoney(amount)),
                           onPressed: () => setState(() {
                             rows.removeWhere((row) => row.method == 'cash');
-                            rows.insert(
-                              0,
-                              _PaymentRow(method: 'cash', amount: amount),
-                            );
+                            rows.insert(0, _PaymentRow(method: 'cash', amount: amount));
                           }),
                         ),
                     ],
@@ -79,17 +92,12 @@ Future<List<CartPayment>?> showPaymentDialog(
                               value: row.method,
                               isDense: true,
                               isExpanded: true,
-                              decoration: const InputDecoration(
-                                  labelText: 'Method', isDense: true),
+                              decoration: const InputDecoration(labelText: 'Method', isDense: true),
                               items: [
                                 for (final method in _methods)
-                                  DropdownMenuItem(
-                                    value: method.$1,
-                                    child: Text(method.$2),
-                                  ),
+                                  DropdownMenuItem(value: method.$1, child: Text(method.$2)),
                               ],
-                              onChanged: (value) =>
-                                  setState(() => row.method = value ?? 'cash'),
+                              onChanged: (value) => setState(() => row.method = value ?? 'cash'),
                             ),
                             const SizedBox(height: 8),
                             Row(
@@ -98,22 +106,27 @@ Future<List<CartPayment>?> showPaymentDialog(
                                   child: AppTextField(
                                     label: 'Amount',
                                     controller: row.amountController,
-                                    keyboardType:
-                                        const TextInputType.numberWithOptions(
-                                            decimal: true),
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                     onChanged: (_) => setState(() {}),
                                   ),
                                 ),
                                 IconButton(
                                   tooltip: 'Remove',
                                   icon: const Icon(Icons.delete_outline),
-                                  onPressed: rows.length == 1
-                                      ? null
-                                      : () =>
-                                          setState(() => rows.removeAt(index)),
+                                  onPressed: rows.length == 1 ? null : () => setState(() => rows.removeAt(index)),
                                 ),
                               ],
                             ),
+                            if (_needsReference(row.method)) ...[
+                              const SizedBox(height: 8),
+                              AppTextField(
+                                label: _requiresReference(row.method)
+                                    ? 'Reference / transaction number *'
+                                    : 'Reference / transaction number',
+                                controller: row.referenceController,
+                                onChanged: (_) => setState(() {}),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -122,56 +135,33 @@ Future<List<CartPayment>?> showPaymentDialog(
                   TextButton.icon(
                     icon: const Icon(Icons.add, size: 18),
                     label: const Text('Add another payment'),
-                    onPressed: () => setState(
-                        () => rows.add(_PaymentRow(method: 'card', amount: 0))),
+                    onPressed: () => setState(() => rows.add(_PaymentRow(method: 'card', amount: 0))),
                   ),
                   const Divider(),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Paid'),
-                      Text(formatMoney(paid),
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ],
+                    children: [const Text('Paid'), Text(formatMoney(paid), style: const TextStyle(fontWeight: FontWeight.bold))],
                   ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Change'),
-                      Text(formatMoney(change),
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: change > 0 ? AppColors.success : null,
-                          )),
+                      Text(formatMoney(change), style: TextStyle(fontWeight: FontWeight.bold, color: change > 0 ? AppColors.success : null)),
                     ],
                   ),
-                  if (!canSubmit && paid > total && !hasCash)
+                  if (amountError != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        'Add a cash payment to give change.',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: AppColors.danger),
-                      ),
+                      child: Text(amountError, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.danger)),
                     ),
                 ],
               ),
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(S.cancel),
-            ),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text(S.cancel)),
             ElevatedButton(
-              onPressed: canSubmit
-                  ? () => Navigator.pop(
-                        context,
-                        rows.map((row) => row.toPayment()).toList(),
-                      )
-                  : null,
+              onPressed: canSubmit ? () => Navigator.pop(context, payments) : null,
               child: Text('Confirm ${formatMoney(total)}'),
             ),
           ],
@@ -182,18 +172,17 @@ Future<List<CartPayment>?> showPaymentDialog(
 }
 
 class _PaymentRow {
-  _PaymentRow({
-    required this.method,
-    required double amount,
-  }) : amountController = TextEditingController(
-          text: amount == 0 ? '' : amount.toStringAsFixed(2),
-        );
+  _PaymentRow({required this.method, required double amount})
+      : amountController = TextEditingController(text: amount == 0 ? '' : amount.toStringAsFixed(2)),
+        referenceController = TextEditingController();
 
   String method;
   final TextEditingController amountController;
+  final TextEditingController referenceController;
 
   CartPayment toPayment() => CartPayment(
         method: method,
         amount: double.tryParse(amountController.text.replaceAll(',', '')) ?? 0,
+        reference: referenceController.text.trim().isEmpty ? null : referenceController.text.trim(),
       );
 }
