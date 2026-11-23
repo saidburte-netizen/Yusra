@@ -20,8 +20,7 @@ class YusraApp extends ConsumerWidget {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: mode,
-      themeAnimationDuration: const Duration(milliseconds: 250),
-      themeAnimationCurve: Curves.easeInOut,
+      themeAnimationDuration: Duration.zero,
       routerConfig: ref.watch(appRouterProvider),
       debugShowCheckedModeBanner: false,
       builder: (context, child) => AppTheme.pageBackground(

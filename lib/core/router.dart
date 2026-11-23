@@ -32,33 +32,11 @@ import 'strings.dart';
 import 'theme/app_colors.dart';
 import 'widgets.dart';
 
-CustomTransitionPage<void> _fadeSlidePage({
+Page<void> _fadePage({
   required GoRouterState state,
   required Widget child,
 }) {
-  return CustomTransitionPage<void>(
-    key: state.pageKey,
-    transitionDuration: const Duration(milliseconds: 220),
-    reverseTransitionDuration: const Duration(milliseconds: 200),
-    child: child,
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      );
-      return FadeTransition(
-        opacity: curved,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0.03, 0),
-            end: Offset.zero,
-          ).animate(curved),
-          child: child,
-        ),
-      );
-    },
-  );
+  return NoTransitionPage<void>(key: state.pageKey, child: child);
 }
 
 RouteBase _withTransition(RouteBase route) {
@@ -77,7 +55,7 @@ RouteBase _withTransition(RouteBase route) {
           (builder == null
               ? null
               : (context, state) =>
-                  _fadeSlidePage(state: state, child: builder(context, state))),
+                  _fadePage(state: state, child: builder(context, state))),
     );
   }
   if (route is ShellRoute) {

@@ -561,7 +561,7 @@ class _NeedsOrderingScreenState extends ConsumerState<NeedsOrderingScreen> {
 
     final branch = ref.watch(branchScopeProvider);
     final state = ref.watch(reorderSuggestionsProvider(branch));
-    final rows = state.value ?? const <ReorderSuggestion>[];
+    final rows = state.valueOrNull ?? const <ReorderSuggestion>[];
 
     return Scaffold(
       body: SafeArea(

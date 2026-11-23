@@ -523,43 +523,61 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                   ? 'Open a cash shift before selling'
                   : 'Shift open  •  ${formatDateTime(shift.openedAt ?? DateTime.now())}',
               actions: [
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: SecondaryButton(
-                    label: 'Held (${_heldStore?.list().length ?? 0})',
-                    icon: Icons.bookmark_border,
-                    width: 110,
-                    onPressed: _resumeCart,
-                  ),
-                ),
-                if (!wide)
+                if (wide) ...[
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: SecondaryButton(
-                      label: 'Cart (${_cart.itemCount})',
-                      icon: Icons.shopping_cart,
+                      label: 'Held (${_heldStore?.list().length ?? 0})',
+                      icon: Icons.bookmark_border,
                       width: 110,
-                      onPressed: () => setState(() => _showCart = true),
+                      onPressed: _resumeCart,
                     ),
                   ),
-                if (shift != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: SecondaryButton(
-                      label: 'Close shift',
-                      icon: Icons.lock_outline,
-                      width: 110,
-                      onPressed: () => _closeShift(shift),
+                  if (shift != null)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: SecondaryButton(
+                        label: 'Close shift',
+                        icon: Icons.lock_outline,
+                        width: 110,
+                        onPressed: () => _closeShift(shift),
+                      ),
                     ),
+                  IconButton(
+                    tooltip: S.refresh,
+                    onPressed: () {
+                      ref.invalidate(posMedicinesProvider);
+                      ref.invalidate(stockSummaryProvider);
+                    },
+                    icon: const Icon(Icons.refresh),
                   ),
-                IconButton(
-                  tooltip: S.refresh,
-                  onPressed: () {
-                    ref.invalidate(posMedicinesProvider);
-                    ref.invalidate(stockSummaryProvider);
-                  },
-                  icon: const Icon(Icons.refresh),
-                ),
+                ] else
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert),
+                    onSelected: (value) {
+                      if (value == 'held') _resumeCart();
+                      if (value == 'close' && shift != null) _closeShift(shift);
+                      if (value == 'refresh') {
+                        ref.invalidate(posMedicinesProvider);
+                        ref.invalidate(stockSummaryProvider);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'held',
+                        child: Text('Held (${_heldStore?.list().length ?? 0})'),
+                      ),
+                      if (shift != null)
+                        const PopupMenuItem(
+                          value: 'close',
+                          child: Text('Close shift'),
+                        ),
+                      const PopupMenuItem(
+                        value: 'refresh',
+                        child: Text('Refresh'),
+                      ),
+                    ],
+                  ),
               ],
             ),
             if (settingsState.hasError)
@@ -571,32 +589,19 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                 ),
               ),
             if (shift == null)
-              Card(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? AppColors.darkElevated
-                    : AppColors.pink50,
+              Center(
                 child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      const Icon(Icons.info_outline, color: AppColors.warning),
-                      SizedBox(
-                        width: (MediaQuery.sizeOf(context).width - 130)
-                            .clamp(170.0, 360.0)
-                            .toDouble(),
-                        child: const Text(
-                          'You need an open cash shift to make a sale.',
-                        ),
-                      ),
-                      ElevatedButton.icon(
-                        onPressed: _openShift,
-                        icon: const Icon(Icons.play_arrow),
-                        label: const Text('Open shift'),
-                      ),
-                    ],
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: FilledButton.icon(
+                    onPressed: _openShift,
+                    icon: const Icon(Icons.play_arrow, size: 28),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 32, vertical: 20),
+                      textStyle: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w600),
+                    ),
+                    label: const Text('Open shift'),
                   ),
                 ),
               ),
@@ -647,6 +652,25 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           ],
         ),
       ),
+      bottomNavigationBar: !wide
+          ? SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: FilledButton(
+                  onPressed: (_cart.isEmpty || shift == null)
+                      ? null
+                      : () async {
+                          setState(() => _showCart = true);
+                          await _checkout(shift, settings);
+                        },
+                  child: Text(
+                    'Cart (${_cart.itemCount} items) · Total ${formatMoney(_cart.total(settings.vatRate))} · Pay',
+                  ),
+                ),
+              ),
+            )
+          : null,
       bottomSheet: !wide && _showCart && MediaQuery.sizeOf(context).height > 480
           ? SizedBox(
               height: MediaQuery.sizeOf(context).height * 0.72,
@@ -744,15 +768,20 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                                 stock[medicine.id]?.availableQty ?? 0;
                             return Card(
                               child: InkWell(
-                                onTap: available < 1
-                                    ? null
-                                    : () {
-                                        final line = _lineFor(
-                                            medicine, stock[medicine.id]);
-                                        if (line != null) {
-                                          _updateCart(_cart.add(line));
-                                        }
-                                      },
+                                onTap: () {
+                                  if (available < 1) {
+                                    AppSnackbar.error(
+                                      context,
+                                      'No stock. Add opening stock in Inventory → Opening stock.',
+                                    );
+                                    return;
+                                  }
+                                  final line =
+                                      _lineFor(medicine, stock[medicine.id]);
+                                  if (line != null) {
+                                    _updateCart(_cart.add(line));
+                                  }
+                                },
                                 borderRadius:
                                     BorderRadius.circular(AppColors.radius),
                                 child: Padding(

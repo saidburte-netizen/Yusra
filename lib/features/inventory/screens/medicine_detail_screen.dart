@@ -29,8 +29,9 @@ class MedicineDetailScreen extends ConsumerWidget {
     ));
     final role = ref.watch(authProvider).profile?.role ?? AppRole.cashier;
     final canEdit = can(role, Modules.stock, PermAction.edit);
-    final medicine =
-        medicineState.value?.where((item) => item.id == medicineId).firstOrNull;
+    final medicine = medicineState.valueOrNull
+        ?.where((item) => item.id == medicineId)
+        .firstOrNull;
     void retry() => ref.invalidate(medicinesProvider(listFilter));
 
     return Scaffold(
