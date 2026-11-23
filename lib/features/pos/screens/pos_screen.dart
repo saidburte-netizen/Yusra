@@ -27,6 +27,11 @@ import '../../sales/logic/held_carts.dart';
 import '../../sales/logic/receipts.dart';
 import 'payment_dialog.dart';
 
+final posMedicinesProvider =
+    FutureProvider.autoDispose<List<Medicine>>((ref) async {
+  return ref.read(inventoryRepositoryProvider).medicines(limit: 1000);
+});
+
 class PosScreen extends ConsumerStatefulWidget {
   const PosScreen({super.key});
 
@@ -477,8 +482,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   Widget build(BuildContext context) {
     final shiftState = ref.watch(myOpenShiftProvider);
     final settingsState = ref.watch(receiptSettingsProvider);
-    final medicinesState =
-        ref.watch(medicinesProvider((query: '', categoryId: null)));
+    final medicinesState = ref.watch(posMedicinesProvider);
     final stockState = ref.watch(stockSummaryProvider);
     final role = ref.watch(authProvider).profile?.role ?? AppRole.cashier;
     final canSell = can(role, Modules.pos, PermAction.edit);
@@ -551,7 +555,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                 IconButton(
                   tooltip: S.refresh,
                   onPressed: () {
-                    ref.invalidate(medicinesProvider);
+                    ref.invalidate(posMedicinesProvider);
                     ref.invalidate(stockSummaryProvider);
                   },
                   icon: const Icon(Icons.refresh),
@@ -716,7 +720,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                               (medicinesState.error ?? stockState.error)!)
                           .message,
                       onRetry: () {
-                        ref.invalidate(medicinesProvider);
+                        ref.invalidate(posMedicinesProvider);
                         ref.invalidate(stockSummaryProvider);
                       },
                     )
