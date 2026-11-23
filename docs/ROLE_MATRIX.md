@@ -23,20 +23,22 @@ Router gates routes through `moduleForLocation()` + `can(role, module, view)` (l
 
 | Route | Screen | Module (router) | Router allows | Bottom nav | Drawer | Dashboard quick actions | Code |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `/login` | LoginScreen | — | any authenticated | — | — | — | lib/core/router.dart:117 |
-| `/forgot-password` | ForgotPasswordScreen | — | any authenticated | — | — | — | lib/core/router.dart:121 |
-| `/reset-password` | ResetPasswordScreen | — | any authenticated | — | — | — | lib/core/router.dart:125 |
-| `/forbidden` | ForbiddenScreen | — | any authenticated | — | — | — | lib/core/router.dart:129 |
-| `/profile_error` | ProfileErrorScreen | — | any authenticated | — | — | — | lib/core/router.dart:133 |
-| `/dashboard` | DashboardScreen | dashboard | all 6 | all 6 | all 6 | — | lib/core/router.dart:140 |
-| `/profile` | ProfileScreen | dashboard | all 6 | — | all 6 | store_keeper | lib/core/router.dart:144 |
-| `/expenses` | ExpensesScreen | expenses | super_admin, admin, accountant | — | super_admin, admin, accountant | — | lib/core/router.dart:148 |
-| `/reports` | ReportsScreen | reports | super_admin, admin, accountant | — | super_admin, admin, accountant | — | lib/core/router.dart:152 |
-| `/admin/users` | UsersScreen | users | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:156 |
-| `/admin/team` | TeamAccessScreen | teamAccess | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:160 |
-| `/admin/branches` | BranchesScreen | branches | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:164 |
-| `/admin/settings` | SettingsScreen | settings | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:168 |
-| `/admin/audit` | AuditScreen | audit | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:172 |
+| `/login` | LoginScreen | — | any authenticated | — | — | — | lib/core/router.dart:119 |
+| `/forgot-password` | ForgotPasswordScreen | — | any authenticated | — | — | — | lib/core/router.dart:123 |
+| `/reset-password` | ResetPasswordScreen | — | any authenticated | — | — | — | lib/core/router.dart:127 |
+| `/forbidden` | ForbiddenScreen | — | any authenticated | — | — | — | lib/core/router.dart:131 |
+| `/profile_error` | ProfileErrorScreen | — | any authenticated | — | — | — | lib/core/router.dart:135 |
+| `/dashboard` | DashboardScreen | dashboard | all 6 | all 6 | all 6 | — | lib/core/router.dart:142 |
+| `pharmacy-value` | PharmacyValueScreen | — | any authenticated | — | — | — | lib/core/router.dart:146 |
+| `expected-expenses` | ExpectedExpensesScreen | — | any authenticated | — | — | — | lib/core/router.dart:150 |
+| `/profile` | ProfileScreen | dashboard | all 6 | — | all 6 | store_keeper | lib/core/router.dart:156 |
+| `/expenses` | ExpensesScreen | expenses | super_admin, admin, accountant | — | super_admin, admin, accountant | — | lib/core/router.dart:160 |
+| `/reports` | ReportsScreen | reports | super_admin, admin, accountant | — | super_admin, admin, accountant | — | lib/core/router.dart:164 |
+| `/admin/users` | UsersScreen | users | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:168 |
+| `/admin/team` | TeamAccessScreen | teamAccess | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:172 |
+| `/admin/branches` | BranchesScreen | branches | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:176 |
+| `/admin/settings` | SettingsScreen | settings | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:180 |
+| `/admin/audit` | AuditScreen | audit | super_admin, admin | — | super_admin, admin | — | lib/core/router.dart:184 |
 | `/customers` | CustomersScreen | customers | super_admin, admin, pharmacist, cashier, accountant | — | super_admin, admin, pharmacist, cashier, accountant | — | lib/features/customers/customers_routes.dart:7 |
 | `/customers/:id` | CustomerDetailScreen | customers | super_admin, admin, pharmacist, cashier, accountant | — | — | — | lib/features/customers/customers_routes.dart:11 |
 | `/inventory` | StockOverviewScreen | medicines | all 6 | all 6 | all 6 | all 6 | lib/features/inventory/inventory_routes.dart:18 |
@@ -210,6 +212,8 @@ Unmapped database objects (must be `internal` to be ignored by the test):
 | `policy:rls_branding_read` | super_admin, admin, pharmacist, cashier, store_keeper, accountant | yes | supabase/migrations/0019_hardening_fixes.sql:601 |
 | `policy:rls_categories_read` | super_admin, admin, pharmacist, cashier, store_keeper, accountant | yes | supabase/migrations/0012_rls_hardening.sql:58 |
 | `policy:rls_customers_read` | super_admin, admin, pharmacist, cashier, store_keeper, accountant | yes | supabase/migrations/0012_rls_hardening.sql:67 |
+| `policy:rls_expected_expenses_read` | super_admin, admin, pharmacist, cashier, store_keeper, accountant | yes | supabase/migrations/0025_expected_expenses.sql:23 |
+| `policy:rls_expected_expenses_write` | super_admin, admin | NO | supabase/migrations/0025_expected_expenses.sql:31 |
 | `policy:rls_expenses_read` | super_admin, admin, pharmacist, cashier, store_keeper, accountant | yes | supabase/migrations/0012_rls_hardening.sql:119 |
 | `policy:rls_medicine_images_delete` | super_admin, admin, pharmacist, store_keeper | yes | supabase/migrations/0019_hardening_fixes.sql:622 |
 | `policy:rls_medicine_images_read` | super_admin, admin, pharmacist, cashier, store_keeper, accountant | yes | supabase/migrations/0019_hardening_fixes.sql:613 |
@@ -260,4 +264,5 @@ Unmapped database objects (must be `internal` to be ignored by the test):
 - audit.requestCorrection / store_keeper: rpc.request_activity_correction supabase/migrations/0019_hardening_fixes.sql:158 allows store_keeper but UI lib/features/admin/audit_screen.dart:240 hides "Request activity correction"
 - audit.requestCorrection / accountant: rpc.request_activity_correction supabase/migrations/0019_hardening_fixes.sql:158 allows accountant but UI lib/features/admin/audit_screen.dart:240 hides "Request activity correction"
 - function:update_staff_profile: supabase/migrations/0024_staff_fields.sql:13 is not marked internal and has no UI action
+- policy:rls_expected_expenses_write: supabase/migrations/0025_expected_expenses.sql:31 is not marked internal and has no UI action
 

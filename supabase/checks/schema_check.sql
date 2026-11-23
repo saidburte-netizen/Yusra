@@ -11,7 +11,7 @@ with expected_tables(name) as (
          ('purchase_order_items'), ('stock_batches'), ('stock_movements'),
          ('customers'), ('prescriptions'), ('shifts'), ('sales'), ('sale_items'),
          ('sale_payments'), ('sale_returns'), ('sale_return_items'), ('expenses'),
-         ('activity_log')
+         ('expected_expenses'), ('activity_log')
 ),
 expected_views(name) as (
   values ('v_stock_summary'), ('v_low_stock'), ('v_expiring_batches'), ('v_daily_sales'),
@@ -65,10 +65,10 @@ expected_policies(name) as (
          ('rls_poi_read'), ('rls_batches_read'), ('rls_movements_read'),
          ('rls_rx_read'), ('rls_shifts_read'), ('rls_sales_read'),
          ('rls_sale_items_read'), ('rls_sale_payments_read'), ('rls_returns_read'),
-         ('rls_return_items_read'), ('rls_expenses_read'), ('rls_categories_write'),
+         ('rls_return_items_read'), ('rls_expenses_read'), ('rls_expected_expenses_read'), ('rls_categories_write'),
          ('rls_medicines_write'), ('rls_suppliers_write'), ('rls_customers_write'),
          ('rls_settings_write'), ('rls_branches_write'), ('rls_po_write'),
-         ('rls_poi_write'), ('rls_rx_write'), ('rls_expenses_write'),
+         ('rls_poi_write'), ('rls_rx_write'), ('rls_expenses_write'), ('rls_expected_expenses_write'),
          ('rls_rx_storage_read'), ('rls_rx_storage_write'), ('rls_rx_storage_delete'),
          ('rls_receipts_read'), ('rls_receipts_write'),
          ('rls_avatars_read'), ('rls_avatars_write'), ('rls_avatars_update'), ('rls_avatars_delete'),

@@ -38,7 +38,8 @@
     "supabase/migrations/0019_hardening_fixes.sql",
     "supabase/migrations/0022_opening_stock_reorder.sql",
     "supabase/migrations/0023_review_fixes.sql",
-    "supabase/migrations/0024_staff_fields.sql"
+    "supabase/migrations/0024_staff_fields.sql",
+    "supabase/migrations/0025_expected_expenses.sql"
   ],
   "operations": {
     "rls.branches.write": {
@@ -999,6 +1000,30 @@
       "all_authenticated": true,
       "internal": true,
       "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_expected_expenses_read": {
+      "roles": [
+        "accountant",
+        "admin",
+        "cashier",
+        "pharmacist",
+        "store_keeper",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0025_expected_expenses.sql:23",
+      "all_authenticated": true,
+      "internal": true,
+      "note": "Backing policy for list screens, storage lifecycle or RPC-managed rows"
+    },
+    "policy:rls_expected_expenses_write": {
+      "roles": [
+        "admin",
+        "super_admin"
+      ],
+      "evidence": "supabase/migrations/0025_expected_expenses.sql:31",
+      "all_authenticated": false,
+      "internal": false,
+      "note": "No UI action mapped"
     },
     "policy:rls_expenses_read": {
       "roles": [

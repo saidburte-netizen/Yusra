@@ -899,6 +899,10 @@ const Map<String, String> _dashboardFieldSources = {
   'topMedicines': 'sale_items',
   'recentActivityLog': 'activity_log',
   'teamStatus': 'profiles',
+  'pharmacyStockValueCost': 'v_stock_summary',
+  'pharmacyStockValueRetail': 'v_stock_summary',
+  'expectedExpenseTotal': 'expected_expenses',
+  'expectedExpenseOverdue': 'expected_expenses',
 };
 
 // ---------------------------------------------------------------------------
@@ -1182,7 +1186,11 @@ class WiringAudit {
         if (isParam) return t.startsWith('$prefix/');
         // A button to a child path proves this parent path is live too, e.g.
         // `/inventory/medicines/:id` implies `/inventory/medicines`.
-        return t.startsWith('$prefix/');
+        if (t.startsWith('$prefix/')) return true;
+        // Child routes may be recorded as relative paths (e.g. "pharmacy-value")
+        // while navigation uses the full path (/dashboard/pharmacy-value).
+        final full = route.path.startsWith('/') ? route.path : '/$route.path';
+        return t == full || t.endsWith('/${route.path}');
       });
       if (!isReachable) {
         result.add(Gap(

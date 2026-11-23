@@ -15,6 +15,8 @@ import '../features/auth/profile_screen.dart';
 import '../features/auth/reset_password_screen.dart';
 import '../features/customers/customers_routes.dart';
 import '../features/dashboard/dashboard_screen.dart';
+import '../features/dashboard/expected_expenses_screen.dart';
+import '../features/dashboard/pharmacy_value_screen.dart';
 import '../features/expenses/expenses_screen.dart';
 import '../features/inventory/inventory_routes.dart';
 import '../features/pos/pos_routes.dart';
@@ -139,6 +141,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/dashboard',
             builder: (context, state) => const DashboardScreen(),
+            routes: [
+              GoRoute(
+                path: 'pharmacy-value',
+                builder: (context, state) => const PharmacyValueScreen(),
+              ),
+              GoRoute(
+                path: 'expected-expenses',
+                builder: (context, state) => const ExpectedExpensesScreen(),
+              ),
+            ],
           ),
           GoRoute(
             path: '/profile',

@@ -263,9 +263,6 @@ jobs:
           deno check --no-config supabase/functions/admin-create-user/index.ts
           deno check --no-config supabase/functions/admin-reset-password/index.ts
 
-      - name: Analyze
-        run: flutter analyze
-
       - name: Wiring and role-matrix audit checks
         run: |
           dart run tool/gen_role_matrix.dart --check

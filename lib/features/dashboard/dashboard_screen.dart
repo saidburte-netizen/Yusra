@@ -75,6 +75,12 @@ class DashboardSnapshot {
     this.recentActivityLog = const [],
     this.failedSections = const [],
     this.teamStatus = const [],
+    this.pharmacyStockValueCost,
+    this.pharmacyStockValueRetail,
+    this.pharmacyStockByCategory = const [],
+    this.expectedExpenseTotal,
+    this.expectedExpenseOverdue,
+    this.expectedExpenseItems = const [],
   });
 
   final double? todaySales;
@@ -102,6 +108,16 @@ class DashboardSnapshot {
   /// Human-readable names of queries that failed; drives the partial-data banner.
   final List<String> failedSections;
   final List<TeamMemberStatus> teamStatus;
+
+  /// Overall pharmacy stock value (available qty * unit cost/selling price).
+  final double? pharmacyStockValueCost;
+  final double? pharmacyStockValueRetail;
+  final List<Map<String, dynamic>> pharmacyStockByCategory;
+
+  /// Expected expenses (salaries, rent, other configured types) and overdue.
+  final double? expectedExpenseTotal;
+  final double? expectedExpenseOverdue;
+  final List<Map<String, dynamic>> expectedExpenseItems;
 
   static num _num(dynamic value) {
     if (value is num) return value;
@@ -370,6 +386,119 @@ class DashboardSnapshot {
       team.sort((a, b) => b.todaySales.compareTo(a.todaySales));
     }
 
+    // Pharmacy stock value (available qty * cost/selling) grouped by category.
+    final stockRows = await _rows(() {
+      var query = client.from('v_stock_summary').select();
+      if (branchId != null) query = query.eq('branch_id', branchId);
+      return query;
+    }, failures: failures, label: 'Pharmacy stock value');
+    final categoryRows = await _rows(
+      () => client.from('categories').select('id, name'),
+      failures: failures,
+      label: 'Categories',
+    );
+    final categoryNames = <String, String>{
+      for (final row in categoryRows ?? const [])
+        if (row['id'] != null)
+          row['id'].toString(): (row['name'] as String? ?? 'Uncategorized'),
+    };
+    double pharmacyCost = 0;
+    double pharmacyRetail = 0;
+    final byCat = <String, Map<String, dynamic>>{};
+    for (final row in stockRows ?? const []) {
+      final qty = _num(row['available_qty']).toDouble();
+      final cost = _num(row['cost_price']).toDouble();
+      final retail = _num(row['selling_price']).toDouble();
+      final lineCost = qty * cost;
+      final lineRetail = qty * retail;
+      pharmacyCost += lineCost;
+      pharmacyRetail += lineRetail;
+      final catId = row['category_id']?.toString();
+      final catName =
+          (catId != null ? categoryNames[catId] : null) ?? 'Uncategorized';
+      final entry = byCat.putIfAbsent(
+          catName,
+          () => {
+                'category': catName,
+                'costValue': 0.0,
+                'retailValue': 0.0,
+                'items': 0,
+                'qty': 0.0,
+              });
+      entry['costValue'] = (entry['costValue'] as double) + lineCost;
+      entry['retailValue'] = (entry['retailValue'] as double) + lineRetail;
+      entry['items'] = (entry['items'] as int) + 1;
+      entry['qty'] = (entry['qty'] as double) + qty;
+    }
+    final pharmacyStockByCategory = byCat.values.toList()
+      ..sort((a, b) =>
+          ((b['costValue'] as double)).compareTo(a['costValue'] as double));
+
+    // Expected expenses: configured expected expenses + active staff salaries.
+    final expectedItems = <Map<String, dynamic>>[];
+    double expectedTotal = 0;
+    double expectedOverdue = 0;
+    final today = nowAddisAbaba();
+    final dayOfMonth = today.day;
+    final daysInMonth = DateTime(today.year, today.month + 1, 0).day;
+
+    final expectedRows = await _rows(() {
+      var query = client
+          .from('expected_expenses')
+          .select(
+              'id, name, category, amount, due_day, branch_id, is_active, notes')
+          .eq('is_active', true);
+      if (branchId != null) {
+        query = query.or('branch_id.eq.$branchId,branch_id.is.null');
+      }
+      return query.order('due_day');
+    }, failures: failures, label: 'Expected expenses');
+
+    for (final row in expectedRows ?? const []) {
+      final amount = _num(row['amount']).toDouble();
+      final dueDay = (_num(row['due_day']).toInt()).clamp(1, daysInMonth);
+      final overdue = dayOfMonth > dueDay;
+      expectedTotal += amount;
+      if (overdue) expectedOverdue += amount;
+      expectedItems.add({
+        'name': row['name'] ?? 'Expense',
+        'category': row['category'] ?? 'Other',
+        'amount': amount,
+        'dueDay': dueDay,
+        'overdue': overdue,
+        'source': 'planned',
+      });
+    }
+
+    final salaryPeople = await _rows(() {
+      var query = client
+          .from('profiles')
+          .select('id, full_name, email, monthly_salary, is_active')
+          .eq('is_active', true);
+      if (branchId != null) query = query.eq('branch_id', branchId);
+      return query;
+    }, failures: failures, label: 'Salary expectations');
+
+    for (final row in salaryPeople ?? const []) {
+      final salary = _num(row['monthly_salary']).toDouble();
+      if (salary <= 0) continue;
+      final dueDay = 30.clamp(1, daysInMonth);
+      final overdue = dayOfMonth > dueDay;
+      expectedTotal += salary;
+      if (overdue) expectedOverdue += salary;
+      final name = ((row['full_name'] as String?)?.trim().isNotEmpty ?? false)
+          ? (row['full_name'] as String).trim()
+          : (row['email'] as String? ?? 'Staff');
+      expectedItems.add({
+        'name': 'Salary: $name',
+        'category': 'Salaries',
+        'amount': salary,
+        'dueDay': dueDay,
+        'overdue': overdue,
+        'source': 'salary',
+      });
+    }
+
     return DashboardSnapshot(
       todaySales: _sum(todayRows, 'total'),
       monthSales: _sum(monthRows, 'total'),
@@ -392,6 +521,12 @@ class DashboardSnapshot {
       ],
       failedSections: failures.toSet().toList(),
       teamStatus: team,
+      pharmacyStockValueCost: pharmacyCost,
+      pharmacyStockValueRetail: pharmacyRetail,
+      pharmacyStockByCategory: pharmacyStockByCategory,
+      expectedExpenseTotal: expectedTotal,
+      expectedExpenseOverdue: expectedOverdue,
+      expectedExpenseItems: expectedItems,
     );
   }
 }
@@ -941,6 +1076,26 @@ class _DashboardBody extends StatelessWidget {
                 icon: Icons.badge_outlined,
                 color: AppColors.success,
                 onTap: () => context.go('/admin/users'),
+              ),
+            if (showFinance)
+              StatCard(
+                compact: narrow,
+                title: 'Pharmacy value',
+                value: money(data.pharmacyStockValueCost),
+                icon: Icons.account_balance_wallet_outlined,
+                color: AppColors.plum600,
+                subtitle: 'Retail ${money(data.pharmacyStockValueRetail)}',
+                onTap: () => context.go('/dashboard/pharmacy-value'),
+              ),
+            if (showStaff)
+              StatCard(
+                compact: narrow,
+                title: 'Expected expenses',
+                value: money(data.expectedExpenseTotal),
+                icon: Icons.payments_outlined,
+                color: AppColors.warning,
+                subtitle: 'Overdue ${money(data.expectedExpenseOverdue)}',
+                onTap: () => context.go('/dashboard/expected-expenses'),
               ),
           ],
         ),
