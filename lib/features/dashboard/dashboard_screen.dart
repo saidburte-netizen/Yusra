@@ -881,7 +881,6 @@ class _DashboardBody extends StatelessWidget {
     final narrow = MediaQuery.sizeOf(context).width < 600;
     final gridMin = narrow ? 150.0 : 260.0;
     final gridSpacing = narrow ? 10.0 : 14.0;
-    final staffOnShift = data.teamStatus.where((m) => m.hasOpenShift).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -938,7 +937,7 @@ class _DashboardBody extends StatelessWidget {
               StatCard(
                 compact: narrow,
                 title: 'On shift',
-                value: '$staffOnShift',
+                value: '${data.teamStatus.where((m) => m.hasOpenShift).length}',
                 icon: Icons.badge_outlined,
                 color: AppColors.success,
                 onTap: () => context.go('/admin/users'),

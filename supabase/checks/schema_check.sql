@@ -30,7 +30,7 @@ expected_functions(name, nargs) as (
          ('add_opening_stock', 2), ('create_draft_purchase_orders', 2), ('adjust_stock', 4),
          ('receive_purchase_order', 2), ('open_shift', 2), ('close_shift', 3),
          ('create_sale', 8), ('void_sale', 2), ('process_sale_return', 4),
-         ('set_user_access', 4), ('share_admin_access', 1),
+         ('set_user_access', 4), ('update_staff_profile', 7), ('share_admin_access', 1),
          ('publish_app_settings', 0), ('get_my_profile', 0),
          ('request_activity_correction', 2), ('approve_activity_correction', 1),
          ('update_my_profile', 3), ('set_purchase_order_status', 2),

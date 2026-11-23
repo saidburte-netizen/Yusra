@@ -218,46 +218,6 @@ const List<Waiver> _waivers = [
   // each one names the exact file:line to change.
   // -------------------------------------------------------------------------
   Waiver(
-    'backward/route_reachable|/inventory/categories',
-    'Route is declared but no button navigates to it. Add a Categories button '
-        'to the stock overview action row (or the inventory nav).',
-    'lib/features/inventory/inventory_routes.dart:32; '
-        'lib/features/inventory/screens/stock_overview_screen.dart:45-80',
-    deferredCodeFix: true,
-  ),
-  Waiver(
-    'backward/route_reachable|/inventory/batches',
-    'Route is declared but no button navigates to it. Add a Batches button to '
-        'the stock overview action row (or the inventory nav).',
-    'lib/features/inventory/inventory_routes.dart:36; '
-        'lib/features/inventory/screens/stock_overview_screen.dart:45-80',
-    deferredCodeFix: true,
-  ),
-  Waiver(
-    'backward/route_reachable|/inventory/adjustments',
-    'Route is declared but no button navigates to it. Add an Adjustments '
-        'button to the stock overview action row (or the inventory nav).',
-    'lib/features/inventory/inventory_routes.dart:48; '
-        'lib/features/inventory/screens/stock_overview_screen.dart:45-80',
-    deferredCodeFix: true,
-  ),
-  Waiver(
-    'backward/route_reachable|/inventory/movements',
-    'Route is declared but no button navigates to it. Add a Movements button '
-        'to the stock overview action row (or the inventory nav).',
-    'lib/features/inventory/inventory_routes.dart:52; '
-        'lib/features/inventory/screens/stock_overview_screen.dart:45-80',
-    deferredCodeFix: true,
-  ),
-  Waiver(
-    'backward/route_reachable|/inventory/stocktake',
-    'Route is declared but no button navigates to it. Add a Stocktake button '
-        'to the stock overview action row (or the inventory nav).',
-    'lib/features/inventory/inventory_routes.dart:60; '
-        'lib/features/inventory/screens/stock_overview_screen.dart:45-80',
-    deferredCodeFix: true,
-  ),
-  Waiver(
     'backward/dashboard_tile_reconciliation|grossProfitToday',
     'Dashboard gross profit uses line_total - cost_price * quantity, while '
         'the report views subtract discount_share and returned_qty. Align the '
@@ -637,14 +597,17 @@ WiringInventory _extract(String root) {
                 .firstMatch(joined)
                 ?.group(1) ??
             '';
-        final labelMatch = RegExp(r'S\.(\w+)').firstMatch(labelLine);
+        final labelMatch = RegExp(r"S\.(\w+)").firstMatch(labelLine);
+        final plainLabelMatch =
+            RegExp(r'''['"]([^'"]+)['"]''').firstMatch(labelLine);
         final fieldMatch =
             RegExp(r'\bvalue:\s*(?:money|count)?\(?\s*data\.(\w+)')
                 .firstMatch(joined);
         final drillMatch =
             RegExp(r"context\.go\('([^']+)'\)").firstMatch(joined);
         final dynamicDrill = joined.contains('context.go(item.path)');
-        final label = labelMatch?.group(1) ?? '<label>';
+        final label =
+            labelMatch?.group(1) ?? plainLabelMatch?.group(1) ?? '<label>';
         final field = fieldMatch?.group(1) ?? '<field>';
         // The source query is resolved from the snapshot field assignment in
         // DashboardSnapshot.load; see _resolveTileSource below.
