@@ -67,8 +67,13 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     super.didChangeDependencies();
     // Route state is an inherited dependency, so read it here rather than in
     // initState (where GoRouterState.of would register too early).
-    final rxId = GoRouterState.of(context).uri.queryParameters['prescription'];
-    if (rxId != null) _prescriptionId = rxId;
+    try {
+      final rxId =
+          GoRouterState.of(context).uri.queryParameters['prescription'];
+      if (rxId != null) _prescriptionId = rxId;
+    } catch (_) {
+      // Not under GoRouter (e.g. widget tests).
+    }
   }
 
   @override
