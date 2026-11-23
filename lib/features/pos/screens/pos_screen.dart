@@ -798,19 +798,38 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                                         crossAxisAlignment:
                                             WrapCrossAlignment.center,
                                         children: [
-                                          Text(
-                                            available < 1
-                                                ? 'Out of stock'
-                                                : '$available ${medicine.unit} available',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .labelSmall
-                                                ?.copyWith(
-                                                  color: available < 1
-                                                      ? AppColors.danger
-                                                      : AppColors.muted,
+                                          available < 1
+                                              ? Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.danger
+                                                        .withOpacity(0.12),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            999),
+                                                  ),
+                                                  child: const Text(
+                                                    'Out of stock',
+                                                    style: TextStyle(
+                                                      color: AppColors.danger,
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                )
+                                              : Text(
+                                                  '$available ${medicine.unit} available',
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .labelSmall
+                                                      ?.copyWith(
+                                                          color:
+                                                              AppColors.muted),
                                                 ),
-                                          ),
                                           const Icon(Icons.add_circle_outline,
                                               color: AppColors.gold700),
                                         ],

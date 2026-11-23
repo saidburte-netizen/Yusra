@@ -26,7 +26,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(batchesProvider(null));
-    final alertDays = ref.watch(expiryAlertDaysProvider).value ?? 90;
+    final alertDays = ref.watch(expiryAlertDaysProvider).valueOrNull ?? 90;
     final role = ref.watch(authProvider).profile?.role ?? AppRole.cashier;
     final canEdit = can(role, Modules.stock, PermAction.edit);
     final showCost = role != AppRole.cashier;

@@ -335,7 +335,8 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
     final source = utf8.decode(bytes, allowMalformed: true);
     final parsed = MedicineCsv.parse(source);
     if (!mounted) return;
-    final categories = ref.read(categoriesProvider).value ?? const <Category>[];
+    final categories =
+        ref.read(categoriesProvider).valueOrNull ?? const <Category>[];
     final accepted = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(

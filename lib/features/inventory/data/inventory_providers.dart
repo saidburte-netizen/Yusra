@@ -180,28 +180,32 @@ final reorderSuggestionsProvider =
 
 /// `expiry_alert_days` from app_settings, with the seeded default of 90.
 final expiryAlertDaysProvider = FutureProvider<int>((ref) async {
-  if (!SupabaseService.isReady) return 90;
-  final key = AppCache.scopedKey(CacheTag.settings, 'global', 'expiry_days');
-  return ref.read(appCacheProvider).readVersioned<int>(
-    key,
-    CachePolicy.settingsTtl,
-    () => ref.read(settingsVersionProvider.future),
-    () async {
-      try {
-        final row = await SupabaseService.client
-            .from('app_settings')
-            .select('value')
-            .eq('key', 'expiry_alert_days')
-            .maybeSingle();
-        final value = row?['value'];
-        if (value is num) return value.toInt();
-        if (value is String) return int.tryParse(value) ?? 90;
-        return 90;
-      } catch (_) {
-        // The alert window is a display preference; a failed read falls
-        // back to the seeded default so stock screens remain usable.
-        return 90;
-      }
-    },
-  );
+  try {
+    if (!SupabaseService.isReady) return 90;
+    final key = AppCache.scopedKey(CacheTag.settings, 'global', 'expiry_days');
+    return await ref.read(appCacheProvider).readVersioned<int>(
+      key,
+      CachePolicy.settingsTtl,
+      () => ref.read(settingsVersionProvider.future),
+      () async {
+        try {
+          final row = await SupabaseService.client
+              .from('app_settings')
+              .select('value')
+              .eq('key', 'expiry_alert_days')
+              .maybeSingle();
+          final value = row?['value'];
+          if (value is num) return value.toInt();
+          if (value is String) return int.tryParse(value) ?? 90;
+          return 90;
+        } catch (_) {
+          // The alert window is a display preference; a failed read falls
+          // back to the seeded default so stock screens remain usable.
+          return 90;
+        }
+      },
+    );
+  } catch (_) {
+    return 90;
+  }
 });

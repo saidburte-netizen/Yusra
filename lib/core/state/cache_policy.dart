@@ -73,24 +73,28 @@ final cacheSnapshotStoreProvider =
 /// is cached for one minute; a change invalidates the settings cache group on
 /// the next read instead of requiring the user to reload the screen.
 final settingsVersionProvider = FutureProvider<String>((ref) async {
-  if (!SupabaseService.isReady) return '';
-  final key = AppCache.scopedKey(CacheTag.settings, 'global', 'version');
-  return ref.read(appCacheProvider).read<String>(
-    key,
-    CachePolicy.settingsVersionTtl,
-    () async {
-      try {
-        final rows = await SupabaseService.client
-            .from('app_settings')
-            .select('updated_at')
-            .order('updated_at', ascending: false)
-            .limit(1) as List;
-        if (rows.isEmpty) return '';
-        return (rows.first as Map)['updated_at']?.toString() ?? '';
-      } catch (_) {
-        // Offline or missing table: keep serving the last good version.
-        return '';
-      }
-    },
-  );
+  try {
+    if (!SupabaseService.isReady) return '';
+    final key = AppCache.scopedKey(CacheTag.settings, 'global', 'version');
+    return await ref.read(appCacheProvider).read<String>(
+      key,
+      CachePolicy.settingsVersionTtl,
+      () async {
+        try {
+          final rows = await SupabaseService.client
+              .from('app_settings')
+              .select('updated_at')
+              .order('updated_at', ascending: false)
+              .limit(1) as List;
+          if (rows.isEmpty) return '';
+          return (rows.first as Map)['updated_at']?.toString() ?? '';
+        } catch (_) {
+          // Offline or missing table: keep serving the last good version.
+          return '';
+        }
+      },
+    );
+  } catch (_) {
+    return '';
+  }
 });

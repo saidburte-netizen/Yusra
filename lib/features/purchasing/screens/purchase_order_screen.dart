@@ -269,7 +269,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
 
   Future<void> _printOrder() async {
     final supplier =
-        (ref.read(suppliersProvider('')).value ?? const <Supplier>[])
+        (ref.read(suppliersProvider('')).valueOrNull ?? const <Supplier>[])
             .where((item) => item.id == _supplierId)
             .firstOrNull;
     try {
@@ -296,7 +296,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
 
   Future<void> _printGrn() async {
     final supplier =
-        (ref.read(suppliersProvider('')).value ?? const <Supplier>[])
+        (ref.read(suppliersProvider('')).valueOrNull ?? const <Supplier>[])
             .where((item) => item.id == _supplierId)
             .firstOrNull;
     final order = _order;

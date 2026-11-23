@@ -160,7 +160,8 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen>
   }
 
   Future<void> _createPurchaseOrder() async {
-    final low = ref.read(lowStockProvider).value ?? const <StockSummary>[];
+    final low =
+        ref.read(lowStockProvider).valueOrNull ?? const <StockSummary>[];
     if (low.isEmpty) {
       if (mounted) {
         AppSnackbar.error(context, 'Nothing is below reorder level.');
