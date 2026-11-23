@@ -19,6 +19,123 @@ import '../../core/widgets.dart';
 import '../inventory/data/inventory_providers.dart';
 import 'dashboard_metrics.dart';
 
+final dashboardRefreshProvider = StateProvider<int>((ref) => 0);
+
+class DashboardPharmacyValueSummary {
+  const DashboardPharmacyValueSummary(
+      {required this.cost, required this.retail});
+  final double cost;
+  final double retail;
+}
+
+class DashboardExpectedExpenseSummary {
+  const DashboardExpectedExpenseSummary(
+      {required this.total, required this.overdue});
+  final double total;
+  final double overdue;
+}
+
+final dashboardPharmacyValueProvider =
+    FutureProvider.autoDispose<DashboardPharmacyValueSummary>((ref) async {
+  ref.watch(dashboardRefreshProvider);
+  final branchId = ref.watch(branchScopeProvider);
+  if (!SupabaseService.isReady)
+    return const DashboardPharmacyValueSummary(cost: 0, retail: 0);
+  final client = SupabaseService.client;
+  var q = client
+      .from('v_stock_summary')
+      .select('available_qty, cost_price, selling_price');
+  if (branchId != null) q = q.eq('branch_id', branchId);
+  final rows = List<Map<String, dynamic>>.from(await q as List);
+  double cost = 0, retail = 0;
+  for (final r in rows) {
+    final qty = ((r['available_qty'] is num)
+            ? (r['available_qty'] as num)
+            : num.tryParse('${r['available_qty']}') ?? 0)
+        .toDouble();
+    final cp = ((r['cost_price'] is num)
+            ? (r['cost_price'] as num)
+            : num.tryParse('${r['cost_price']}') ?? 0)
+        .toDouble();
+    final sp = ((r['selling_price'] is num)
+            ? (r['selling_price'] as num)
+            : num.tryParse('${r['selling_price']}') ?? 0)
+        .toDouble();
+    cost += qty * cp;
+    retail += qty * sp;
+  }
+  return DashboardPharmacyValueSummary(cost: cost, retail: retail);
+});
+
+final dashboardExpectedExpensesProvider =
+    FutureProvider.autoDispose<DashboardExpectedExpenseSummary>((ref) async {
+  ref.watch(dashboardRefreshProvider);
+  final branchId = ref.watch(branchScopeProvider);
+  if (!SupabaseService.isReady)
+    return const DashboardExpectedExpenseSummary(total: 0, overdue: 0);
+  final client = SupabaseService.client;
+  final now = nowAddisAbaba();
+  final day = now.day;
+  final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+  double total = 0, overdue = 0;
+
+  var plannedQ = client
+      .from('expected_expenses')
+      .select('amount, due_day')
+      .eq('is_active', true);
+  if (branchId != null)
+    plannedQ = plannedQ.or('branch_id.eq.$branchId,branch_id.is.null');
+  for (final r in List<Map<String, dynamic>>.from(await plannedQ as List)) {
+    final amount = ((r['amount'] is num)
+            ? (r['amount'] as num)
+            : num.tryParse('${r['amount']}') ?? 0)
+        .toDouble();
+    final dueDay = (((r['due_day'] is num)
+            ? (r['due_day'] as num)
+            : num.tryParse('${r['due_day']}') ?? 1))
+        .toInt()
+        .clamp(1, daysInMonth);
+    total += amount;
+    if (day > dueDay) overdue += amount;
+  }
+
+  var salQ =
+      client.from('profiles').select('monthly_salary').eq('is_active', true);
+  if (branchId != null) salQ = salQ.eq('branch_id', branchId);
+  for (final r in List<Map<String, dynamic>>.from(await salQ as List)) {
+    final amount = ((r['monthly_salary'] is num)
+            ? (r['monthly_salary'] as num)
+            : num.tryParse('${r['monthly_salary']}') ?? 0)
+        .toDouble();
+    if (amount <= 0) continue;
+    final dueDay = 30.clamp(1, daysInMonth);
+    total += amount;
+    if (day > dueDay) overdue += amount;
+  }
+
+  final from = DateTime.utc(now.year, now.month, 1)
+      .subtract(addisAbabaOffset)
+      .toIso8601String();
+  final to = DateTime.utc(now.year, now.month + 1, 1)
+      .subtract(addisAbabaOffset)
+      .toIso8601String();
+  var recQ = client
+      .from('expenses')
+      .select('amount')
+      .gte('expense_date', from)
+      .lt('expense_date', to);
+  if (branchId != null) recQ = recQ.eq('branch_id', branchId);
+  for (final r in List<Map<String, dynamic>>.from(await recQ as List)) {
+    final amount = ((r['amount'] is num)
+            ? (r['amount'] as num)
+            : num.tryParse('${r['amount']}') ?? 0)
+        .toDouble();
+    total += amount;
+  }
+
+  return DashboardExpectedExpenseSummary(total: total, overdue: overdue);
+});
+
 class DayPoint {
   const DayPoint(this.date, this.total);
 
@@ -677,6 +794,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         _load();
       }
     });
+    ref.listen<int>(dashboardRefreshProvider, (previous, next) {
+      if (previous != next && !_loading) _load();
+    });
     final role = auth.profile?.role ?? AppRole.cashier;
     final ownOnly = isOwnOnly(role, Modules.sales);
     final screenWidth = MediaQuery.sizeOf(context).width;
@@ -956,14 +1076,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ],
                       ),
                     ),
-                  if (_loading && _data == null)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 48),
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (_error != null && _data == null)
+                  _TopValueCards(narrow: screenWidth < 600),
+                  const SizedBox(height: 16),
+                  if (_error != null && _data == null)
                     ErrorState(message: _error!, onRetry: _load)
-                  else if (_data != null) ...[
+                  else if (_data == null)
+                    const _DashboardSkeleton()
+                  else ...[
                     if (_loading)
                       const Padding(
                         padding: EdgeInsets.only(bottom: 12),
@@ -982,6 +1101,205 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardSkeleton extends StatelessWidget {
+  const _DashboardSkeleton();
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const LinearProgressIndicator(minHeight: 3),
+        const SizedBox(height: 16),
+        GridView.count(
+          crossAxisCount: MediaQuery.of(context).size.width < 600 ? 2 : 4,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.6,
+          children: List.generate(
+              4,
+              (_) => const Card(
+                  child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                                height: 12,
+                                width: 80,
+                                child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                        color: Color(0x1AFFFFFF)))),
+                            SizedBox(height: 12),
+                            SizedBox(
+                                height: 20,
+                                width: 100,
+                                child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                        color: Color(0x1AFFFFFF))))
+                          ])))),
+        ),
+      ],
+    );
+  }
+}
+
+class _TopValueCards extends ConsumerWidget {
+  const _TopValueCards({required this.narrow});
+  final bool narrow;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pharmacy = ref.watch(dashboardPharmacyValueProvider);
+    final expected = ref.watch(dashboardExpectedExpensesProvider);
+    final cardHeight = narrow ? 132.0 : 148.0;
+    return Row(
+      children: [
+        Expanded(
+          child: SizedBox(
+            height: cardHeight,
+            child: pharmacy.when(
+              loading: () => const Card(
+                  child:
+                      Center(child: CircularProgressIndicator(strokeWidth: 2))),
+              error: (e, _) => Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('Pharmacy value',
+                          style: TextStyle(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 8),
+                      TextButton(
+                          onPressed: () =>
+                              ref.invalidate(dashboardPharmacyValueProvider),
+                          child: const Text('Try again')),
+                    ],
+                  ),
+                ),
+              ),
+              data: (v) => _BigTopCard(
+                title: 'Pharmacy value',
+                value: formatMoney(v.cost),
+                subtitle: 'Retail ${formatMoney(v.retail)}',
+                icon: Icons.account_balance_wallet_outlined,
+                color: AppColors.plum600,
+                onTap: () => context.go('/dashboard/pharmacy-value'),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: SizedBox(
+            height: cardHeight,
+            child: expected.when(
+              loading: () => const Card(
+                  child:
+                      Center(child: CircularProgressIndicator(strokeWidth: 2))),
+              error: (e, _) => Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('Expected expenses',
+                          style: TextStyle(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 8),
+                      TextButton(
+                          onPressed: () =>
+                              ref.invalidate(dashboardExpectedExpensesProvider),
+                          child: const Text('Try again')),
+                    ],
+                  ),
+                ),
+              ),
+              data: (v) => _BigTopCard(
+                title: 'Expected expenses',
+                value: formatMoney(v.total),
+                subtitle: 'Overdue ${formatMoney(v.overdue)}',
+                subtitleColor: v.overdue > 0 ? AppColors.danger : null,
+                icon: Icons.payments_outlined,
+                color: AppColors.warning,
+                onTap: () => context.go('/dashboard/expected-expenses'),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BigTopCard extends StatelessWidget {
+  const _BigTopCard({
+    required this.title,
+    required this.value,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+    this.subtitleColor,
+  });
+  final String title;
+  final String value;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  final Color? subtitleColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, color: color, size: 22),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, color: color)),
+                  ),
+                  Icon(Icons.chevron_right, color: color.withOpacity(0.7)),
+                ],
+              ),
+              const Spacer(),
+              FittedBox(
+                alignment: Alignment.centerLeft,
+                fit: BoxFit.scaleDown,
+                child: Text(value,
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w900)),
+              ),
+              const SizedBox(height: 4),
+              Text(subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      color: subtitleColor ?? AppColors.onDarkMuted,
+                      fontWeight: FontWeight.w600)),
+            ],
+          ),
         ),
       ),
     );
@@ -1076,26 +1394,6 @@ class _DashboardBody extends StatelessWidget {
                 icon: Icons.badge_outlined,
                 color: AppColors.success,
                 onTap: () => context.go('/admin/users'),
-              ),
-            if (showFinance)
-              StatCard(
-                compact: narrow,
-                title: 'Pharmacy value',
-                value: money(data.pharmacyStockValueCost),
-                icon: Icons.account_balance_wallet_outlined,
-                color: AppColors.plum600,
-                subtitle: 'Retail ${money(data.pharmacyStockValueRetail)}',
-                onTap: () => context.go('/dashboard/pharmacy-value'),
-              ),
-            if (showStaff)
-              StatCard(
-                compact: narrow,
-                title: 'Expected expenses',
-                value: money(data.expectedExpenseTotal),
-                icon: Icons.payments_outlined,
-                color: AppColors.warning,
-                subtitle: 'Overdue ${money(data.expectedExpenseOverdue)}',
-                onTap: () => context.go('/dashboard/expected-expenses'),
               ),
           ],
         ),

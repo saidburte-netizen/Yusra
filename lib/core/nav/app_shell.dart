@@ -53,8 +53,10 @@ class AppShell extends ConsumerWidget {
     final wide = screenWidth >= 1100;
     final narrowTopBar = screenWidth < 800;
 
+    final drawer = _AppDrawer(role: role, profile: auth.profile);
     if (wide) {
       return Scaffold(
+        drawer: drawer,
         body: Row(
           children: [
             NavigationRail(
@@ -153,93 +155,7 @@ class AppShell extends ConsumerWidget {
           ),
         ),
       ),
-      endDrawer: Drawer(
-        child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: (dark ? AppColors.darkSurface : AppColors.plum800)
-                        .withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: (dark ? AppColors.darkGold : AppColors.gold500)
-                          .withOpacity(0.35),
-                    ),
-                  ),
-                  child: const YusraLogo(
-                    variant: YusraLogoVariant.full,
-                    size: 180,
-                    onDark: true,
-                  ),
-                ),
-              ),
-              Divider(
-                  color: (dark ? AppColors.darkGold : AppColors.gold500)
-                      .withOpacity(0.35)),
-              Expanded(
-                child: ListView(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  children: [
-                    for (final item in items)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: ListTile(
-                          leading: Icon(
-                            item.icon,
-                            color: location.startsWith(item.path)
-                                ? (dark
-                                    ? AppColors.darkGold
-                                    : AppColors.gold300)
-                                : (dark
-                                    ? AppColors.darkMuted
-                                    : AppColors.onDarkMuted),
-                          ),
-                          title: Text(
-                            item.label,
-                            style: TextStyle(
-                              color: location.startsWith(item.path)
-                                  ? (dark
-                                      ? AppColors.darkGold
-                                      : AppColors.gold300)
-                                  : (dark
-                                      ? AppColors.darkText
-                                      : AppColors.onDark),
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          selected: location.startsWith(item.path),
-                          selectedTileColor:
-                              (dark ? AppColors.darkGold : AppColors.gold500)
-                                  .withOpacity(0.18),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            side: BorderSide(
-                              color: location.startsWith(item.path)
-                                  ? (dark
-                                          ? AppColors.darkGold
-                                          : AppColors.gold500)
-                                      .withOpacity(0.35)
-                                  : Colors.transparent,
-                            ),
-                          ),
-                          onTap: () {
-                            Navigator.pop(context);
-                            context.go(item.path);
-                          },
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      drawer: drawer,
     );
   }
 
@@ -255,13 +171,147 @@ class AppShell extends ConsumerWidget {
   }
 }
 
+class _AppDrawer extends ConsumerWidget {
+  const _AppDrawer({required this.role, required this.profile});
+  final AppRole role;
+  final UserProfile? profile;
+
+  bool _can(String module) => can(role, module, PermAction.view);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final location = GoRouterState.of(context).uri.path;
+    final name = profile?.fullName.trim();
+    final displayName =
+        (name == null || name.isEmpty) ? (profile?.email ?? 'User') : name;
+    final roleLabel = profile?.role.label ?? role.label;
+
+    Widget header() => DrawerHeader(
+          decoration: BoxDecoration(
+            color: dark ? AppColors.darkSurface : AppColors.plum800,
+            border: Border(
+                bottom: BorderSide(color: AppColors.gold500.withOpacity(0.35))),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const YusraLogo(
+                  variant: YusraLogoVariant.mark, size: 52, onDark: true),
+              const SizedBox(height: 12),
+              Text(displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: AppColors.onDark,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16)),
+              const SizedBox(height: 2),
+              Text(roleLabel,
+                  style: const TextStyle(
+                      color: AppColors.onDarkMuted, fontSize: 13)),
+            ],
+          ),
+        );
+
+    ListTile item(String label, IconData icon, String path,
+        {bool visible = true, VoidCallback? onTap}) {
+      if (!visible)
+        return const ListTile(
+            visualDensity: VisualDensity(horizontal: 0, vertical: -4),
+            dense: true,
+            minVerticalPadding: 0,
+            contentPadding: EdgeInsets.zero,
+            title: SizedBox.shrink());
+      final selected = location == path || location.startsWith('$path/');
+      return ListTile(
+        leading: Icon(icon,
+            color: selected ? AppColors.gold300 : AppColors.onDarkMuted),
+        title: Text(label,
+            style: TextStyle(
+                color: selected ? AppColors.gold300 : AppColors.onDark,
+                fontWeight: FontWeight.w600)),
+        selected: selected,
+        selectedTileColor: AppColors.gold500.withOpacity(0.12),
+        onTap: onTap ??
+            () {
+              Navigator.pop(context);
+              context.go(path);
+            },
+      );
+    }
+
+    Widget section(String title) => Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+          child: Text(title.toUpperCase(),
+              style: const TextStyle(
+                  color: AppColors.onDarkMuted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8)),
+        );
+
+    final isAdmin = role == AppRole.admin || role == AppRole.superAdmin;
+
+    return Drawer(
+      child: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            header(),
+            section('Main'),
+            item('Dashboard', Icons.dashboard_outlined, '/dashboard',
+                visible: _can(Modules.dashboard)),
+            item('New sale', Icons.point_of_sale, '/pos',
+                visible: _can(Modules.pos)),
+            item('Inventory', Icons.inventory_2_outlined, '/inventory',
+                visible: _can(Modules.medicines) || _can(Modules.stock)),
+            item('Purchasing', Icons.shopping_cart_outlined,
+                '/purchasing/orders',
+                visible: _can(Modules.purchaseOrders)),
+            section('Money'),
+            item('Expenses', Icons.account_balance_wallet_outlined, '/expenses',
+                visible: _can(Modules.expenses)),
+            item(
+                'Add expense', Icons.add_circle_outline, '/expenses?action=add',
+                visible: can(role, Modules.expenses, PermAction.edit)),
+            item('Pharmacy value', Icons.account_balance_wallet_outlined,
+                '/dashboard/pharmacy-value',
+                visible: _can(Modules.reports) || isAdmin),
+            item('Expected expenses and overdue', Icons.payments_outlined,
+                '/dashboard/expected-expenses',
+                visible: isAdmin),
+            section('Team'),
+            item('Staff list and status', Icons.groups_outlined, '/admin/users',
+                visible: _can(Modules.users)),
+            item('Add staff', Icons.person_add_alt_1_outlined,
+                '/admin/users?action=add',
+                visible: can(role, Modules.users, PermAction.edit)),
+            item('My profile', Icons.person_outline, '/profile', visible: true),
+            section('Settings'),
+            item('Change password', Icons.lock_outline,
+                '/profile/change-password',
+                visible: true),
+            item('Theme', Icons.brightness_6_outlined, '/settings/theme',
+                visible: true),
+            item('Branches', Icons.account_balance_outlined, '/admin/branches',
+                visible: isAdmin && _can(Modules.branches)),
+            item('Sign out', Icons.logout, '/login', visible: true, onTap: () {
+              Navigator.pop(context);
+              ref.read(authProvider.notifier).signOut();
+            }),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class TopBar extends ConsumerWidget implements PreferredSizeWidget {
   const TopBar({super.key, required this.title, this.narrow = false});
 
   final String title;
-
-  /// Set by [AppShell] from MediaQuery. The parent decides it so [preferredSize]
-  /// (read before this widget builds) always matches the rendered height.
   final bool narrow;
 
   @override
@@ -310,18 +360,21 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
 
     return AppBar(
       toolbarHeight: 64,
-      titleSpacing: narrow ? 0 : null,
+      leading: IconButton(
+        icon: const Icon(Icons.menu),
+        tooltip: 'Menu',
+        onPressed: () => Scaffold.of(context).openDrawer(),
+      ),
+      titleSpacing: 8,
       title: Text(
         title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: narrow
-            ? const TextStyle(
-                color: AppColors.onDark,
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-              )
-            : null,
+        style: const TextStyle(
+          color: AppColors.onDark,
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
+        ),
       ),
       actions: [
         ...actions,

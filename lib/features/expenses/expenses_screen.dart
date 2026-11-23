@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -15,6 +16,7 @@ import '../../core/strings.dart';
 import '../../core/supabase_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets.dart';
+import '../dashboard/dashboard_screen.dart' show dashboardRefreshProvider;
 import '../inventory/data/inventory_providers.dart';
 
 const List<String> expenseCategories = [
@@ -74,7 +76,16 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   bool _loading = true;
   String? _error;
   String? _categoryFilter;
-  DateTime _month = nowAddisAbaba();
+  DateTimeRange _range = () {
+    final now = nowAddisAbaba();
+    final start = DateTime(now.year, now.month, 1);
+    final end = DateTime(now.year, now.month + 1, 0);
+    return DateTimeRange(start: start, end: end);
+  }();
+  bool _handledAction = false;
+  Map<String, String> _creatorNames = const {};
+  bool get _testMode =>
+      widget.initialRows != null || widget.initialError != null;
 
   @override
   void initState() {
@@ -88,6 +99,19 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     }
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_handledAction) return;
+    final action = GoRouterState.of(context).uri.queryParameters['action'];
+    if (action == 'add') {
+      _handledAction = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _edit(null);
+      });
+    }
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -97,10 +121,12 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       if (!SupabaseService.isReady) throw const SupabaseNotConfigured();
       final profile = ref.read(authProvider).profile;
       final allBranches = profile == null || canSeeAllBranches(profile.role);
-      final from = DateTime.utc(_month.year, _month.month)
-          .subtract(addisAbabaOffset)
-          .toIso8601String();
-      final to = DateTime.utc(_month.year, _month.month + 1)
+      final from =
+          DateTime.utc(_range.start.year, _range.start.month, _range.start.day)
+              .subtract(addisAbabaOffset)
+              .toIso8601String();
+      final to = DateTime.utc(_range.end.year, _range.end.month, _range.end.day)
+          .add(const Duration(days: 1))
           .subtract(addisAbabaOffset)
           .toIso8601String();
 
@@ -114,9 +140,32 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
         query = query.eq('branch_id', branchId);
       }
       final result = await query.order('expense_date', ascending: false);
+      final rows = List<Map<String, dynamic>>.from(result as List);
+      final creatorIds = rows
+          .map((r) => r['created_by']?.toString())
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+      var creatorNames = <String, String>{};
+      if (creatorIds.isNotEmpty) {
+        try {
+          final creators = await SupabaseService.client
+              .from('profiles')
+              .select('id, full_name')
+              .inFilter('id', creatorIds);
+          for (final c in creators as List) {
+            final m = c as Map<String, dynamic>;
+            final id = m['id']?.toString();
+            if (id != null)
+              creatorNames[id] = (m['full_name'] as String?)?.trim() ?? '';
+          }
+        } catch (_) {}
+      }
       if (!mounted) return;
       setState(() {
-        _rows = List<Map<String, dynamic>>.from(result as List);
+        _rows = rows;
+        _creatorNames = creatorNames;
         _loading = false;
       });
     } catch (e) {
@@ -167,8 +216,31 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     );
     if (result == null || !mounted) return;
     try {
-      final client = SupabaseService.client;
       final isNew = expense == null;
+      if (_testMode) {
+        final id = isNew
+            ? 'test-${DateTime.now().microsecondsSinceEpoch}'
+            : expense['id'];
+        final row = <String, dynamic>{
+          ...?expense,
+          ...result.values,
+          'id': id,
+          'status': expense?['status'] ?? 'pending',
+          'created_by': ref.read(authProvider).profile?.id,
+        };
+        setState(() {
+          if (isNew) {
+            _rows = [row, ..._rows];
+          } else {
+            _rows = _rows.map((r) => r['id'] == id ? row : r).toList();
+          }
+        });
+        if (!mounted) return;
+        AppSnackbar.success(
+            context, isNew ? 'Expense created.' : 'Expense updated.');
+        return;
+      }
+      final client = SupabaseService.client;
       // The expense always belongs to a concrete branch; an unscoped admin has
       // to pick one before creating a record.
       final branchId = isNew
@@ -211,6 +283,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       }
 
       if (!mounted) return;
+      ref.read(dashboardRefreshProvider.notifier).state++;
       AppSnackbar.success(
           context, isNew ? 'Expense created.' : 'Expense updated.');
       await _load();
@@ -232,6 +305,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
           .delete()
           .eq('id', expense['id']);
       if (!mounted) return;
+      ref.read(dashboardRefreshProvider.notifier).state++;
       AppSnackbar.success(context, 'Expense deleted.');
       await _load();
     } catch (e) {
@@ -277,15 +351,15 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     }
   }
 
-  Future<void> _pickMonth() async {
-    final picked = await showDatePicker(
+  Future<void> _pickRange() async {
+    final picked = await showDateRangePicker(
       context: context,
-      initialDate: _month,
-      firstDate: DateTime.utc(2020),
-      lastDate: DateTime.utc(2100),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      initialDateRange: _range,
     );
     if (picked == null) return;
-    setState(() => _month = DateTime(picked.year, picked.month));
+    setState(() => _range = picked);
     await _load();
   }
 
@@ -310,9 +384,10 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: OutlinedButton.icon(
-                    onPressed: _pickMonth,
-                    icon: const Icon(Icons.calendar_month_outlined, size: 18),
-                    label: Text(formatDate(_month, pattern: 'MMM yyyy')),
+                    onPressed: _pickRange,
+                    icon: const Icon(Icons.date_range_outlined, size: 18),
+                    label: Text(
+                        '${formatDate(_range.start, pattern: 'dd MMM')} - ${formatDate(_range.end, pattern: 'dd MMM yyyy')}'),
                   ),
                 ),
                 if (canEdit)
@@ -341,7 +416,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                         minTileWidth: 220,
                         children: [
                           StatCard(
-                            title: S.monthlyTotal,
+                            title: 'Total',
                             value: formatMoneyWhole(_monthlyTotal),
                             icon: Icons.account_balance_wallet_outlined,
                             color: AppColors.gold700,
@@ -417,16 +492,17 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                       ),
                       _filtered.isEmpty
                           ? const EmptyState(
-                              message: 'No expenses for this month.',
+                              message: 'No expenses for this date range.',
                               icon: Icons.account_balance_wallet_outlined)
                           : DataTablePlus(
                               columns: const [
                                 'Date',
                                 S.category,
                                 'Amount',
+                                'Note',
+                                'Who added it',
                                 S.paymentMethod,
                                 'Status',
-                                'Description',
                               ],
                               exportFileName: 'yusra-expenses.csv',
                               rows: [
@@ -440,12 +516,26 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                                   as String)),
                                       (expense['category'] as String?) ?? '—',
                                       formatMoney(_amount(expense)),
+                                      (expense['description'] as String?)
+                                                  ?.trim()
+                                                  .isNotEmpty ==
+                                              true
+                                          ? (expense['description'] as String)
+                                          : '—',
+                                      _creatorNames[expense['created_by']
+                                                      ?.toString()]
+                                                  ?.isNotEmpty ==
+                                              true
+                                          ? _creatorNames[expense['created_by']
+                                              ?.toString()]!
+                                          : (expense['created_by']
+                                                  ?.toString()
+                                                  .substring(0, 8) ??
+                                              '—'),
                                       _paymentMethodLabel(
                                           expense['payment_method'] as String?),
                                       (expense['status'] as String?) ??
                                           'approved',
-                                      (expense['description'] as String?) ??
-                                          '—',
                                     ],
                                     actions: [
                                       if (expense['receipt_path'] != null)

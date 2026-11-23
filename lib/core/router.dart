@@ -6,7 +6,9 @@ import '../features/admin/audit_screen.dart';
 import '../features/admin/branches_screen.dart';
 import '../features/admin/settings_screen.dart';
 import '../features/admin/team_access_screen.dart';
+import '../features/admin/theme_screen.dart';
 import '../features/admin/users_screen.dart';
+import '../features/auth/change_password_screen.dart';
 import '../features/auth/forbidden_screen.dart';
 import '../features/auth/forgot_password_screen.dart';
 import '../features/auth/login_screen.dart';
@@ -155,6 +157,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/profile',
             builder: (context, state) => const ProfileScreen(),
+            routes: [
+              GoRoute(
+                path: 'change-password',
+                builder: (context, state) => const ChangePasswordScreen(),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/settings/theme',
+            builder: (context, state) => const ThemeScreen(),
           ),
           GoRoute(
             path: '/expenses',

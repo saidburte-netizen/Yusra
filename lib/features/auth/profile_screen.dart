@@ -27,6 +27,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _newPassword = TextEditingController();
   bool _saving = false;
   Uint8List? _avatarBytes;
+  String? _branchName;
+  String? _hiringDate;
+  bool _extrasLoaded = false;
 
   /// The profile object that last populated the controllers. A background
   /// profile refresh must not wipe out unsaved edits in the form.
@@ -46,6 +49,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _boundProfile = profile;
     _name.text = profile.fullName;
     _phone.text = profile.phone ?? '';
+    _loadExtras(profile);
+  }
+
+  Future<void> _loadExtras(UserProfile profile) async {
+    if (_extrasLoaded) return;
+    _extrasLoaded = true;
+    try {
+      if (!SupabaseService.isReady) return;
+      final row = await SupabaseService.client
+          .from('profiles')
+          .select('hiring_date, branch_id, branches(name)')
+          .eq('id', profile.id)
+          .maybeSingle();
+      if (!mounted || row == null) return;
+      final branch = row['branches'];
+      setState(() {
+        _hiringDate = row['hiring_date']?.toString();
+        _branchName = branch is Map ? branch['name']?.toString() : null;
+      });
+    } catch (_) {}
   }
 
   Future<void> _pickAvatar() async {
@@ -191,6 +214,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           '${S.role}: ${profile.roleLabel ?? profile.role.label}',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
+                        if (_branchName != null)
+                          Text('Branch: $_branchName',
+                              style: Theme.of(context).textTheme.bodySmall),
+                        if (_hiringDate != null)
+                          Text('Hiring date: ${_hiringDate!.split('T').first}',
+                              style: Theme.of(context).textTheme.bodySmall),
                         TextButton.icon(
                           onPressed: _pickAvatar,
                           icon: const Icon(Icons.upload, size: 18),

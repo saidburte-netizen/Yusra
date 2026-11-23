@@ -46,6 +46,27 @@ final _salaryExpectationsProvider =
       .toList();
 });
 
+final _recordedExpensesProvider =
+    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
+  if (!SupabaseService.isReady) return const [];
+  final branchId = ref.watch(branchScopeProvider);
+  final now = nowAddisAbaba();
+  final from = DateTime.utc(now.year, now.month, 1)
+      .subtract(addisAbabaOffset)
+      .toIso8601String();
+  final to = DateTime.utc(now.year, now.month + 1, 1)
+      .subtract(addisAbabaOffset)
+      .toIso8601String();
+  var query = SupabaseService.client
+      .from('expenses')
+      .select('id, category, amount, expense_date, description, status')
+      .gte('expense_date', from)
+      .lt('expense_date', to);
+  if (branchId != null) query = query.eq('branch_id', branchId);
+  final rows = await query.order('expense_date', ascending: false);
+  return List<Map<String, dynamic>>.from(rows as List);
+});
+
 class ExpectedExpensesScreen extends ConsumerWidget {
   const ExpectedExpensesScreen({super.key});
 
@@ -53,6 +74,7 @@ class ExpectedExpensesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final expected = ref.watch(_expectedExpensesProvider);
     final salaries = ref.watch(_salaryExpectationsProvider);
+    final recorded = ref.watch(_recordedExpensesProvider);
     final auth = ref.watch(authProvider);
     final canManage = auth.profile?.role == AppRole.superAdmin ||
         auth.profile?.role == AppRole.admin;
@@ -76,10 +98,12 @@ class ExpectedExpensesScreen extends ConsumerWidget {
           onRetry: () {
             ref.invalidate(_expectedExpensesProvider);
             ref.invalidate(_salaryExpectationsProvider);
+            ref.invalidate(_recordedExpensesProvider);
           },
         ),
         data: (rows) {
           final salaryRows = salaries.valueOrNull ?? const [];
+          final recordedRows = recorded.valueOrNull ?? const [];
           final today = nowAddisAbaba();
           final day = today.day;
           final daysInMonth = DateTime(today.year, today.month + 1, 0).day;
@@ -114,19 +138,45 @@ class ExpectedExpensesScreen extends ConsumerWidget {
               source: 'salary',
             ));
           }
+          for (final r in recordedRows) {
+            final amount = _num(r['amount']).toDouble();
+            DateTime? dt;
+            final raw = r['expense_date'];
+            if (raw is String) dt = DateTime.tryParse(raw)?.toLocal();
+            final dueDay = (dt?.day ?? day).clamp(1, daysInMonth);
+            final desc = (r['description'] as String?)?.trim();
+            items.add(_ExpectedItem(
+              name:
+                  (desc != null && desc.isNotEmpty) ? desc : 'Recorded expense',
+              category: (r['category'] as String?) ?? 'Other',
+              amount: amount,
+              dueDay: dueDay,
+              overdue: false,
+              source: 'recorded',
+              notes: r['status']?.toString(),
+            ));
+          }
           items.sort((a, b) {
             if (a.overdue != b.overdue) return a.overdue ? -1 : 1;
+            if (a.source != b.source) return a.source.compareTo(b.source);
             return a.dueDay.compareTo(b.dueDay);
           });
           final total = items.fold<double>(0, (s, i) => s + i.amount);
           final overdue = items
               .where((i) => i.overdue)
               .fold<double>(0, (s, i) => s + i.amount);
+          final byCategory = <String, double>{};
+          for (final i in items) {
+            byCategory[i.category] = (byCategory[i.category] ?? 0) + i.amount;
+          }
+          final catEntries = byCategory.entries.toList()
+            ..sort((a, b) => b.value.compareTo(a.value));
 
           return RefreshIndicator(
             onRefresh: () async {
               ref.invalidate(_expectedExpensesProvider);
               ref.invalidate(_salaryExpectationsProvider);
+              ref.invalidate(_recordedExpensesProvider);
             },
             child: ListView(
               padding: const EdgeInsets.all(16),
@@ -142,6 +192,32 @@ class ExpectedExpensesScreen extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Breakdown by category',
+                            style: TextStyle(fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 8),
+                        for (final e in catEntries)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              children: [
+                                Expanded(child: Text(e.key)),
+                                Text(formatMoney(e.value),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700)),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 for (final item in items)
                   Card(
                     child: ListTile(
@@ -154,7 +230,7 @@ class ExpectedExpensesScreen extends ConsumerWidget {
                       ),
                       title: Text(item.name),
                       subtitle: Text(
-                          '${item.category} · Due day ${item.dueDay}${item.overdue ? ' · Overdue' : ''}'),
+                          '${item.category} · Due day ${item.dueDay}${item.overdue ? ' · Overdue' : ''} · ${item.source}'),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [

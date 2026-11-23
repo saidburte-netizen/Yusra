@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../core/errors/app_error.dart';
@@ -36,6 +37,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
   String? _roleFilter;
   String? _statusFilter;
   String? _branchFilter;
+  bool _handledAction = false;
 
   @override
   void initState() {
@@ -47,6 +49,19 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       _loading = false;
     } else {
       _load();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_handledAction) return;
+    final action = GoRouterState.of(context).uri.queryParameters['action'];
+    if (action == 'add') {
+      _handledAction = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _createUser();
+      });
     }
   }
 
