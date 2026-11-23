@@ -62,7 +62,8 @@ class _Repo extends InventoryRepository {
       const [Category(id: 'c1', name: 'Antibiotics')];
 
   @override
-  Future<List<Medicine>> medicines({String query = '', String? categoryId, int limit = 200}) async =>
+  Future<List<Medicine>> medicines(
+          {String query = '', String? categoryId, int limit = 200}) async =>
       List.unmodifiable(_meds);
 
   @override
@@ -98,19 +99,39 @@ class _Repo extends InventoryRepository {
   @override
   Future<List<StockBatch>> expiringBatches(String? branchId) async => const [];
   @override
-  Future<List<StockBatch>> batches({required String? branchId, String? medicineId, bool includeInactive = false}) async => const [];
+  Future<List<StockBatch>> batches(
+          {required String? branchId,
+          String? medicineId,
+          bool includeInactive = false}) async =>
+      const [];
   @override
-  Future<List<StockMovement>> movements({required String? branchId, String? medicineId, String? type, DateTime? from, DateTime? to}) async => const [];
+  Future<List<StockMovement>> movements(
+          {required String? branchId,
+          String? medicineId,
+          String? type,
+          DateTime? from,
+          DateTime? to}) async =>
+      const [];
   @override
-  Future<List<ReorderSuggestion>> reorderSuggestions(String? branchId) async => const [];
+  Future<List<ReorderSuggestion>> reorderSuggestions(String? branchId) async =>
+      const [];
 
   @override
-  Future<int> addOpeningStock({required String branchId, required List<OpeningStockRowInput> rows, String? idempotencyKey}) async {
+  Future<int> addOpeningStock(
+      {required String branchId,
+      required List<OpeningStockRowInput> rows,
+      String? idempotencyKey}) async {
     addedOpeningStock = true;
     openingStockRows = rows.length;
     for (final r in rows) {
       _stock.removeWhere((s) => s.medicineId == r.medicineId);
-      final med = _meds.firstWhere((m) => m.id == r.medicineId, orElse: () => Medicine(id: r.medicineId, name: r.medicineId, sellingPrice: 0, costPrice: 0, isActive: true));
+      final med = _meds.firstWhere((m) => m.id == r.medicineId,
+          orElse: () => Medicine(
+              id: r.medicineId,
+              name: r.medicineId,
+              sellingPrice: 0,
+              costPrice: 0,
+              isActive: true));
       _stock.add(StockSummary(
         branchId: branchId,
         medicineId: r.medicineId,
@@ -127,7 +148,8 @@ class _Repo extends InventoryRepository {
 
 class _FakeSupplierRepo extends SupplierRepository {
   @override
-  Future<List<Supplier>> list({String query = ''}) async => const [Supplier(id: 's1', name: 'Supplier')];
+  Future<List<Supplier>> list({String query = ''}) async =>
+      const [Supplier(id: 's1', name: 'Supplier')];
 }
 
 class _FakeSalesRepo extends SalesRepository {
@@ -154,7 +176,8 @@ class _FakeSalesRepo extends SalesRepository {
 class _FakePurchaseRepo extends PurchaseRepository {
   bool received = false;
   @override
-  Future<void> receive(String poId, List<Map<String, dynamic>> items, {String? idempotencyKey}) async {
+  Future<void> receive(String poId, List<Map<String, dynamic>> items,
+      {String? idempotencyKey}) async {
     received = true;
   }
 }
@@ -164,7 +187,9 @@ void main() {
   SharedPreferences.setMockInitialValues(<String, Object>{});
   AppErrorReporter.install();
 
-  testWidgets('full flow: add medicine -> save -> opening stock -> inventory -> sale -> purchase', (tester) async {
+  testWidgets(
+      'full flow: add medicine -> save -> opening stock -> inventory -> sale -> purchase',
+      (tester) async {
     tester.view.physicalSize = const Size(1280, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
@@ -195,14 +220,17 @@ void main() {
       supplierRepositoryProvider.overrideWithValue(_FakeSupplierRepo()),
       salesRepositoryProvider.overrideWithValue(salesRepo),
       purchaseRepositoryProvider.overrideWithValue(purchaseRepo),
-      categoriesProvider.overrideWith((ref) async => const [Category(id: 'c1', name: 'Antibiotics')]),
-      medicinesProvider.overrideWith((ref, filter) async => repo.medicines(query: filter.query, categoryId: filter.categoryId)),
+      categoriesProvider.overrideWith(
+          (ref) async => const [Category(id: 'c1', name: 'Antibiotics')]),
+      medicinesProvider.overrideWith((ref, filter) async =>
+          repo.medicines(query: filter.query, categoryId: filter.categoryId)),
       stockSummaryProvider.overrideWith((ref) async => repo.stockSummary('b1')),
       lowStockProvider.overrideWith((ref) async => const []),
       expiringBatchesProvider.overrideWith((ref) async => const []),
       batchesProvider.overrideWith((ref, medicineId) async => const []),
       movementsProvider.overrideWith((ref, filter) async => const []),
-      reorderSuggestionsProvider.overrideWith((ref, branchId) async => const []),
+      reorderSuggestionsProvider
+          .overrideWith((ref, branchId) async => const []),
       expiryAlertDaysProvider.overrideWith((ref) async => 90),
     ]);
     addTearDown(container.dispose);
@@ -223,7 +251,8 @@ void main() {
     void ok(String step, bool pass, [Object? err]) {
       results[step] = pass;
       // ignore: avoid_print
-      print('STEP[$step]=${pass ? 'PASS' : 'FAIL'}${err != null ? ' err=$err' : ''}');
+      print(
+          'STEP[$step]=${pass ? 'PASS' : 'FAIL'}${err != null ? ' err=$err' : ''}');
     }
 
     // 1. Add Medicine -> save
@@ -255,9 +284,15 @@ void main() {
       await tester.pumpAndSettle(const Duration(milliseconds: 300));
       final before = repo.addedOpeningStock;
       await repo.addOpeningStock(branchId: 'b1', rows: [
-        OpeningStockRowInput(medicineId: 'm1', quantity: 10, unitCost: 8, batchNo: 'B1', expiry: DateTime(2027, 1, 1)),
+        OpeningStockRowInput(
+            medicineId: 'm1',
+            quantity: 10,
+            unitCost: 8,
+            batchNo: 'B1',
+            expiry: DateTime(2027, 1, 1)),
       ]);
-      ok('opening_stock_save', !before && repo.addedOpeningStock && repo.openingStockRows == 1);
+      ok('opening_stock_save',
+          !before && repo.addedOpeningStock && repo.openingStockRows == 1);
     } catch (e) {
       ok('opening_stock_save', false, e);
     }
@@ -267,7 +302,8 @@ void main() {
       router.go('/inventory');
       await tester.pumpAndSettle(const Duration(milliseconds: 300));
       final stock = await repo.stockSummary('b1');
-      ok('appears_in_inventory', stock.any((s) => s.medicineId == 'm1' && s.availableQty == 10));
+      ok('appears_in_inventory',
+          stock.any((s) => s.medicineId == 'm1' && s.availableQty == 10));
     } catch (e) {
       ok('appears_in_inventory', false, e);
     }
@@ -277,8 +313,12 @@ void main() {
       await salesRepo.createSale(
         branchId: 'b1',
         shiftId: 'shift-1',
-        items: [{'medicine_id': 'm1', 'quantity': 1, 'unit_price': 12.5}],
-        payments: [{'method': 'cash', 'amount': 12.5}],
+        items: [
+          {'medicine_id': 'm1', 'quantity': 1, 'unit_price': 12.5}
+        ],
+        payments: [
+          {'method': 'cash', 'amount': 12.5}
+        ],
         discount: 0,
       );
       ok('new_sale', salesRepo.saleCreated && salesRepo.lastBranch == 'b1');
@@ -288,19 +328,27 @@ void main() {
 
     // 5. Purchase
     try {
-      await purchaseRepo.receive('po1', [{'item_id': 'i1', 'quantity_received': 5}]);
+      await purchaseRepo.receive('po1', [
+        {'item_id': 'i1', 'quantity_received': 5}
+      ]);
       ok('purchase_receive', purchaseRepo.received);
     } catch (e) {
       ok('purchase_receive', false, e);
     }
 
     while (tester.takeException() != null) {}
-    final somethingWrong = find.text('Something went wrong').evaluate().isNotEmpty;
+    final somethingWrong =
+        find.text('Something went wrong').evaluate().isNotEmpty;
     final fatal = flutterErrors.where((e) {
       final m = e.exceptionAsString();
       return !m.contains('computeDryBaseline') && !m.contains('overflowed');
     }).toList();
-    ok('no_error_widget', !somethingWrong, somethingWrong ? 'Something went wrong visible' : (fatal.isNotEmpty ? fatal.first.exception : null));
+    ok(
+        'no_error_widget',
+        !somethingWrong,
+        somethingWrong
+            ? 'Something went wrong visible'
+            : (fatal.isNotEmpty ? fatal.first.exception : null));
 
     expect(results['add_medicine_save'], isTrue);
     expect(results['opening_stock_save'], isTrue);
