@@ -126,7 +126,7 @@ void main() {
 
   for (final viewport in sizes) {
     testWidgets(
-        'POS no-shift banner wraps and opens shift in place at '
+        'POS no-shift shows large Open shift button and opens shift at '
         '${viewport.name}', (tester) async {
       _setSize(tester, viewport.size);
       final errors = _captureErrors();
@@ -136,10 +136,6 @@ void main() {
       expect(_unexpectedErrors(errors), isEmpty,
           reason: '${_unexpectedErrors(errors).map((e) => e.exception)}');
       expect(find.text('New sale'), findsOneWidget);
-      expect(
-        find.text('You need an open cash shift to make a sale.'),
-        findsOneWidget,
-      );
       expect(find.text('Open shift'), findsOneWidget);
 
       await tester.tap(find.text('Open shift'));
@@ -162,17 +158,13 @@ void main() {
 
       expect(_unexpectedErrors(errors), isEmpty,
           reason: '${_unexpectedErrors(errors).map((e) => e.exception)}');
-      expect(find.text('Close shift'), findsOneWidget);
       expect(find.textContaining('Shift open'), findsOneWidget);
-      expect(
-        find.text('You need an open cash shift to make a sale.'),
-        findsNothing,
-      );
+      expect(find.text('Open shift'), findsNothing);
 
-      await tester.tap(find.ancestor(
-        of: find.text('Close shift'),
-        matching: find.byType(OutlinedButton),
-      ));
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      expect(find.text('Close shift'), findsOneWidget);
+      await tester.tap(find.text('Close shift'));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsOneWidget);
       expect(
