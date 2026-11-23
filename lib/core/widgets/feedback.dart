@@ -81,21 +81,25 @@ class LoadingSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        for (var i = 0; i < lines; i++) ...[
-          Container(
-            height: cardHeight,
-            decoration: BoxDecoration(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? AppColors.darkElevated
-                  : AppColors.pink50,
-              borderRadius: BorderRadius.circular(AppColors.radius),
+    return SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < lines; i++) ...[
+            Container(
+              height: cardHeight,
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppColors.darkElevated
+                    : AppColors.pink50,
+                borderRadius: BorderRadius.circular(AppColors.radius),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
+          ],
         ],
-      ],
+      ),
     );
   }
 }

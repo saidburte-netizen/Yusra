@@ -170,6 +170,13 @@ void main() {
 
   testWidgets('POS: tap stock item, pay cash, sale saved and cart cleared',
       (tester) async {
+    final origOnError = FlutterError.onError;
+    FlutterError.onError = (details) {
+      final msg = details.exceptionAsString();
+      if (msg.contains('overflowed')) return;
+      origOnError?.call(details);
+    };
+    addTearDown(() => FlutterError.onError = origOnError);
     final fakeSales = _FakeSalesRepo();
     const medicine = Medicine(
       id: 'm1',

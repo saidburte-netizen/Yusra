@@ -762,7 +762,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                           gridDelegate:
                               const SliverGridDelegateWithMaxCrossAxisExtent(
                             maxCrossAxisExtent: 220,
-                            mainAxisExtent: 132,
+                            mainAxisExtent: 148,
                             crossAxisSpacing: 10,
                             mainAxisSpacing: 10,
                           ),
