@@ -50,7 +50,7 @@ class ResponsivePrimaryButton extends StatelessWidget {
     );
     return expand
         ? SizedBox(width: double.infinity, height: 48, child: button)
-        : button;
+        : LimitedBox(maxWidth: 360, child: button);
   }
 }
 
@@ -93,7 +93,7 @@ class ResponsiveSecondaryButton extends StatelessWidget {
     );
     return expand
         ? SizedBox(width: double.infinity, height: 48, child: button)
-        : button;
+        : LimitedBox(maxWidth: 360, child: button);
   }
 }
 

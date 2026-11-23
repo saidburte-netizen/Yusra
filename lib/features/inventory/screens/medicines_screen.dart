@@ -597,21 +597,20 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
   }
 
   /// Two side-by-side fields on wide dialogs, stacked on a phone.
-  Widget _pair(Widget left, Widget right) => LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth < 420) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [left, const SizedBox(height: 10), right],
-            );
-          }
-          return Row(children: [
-            Expanded(child: left),
-            const SizedBox(width: 10),
-            Expanded(child: right),
-          ]);
-        },
+  Widget _pair(Widget left, Widget right) {
+    final narrow = MediaQuery.sizeOf(context).width < 520;
+    if (narrow) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [left, const SizedBox(height: 10), right],
       );
+    }
+    return Row(children: [
+      Expanded(child: left),
+      const SizedBox(width: 10),
+      Expanded(child: right),
+    ]);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -639,16 +638,15 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
                 const SizedBox(height: 10),
                 AppTextField(label: 'Generic name', controller: _generic),
                 const SizedBox(height: 10),
-                LayoutBuilder(
-                  builder: (context, constraints) => Wrap(
+                Builder(builder: (context) {
+                  final w = dialogContentWidth(context, maxWidth: 560);
+                  return Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       SizedBox(
-                        width: constraints.maxWidth < 420
-                            ? constraints.maxWidth
-                            : constraints.maxWidth - 52,
+                        width: w < 420 ? w : w - 52,
                         child: AppTextField(
                             label: 'Barcode', controller: _barcode),
                       ),
@@ -658,48 +656,49 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
                             setState(() => _barcode.text = code),
                       ),
                     ],
-                  ),
-                ),
+                  );
+                }),
                 const SizedBox(height: 10),
-                LayoutBuilder(
-                  builder: (context, constraints) => Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: constraints.maxWidth < 420
-                            ? constraints.maxWidth
-                            : constraints.maxWidth - 140,
-                        child: AppDropdown<String?>(
-                          label: 'Category',
-                          value: _categoryId,
-                          items: [
-                            const DropdownMenuItem(
-                                value: null, child: Text('None')),
-                            if (_categoryId != null &&
-                                !categories
-                                    .any((item) => item.id == _categoryId))
-                              DropdownMenuItem(
-                                value: _categoryId,
-                                child: const Text('Current category'),
-                              ),
-                            for (final category in categories)
-                              DropdownMenuItem(
-                                  value: category.id,
-                                  child: Text(category.name)),
-                          ],
-                          onChanged: (value) =>
-                              setState(() => _categoryId = value),
+                Builder(
+                  builder: (context) {
+                    final w = dialogContentWidth(context, maxWidth: 560);
+                    return Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: w < 420 ? w : w - 140,
+                          child: AppDropdown<String?>(
+                            label: 'Category',
+                            value: _categoryId,
+                            items: [
+                              const DropdownMenuItem(
+                                  value: null, child: Text('None')),
+                              if (_categoryId != null &&
+                                  !categories
+                                      .any((item) => item.id == _categoryId))
+                                DropdownMenuItem(
+                                  value: _categoryId,
+                                  child: const Text('Current category'),
+                                ),
+                              for (final category in categories)
+                                DropdownMenuItem(
+                                    value: category.id,
+                                    child: Text(category.name)),
+                            ],
+                            onChanged: (value) =>
+                                setState(() => _categoryId = value),
+                          ),
                         ),
-                      ),
-                      TextButton.icon(
-                        onPressed: _busy ? null : _addCategory,
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Add category'),
-                      ),
-                    ],
-                  ),
+                        TextButton.icon(
+                          onPressed: _busy ? null : _addCategory,
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Add category'),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 10),
                 _pair(

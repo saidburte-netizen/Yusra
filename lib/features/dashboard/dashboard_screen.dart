@@ -643,6 +643,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           ),
                           child: DropdownButtonFormField<ActivityRange>(
                             value: _range,
+                            isExpanded: true,
                             dropdownColor: AppColors.plum900,
                             style: const TextStyle(
                               color: AppColors.onDark,

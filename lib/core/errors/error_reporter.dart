@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../strings.dart';
 import '../theme/app_colors.dart';
@@ -61,8 +62,13 @@ class _FatalErrorView extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final bg = isDark ? AppColors.darkBase : AppColors.pink50;
-    final debugMessage = '$error';
-    final stack = details.stack?.toString() ?? '';
+    final stackLines = (details.stack?.toString() ?? '')
+        .split('\n')
+        .where((l) => l.trim().isNotEmpty)
+        .take(15)
+        .join('\n');
+    final fullReport =
+        'Exception: $error\n\nStack (first 15 lines):\n$stackLines';
     return Material(
       color: bg,
       child: SafeArea(
@@ -93,49 +99,63 @@ class _FatalErrorView extends StatelessWidget {
                           textAlign: TextAlign.center,
                           style: theme.textTheme.bodyMedium,
                         ),
-                        if (kDebugMode) ...[
-                          const SizedBox(height: 16),
-                          Text(
-                            'Debug details (not shown in release)',
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              color: AppColors.danger,
-                            ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Error details',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: AppColors.danger,
                           ),
-                          const SizedBox(height: 8),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? AppColors.darkCard
+                                : AppColors.pink50.withOpacity(0.5),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
                               color: isDark
-                                  ? AppColors.darkCard
-                                  : AppColors.pink50.withOpacity(0.5),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: isDark
-                                    ? AppColors.darkBorder
-                                    : AppColors.gold300.withOpacity(0.5),
-                              ),
-                            ),
-                            child: SelectableText(
-                              '$debugMessage\n\n$stack',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                fontFamily: 'monospace',
-                              ),
+                                  ? AppColors.darkBorder
+                                  : AppColors.gold300.withOpacity(0.5),
                             ),
                           ),
-                        ],
+                          child: SelectableText(
+                            fullReport,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ),
                         const SizedBox(height: 20),
-                        Center(
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              final nav = Navigator.maybeOf(context);
-                              if (nav != null) {
-                                nav.maybePop();
-                              }
-                            },
-                            icon: const Icon(Icons.refresh),
-                            label: const Text(S.retry),
-                          ),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 8,
+                          alignment: WrapAlignment.center,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: () async {
+                                await Clipboard.setData(
+                                    ClipboardData(text: fullReport));
+                                if (context.mounted) {
+                                  ScaffoldMessenger.maybeOf(context)
+                                      ?.showSnackBar(const SnackBar(
+                                          content: Text('Error copied')));
+                                }
+                              },
+                              icon: const Icon(Icons.copy),
+                              label: const Text('Copy error'),
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                final nav = Navigator.maybeOf(context);
+                                if (nav != null) nav.maybePop();
+                              },
+                              icon: const Icon(Icons.refresh),
+                              label: const Text(S.retry),
+                            ),
+                          ],
                         ),
                       ],
                     ),
