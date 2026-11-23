@@ -1634,7 +1634,7 @@
       "label": "Create sale / charge cart",
       "kind": "create",
       "gate": "can(pos,edit)",
-      "evidence": "lib/features/pos/screens/pos_screen.dart:488",
+      "evidence": "lib/features/pos/screens/pos_screen.dart:493",
       "db_operation": "rpc.create_sale",
       "ui_roles": [
         "super_admin",
