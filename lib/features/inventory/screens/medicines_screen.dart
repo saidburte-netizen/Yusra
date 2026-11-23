@@ -615,7 +615,7 @@ class _MedicineFormDialogState extends ConsumerState<_MedicineFormDialog> {
   @override
   Widget build(BuildContext context) {
     final categories =
-        ref.watch(categoriesProvider).value ?? const <Category>[];
+        ref.watch(categoriesProvider).valueOrNull ?? const <Category>[];
     return AlertDialog(
       title: Text(widget.initial == null ? 'New medicine' : 'Edit medicine'),
       content: ConstrainedBox(

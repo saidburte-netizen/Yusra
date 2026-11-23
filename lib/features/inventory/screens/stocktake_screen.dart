@@ -217,7 +217,7 @@ class _StocktakeScreenState extends ConsumerState<StocktakeScreen> {
   @override
   Widget build(BuildContext context) {
     final categories =
-        ref.watch(categoriesProvider).value ?? const <Category>[];
+        ref.watch(categoriesProvider).valueOrNull ?? const <Category>[];
     final role = ref.watch(authProvider).profile?.role ?? AppRole.cashier;
     final canApply = can(role, Modules.stock, PermAction.edit);
 

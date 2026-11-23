@@ -46,13 +46,13 @@ class SharedPrefsCacheSnapshotStore implements CacheSnapshotStore {
 
   Map<String, String> read() {
     final raw = _prefs.getString(CachePolicy.snapshotKey);
-    if (raw == null) return const <String, String>{};
+    if (raw == null) return <String, String>{};
     try {
       final decoded = jsonDecode(raw) as Map;
       return decoded
           .map((key, value) => MapEntry(key.toString(), value.toString()));
     } catch (_) {
-      return const <String, String>{};
+      return <String, String>{};
     }
   }
 

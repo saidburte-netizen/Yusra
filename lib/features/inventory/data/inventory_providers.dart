@@ -79,7 +79,9 @@ Future<void> _saveCatalogue(
     Ref ref, Map<String, String> Function(Map<String, String>) update) async {
   final store = ref.read(cacheSnapshotStoreProvider);
   if (store == null) return;
-  await store.save(update(store.read()));
+  try {
+    await store.save(update(Map<String, String>.of(store.read())));
+  } catch (_) {}
 }
 
 final categoriesProvider = FutureProvider<List<Category>>((ref) async {
