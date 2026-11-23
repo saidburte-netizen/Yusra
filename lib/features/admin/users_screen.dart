@@ -575,9 +575,6 @@ class _UserFormDialog extends StatefulWidget {
     this.initialRole,
     this.initialBranch,
     this.initialName,
-    this.initialPhone,
-    this.initialSalary,
-    this.initialHiringDate,
     this.showPasswordFields = true,
   });
 
@@ -586,9 +583,6 @@ class _UserFormDialog extends StatefulWidget {
   final String? initialRole;
   final String? initialBranch;
   final String? initialName;
-  final String? initialPhone;
-  final String? initialSalary;
-  final DateTime? initialHiringDate;
   final bool showPasswordFields;
 
   @override
@@ -611,10 +605,10 @@ class _UserFormDialogState extends State<_UserFormDialog> {
     super.initState();
     _email = TextEditingController();
     _name = TextEditingController(text: widget.initialName ?? '');
-    _phone = TextEditingController(text: widget.initialPhone ?? '');
-    _salary = TextEditingController(text: widget.initialSalary ?? '');
+    _phone = TextEditingController();
+    _salary = TextEditingController();
     _password = TextEditingController();
-    _hiringDate = widget.initialHiringDate;
+    _hiringDate = null;
     _role = widget.initialRole;
     _branch = widget.initialBranch;
     if (_role != null &&

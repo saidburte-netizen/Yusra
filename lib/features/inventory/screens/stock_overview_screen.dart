@@ -101,7 +101,7 @@ class _StockOverviewScreenState extends ConsumerState<StockOverviewScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              PageHeader(
+              const PageHeader(
                 title: 'Stock overview',
                 subtitle: 'Available, expired and low stock by medicine',
               ),
