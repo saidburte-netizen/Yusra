@@ -601,8 +601,7 @@ WiringInventory _extract(String root) {
         final plainLabelMatch =
             RegExp(r'''['"]([^'"]+)['"]''').firstMatch(labelLine);
         final fieldMatch =
-            RegExp(r'\bvalue:\s*(?:money|count)?\(?\s*data\.(\w+)')
-                .firstMatch(joined);
+            RegExp(r'\bvalue:[\s\S]*?\bdata\.(\w+)').firstMatch(joined);
         final drillMatch =
             RegExp(r"context\.go\('([^']+)'\)").firstMatch(joined);
         final dynamicDrill = joined.contains('context.go(item.path)');
