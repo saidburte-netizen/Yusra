@@ -342,6 +342,10 @@ class DashboardSnapshot {
 
     final failures = <String>[];
     final ownOnly = isOwnOnly(role, Modules.sales);
+    final showSales = can(role, Modules.sales, PermAction.view);
+    final showStockOverview = canSeeDashboardStock(role);
+    final showPharmacyValue = canSeeDashboardPharmacyValue(role);
+    final showExpectedExpenses = canSeeDashboardExpectedExpenses(role);
 
     Future<List<Map<String, dynamic>>?> salesBetween(
       String from,
@@ -361,12 +365,15 @@ class DashboardSnapshot {
           return query;
         }, failures: failures, label: label);
 
-    final todayRows =
-        await salesBetween(dayStart, dayEnd, label: "Today's sales");
-    final monthRows =
-        await salesBetween(monthStart, dayEnd, label: 'Monthly sales');
-    final periodRows =
-        await salesBetween(periodStart, dayEnd, label: '${range.label} sales');
+    final todayRows = showSales
+        ? await salesBetween(dayStart, dayEnd, label: "Today's sales")
+        : null;
+    final monthRows = showSales
+        ? await salesBetween(monthStart, dayEnd, label: 'Monthly sales')
+        : null;
+    final periodRows = showSales
+        ? await salesBetween(periodStart, dayEnd, label: '${range.label} sales')
+        : null;
 
     final dailyMap = <String, double>{};
     for (final row in periodRows ?? const []) {
@@ -393,62 +400,77 @@ class DashboardSnapshot {
       }, failures: failures, label: label);
     }
 
-    final lowStock = await branchRows('v_low_stock', label: 'Low stock');
+    final lowStock = showStockOverview
+        ? await branchRows('v_low_stock', label: 'Low stock')
+        : null;
     // v_expiring_batches includes both expired and not-yet-expired batches;
     // split it with its real `is_expired` flag.
-    final expiring =
-        await branchRows('v_expiring_batches', label: 'Expiry alerts');
+    final expiring = showStockOverview
+        ? await branchRows('v_expiring_batches', label: 'Expiry alerts')
+        : null;
     final shifts = await _rows(() {
       var query = client.from('shifts').select().eq('status', 'open');
       if (branchId != null) query = query.eq('branch_id', branchId);
       return query;
     }, failures: failures, label: 'Open shifts');
-    final prescriptions = await _rows(() {
-      var query = client.from('prescriptions').select().eq('status', 'pending');
-      if (branchId != null) query = query.eq('branch_id', branchId);
-      return query;
-    }, failures: failures, label: 'Prescriptions');
+    final prescriptions =
+        can(role, Modules.prescriptions, PermAction.view)
+            ? await _rows(() {
+                var query =
+                    client.from('prescriptions').select().eq('status', 'pending');
+                if (branchId != null) query = query.eq('branch_id', branchId);
+                return query;
+              }, failures: failures, label: 'Prescriptions')
+            : null;
     // po_status has no 'pending'/'approved' values: ordered and partially
     // received are the states that still need receiving.
-    final orders = await _rows(() {
-      var query = client
-          .from('purchase_orders')
-          .select()
-          .inFilter('status', const ['ordered', 'partially_received']);
-      if (branchId != null) query = query.eq('branch_id', branchId);
-      return query;
-    }, failures: failures, label: 'Purchase orders');
+    final orders = can(role, Modules.purchaseOrders, PermAction.view)
+        ? await _rows(() {
+            var query = client
+                .from('purchase_orders')
+                .select()
+                .inFilter('status', const ['ordered', 'partially_received']);
+            if (branchId != null) query = query.eq('branch_id', branchId);
+            return query;
+          }, failures: failures, label: 'Purchase orders')
+        : null;
 
     // Profit and top medicines come from sale_items joined to medicines;
     // sales has no `profit` column and v_top_medicines does not exist.
-    final todayItems = await _saleItemsBetween(
-      dayStart,
-      dayEnd,
-      branchId: branchId,
-      ownOnly: ownOnly,
-      userId: userId,
-      failures: failures,
-    );
-    final periodItems = await _saleItemsBetween(
-      periodStart,
-      dayEnd,
-      branchId: branchId,
-      ownOnly: ownOnly,
-      userId: userId,
-      failures: failures,
-    );
+    final todayItems = showSales
+        ? await _saleItemsBetween(
+            dayStart,
+            dayEnd,
+            branchId: branchId,
+            ownOnly: ownOnly,
+            userId: userId,
+            failures: failures,
+          )
+        : null;
+    final periodItems = showSales
+        ? await _saleItemsBetween(
+            periodStart,
+            dayEnd,
+            branchId: branchId,
+            ownOnly: ownOnly,
+            userId: userId,
+            failures: failures,
+          )
+        : null;
 
-    // One unified activity stream (activity_log) feeds recent activity, the
-    // audit trail and each employee's last-active timestamp.
-    final activity = await _rows(() {
-      var query = client
-          .from('activity_log')
-          .select('id, actor_id, actor_email, actor_role, action, entity_type, '
-              'entity_id, summary, branch_id, created_at, '
-              'correction_requested, correction_reason, approved_at');
-      if (branchId != null) query = query.eq('branch_id', branchId);
-      return query.order('created_at', ascending: false).limit(100);
-    }, failures: failures, label: 'Activity log');
+    // Activity/audit data is only needed for admin team standing; other roles
+    // must not have it loaded into their dashboard snapshot at all.
+    final activity = can(role, Modules.audit, PermAction.view)
+        ? await _rows(() {
+            var query = client
+                .from('activity_log')
+                .select('id, actor_id, actor_email, actor_role, action, entity_type, '
+                    'entity_id, summary, branch_id, created_at, '
+                    'correction_requested, correction_reason, approved_at');
+            if (branchId != null) query = query.eq('branch_id', branchId);
+            return query.order('created_at', ascending: false).limit(100);
+          }, failures: failures, label: 'Activity log')
+        : null;
 
     // Admins see each employee's live standing, scoped to the selected branch.
     final team = <TeamMemberStatus>[];
@@ -503,53 +525,57 @@ class DashboardSnapshot {
       team.sort((a, b) => b.todaySales.compareTo(a.todaySales));
     }
 
-    // Pharmacy stock value (available qty * cost/selling) grouped by category.
-    final stockRows = await _rows(() {
-      var query = client.from('v_stock_summary').select();
-      if (branchId != null) query = query.eq('branch_id', branchId);
-      return query;
-    }, failures: failures, label: 'Pharmacy stock value');
-    final categoryRows = await _rows(
-      () => client.from('categories').select('id, name'),
-      failures: failures,
-      label: 'Categories',
-    );
-    final categoryNames = <String, String>{
-      for (final row in categoryRows ?? const [])
-        if (row['id'] != null)
-          row['id'].toString(): (row['name'] as String? ?? 'Uncategorized'),
-    };
+    // Pharmacy stock value is an overall valuation, not an operational alert.
+    // Only finance/admin roles load or hold it.
     double pharmacyCost = 0;
     double pharmacyRetail = 0;
-    final byCat = <String, Map<String, dynamic>>{};
-    for (final row in stockRows ?? const []) {
-      final qty = _num(row['available_qty']).toDouble();
-      final cost = _num(row['cost_price']).toDouble();
-      final retail = _num(row['selling_price']).toDouble();
-      final lineCost = qty * cost;
-      final lineRetail = qty * retail;
-      pharmacyCost += lineCost;
-      pharmacyRetail += lineRetail;
-      final catId = row['category_id']?.toString();
-      final catName =
-          (catId != null ? categoryNames[catId] : null) ?? 'Uncategorized';
-      final entry = byCat.putIfAbsent(
-          catName,
-          () => {
-                'category': catName,
-                'costValue': 0.0,
-                'retailValue': 0.0,
-                'items': 0,
-                'qty': 0.0,
-              });
-      entry['costValue'] = (entry['costValue'] as double) + lineCost;
-      entry['retailValue'] = (entry['retailValue'] as double) + lineRetail;
-      entry['items'] = (entry['items'] as int) + 1;
-      entry['qty'] = (entry['qty'] as double) + qty;
+    List<Map<String, dynamic>> pharmacyStockByCategory = const [];
+    if (showPharmacyValue) {
+      final stockRows = await _rows(() {
+        var query = client.from('v_stock_summary').select();
+        if (branchId != null) query = query.eq('branch_id', branchId);
+        return query;
+      }, failures: failures, label: 'Pharmacy stock value');
+      final categoryRows = await _rows(
+        () => client.from('categories').select('id, name'),
+        failures: failures,
+        label: 'Categories',
+      );
+      final categoryNames = <String, String>{
+        for (final row in categoryRows ?? const [])
+          if (row['id'] != null)
+            row['id'].toString(): (row['name'] as String? ?? 'Uncategorized'),
+      };
+      final byCat = <String, Map<String, dynamic>>{};
+      for (final row in stockRows ?? const []) {
+        final qty = _num(row['available_qty']).toDouble();
+        final cost = _num(row['cost_price']).toDouble();
+        final retail = _num(row['selling_price']).toDouble();
+        final lineCost = qty * cost;
+        final lineRetail = qty * retail;
+        pharmacyCost += lineCost;
+        pharmacyRetail += lineRetail;
+        final catId = row['category_id']?.toString();
+        final catName =
+            (catId != null ? categoryNames[catId] : null) ?? 'Uncategorized';
+        final entry = byCat.putIfAbsent(
+            catName,
+            () => {
+                  'category': catName,
+                  'costValue': 0.0,
+                  'retailValue': 0.0,
+                  'items': 0,
+                  'qty': 0.0,
+                });
+        entry['costValue'] = (entry['costValue'] as double) + lineCost;
+        entry['retailValue'] = (entry['retailValue'] as double) + lineRetail;
+        entry['items'] = (entry['items'] as int) + 1;
+        entry['qty'] = (entry['qty'] as double) + qty;
+      }
+      pharmacyStockByCategory = byCat.values.toList()
+        ..sort((a, b) =>
+            ((b['costValue'] as double)).compareTo(a['costValue'] as double));
     }
-    final pharmacyStockByCategory = byCat.values.toList()
-      ..sort((a, b) =>
-          ((b['costValue'] as double)).compareTo(a['costValue'] as double));
 
     // Expected expenses: configured expected expenses + active staff salaries.
     final expectedItems = <Map<String, dynamic>>[];
@@ -559,61 +585,63 @@ class DashboardSnapshot {
     final dayOfMonth = today.day;
     final daysInMonth = DateTime(today.year, today.month + 1, 0).day;
 
-    final expectedRows = await _rows(() {
-      var query = client
-          .from('expected_expenses')
-          .select(
-              'id, name, category, amount, due_day, branch_id, is_active, notes')
-          .eq('is_active', true);
-      if (branchId != null) {
-        query = query.or('branch_id.eq.$branchId,branch_id.is.null');
+    if (showExpectedExpenses) {
+      final expectedRows = await _rows(() {
+        var query = client
+            .from('expected_expenses')
+            .select(
+                'id, name, category, amount, due_day, branch_id, is_active, notes')
+            .eq('is_active', true);
+        if (branchId != null) {
+          query = query.or('branch_id.eq.$branchId,branch_id.is.null');
+        }
+        return query.order('due_day');
+      }, failures: failures, label: 'Expected expenses');
+
+      for (final row in expectedRows ?? const []) {
+        final amount = _num(row['amount']).toDouble();
+        final dueDay = (_num(row['due_day']).toInt()).clamp(1, daysInMonth);
+        final overdue = dayOfMonth > dueDay;
+        expectedTotal += amount;
+        if (overdue) expectedOverdue += amount;
+        expectedItems.add({
+          'name': row['name'] ?? 'Expense',
+          'category': row['category'] ?? 'Other',
+          'amount': amount,
+          'dueDay': dueDay,
+          'overdue': overdue,
+          'source': 'planned',
+        });
       }
-      return query.order('due_day');
-    }, failures: failures, label: 'Expected expenses');
 
-    for (final row in expectedRows ?? const []) {
-      final amount = _num(row['amount']).toDouble();
-      final dueDay = (_num(row['due_day']).toInt()).clamp(1, daysInMonth);
-      final overdue = dayOfMonth > dueDay;
-      expectedTotal += amount;
-      if (overdue) expectedOverdue += amount;
-      expectedItems.add({
-        'name': row['name'] ?? 'Expense',
-        'category': row['category'] ?? 'Other',
-        'amount': amount,
-        'dueDay': dueDay,
-        'overdue': overdue,
-        'source': 'planned',
-      });
-    }
+      final salaryPeople = await _rows(() {
+        var query = client
+            .from('profiles')
+            .select('id, full_name, email, monthly_salary, is_active')
+            .eq('is_active', true);
+        if (branchId != null) query = query.eq('branch_id', branchId);
+        return query;
+      }, failures: failures, label: 'Salary expectations');
 
-    final salaryPeople = await _rows(() {
-      var query = client
-          .from('profiles')
-          .select('id, full_name, email, monthly_salary, is_active')
-          .eq('is_active', true);
-      if (branchId != null) query = query.eq('branch_id', branchId);
-      return query;
-    }, failures: failures, label: 'Salary expectations');
-
-    for (final row in salaryPeople ?? const []) {
-      final salary = _num(row['monthly_salary']).toDouble();
-      if (salary <= 0) continue;
-      final dueDay = 30.clamp(1, daysInMonth);
-      final overdue = dayOfMonth > dueDay;
-      expectedTotal += salary;
-      if (overdue) expectedOverdue += salary;
-      final name = ((row['full_name'] as String?)?.trim().isNotEmpty ?? false)
-          ? (row['full_name'] as String).trim()
-          : (row['email'] as String? ?? 'Staff');
-      expectedItems.add({
-        'name': 'Salary: $name',
-        'category': 'Salaries',
-        'amount': salary,
-        'dueDay': dueDay,
-        'overdue': overdue,
-        'source': 'salary',
-      });
+      for (final row in salaryPeople ?? const []) {
+        final salary = _num(row['monthly_salary']).toDouble();
+        if (salary <= 0) continue;
+        final dueDay = 30.clamp(1, daysInMonth);
+        final overdue = dayOfMonth > dueDay;
+        expectedTotal += salary;
+        if (overdue) expectedOverdue += salary;
+        final name = ((row['full_name'] as String?)?.trim().isNotEmpty ?? false)
+            ? (row['full_name'] as String).trim()
+            : (row['email'] as String? ?? 'Staff');
+        expectedItems.add({
+          'name': 'Salary: $name',
+          'category': 'Salaries',
+          'amount': salary,
+          'dueDay': dueDay,
+          'overdue': overdue,
+          'source': 'salary',
+        });
+      }
     }
 
     return DashboardSnapshot(
@@ -1091,7 +1119,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ],
                       ),
                     ),
-                  _TopValueCards(narrow: screenWidth < 600),
+                  _TopValueCards(
+                    narrow: screenWidth < 600,
+                    showPharmacyValue: canSeeDashboardPharmacyValue(role),
+                    showExpectedExpenses: canSeeDashboardExpectedExpenses(role),
+                  ),
                   const SizedBox(height: 16),
                   if (_error != null && _data == null)
                     ErrorState(message: _error!, onRetry: _load)
@@ -1165,90 +1197,117 @@ class _DashboardSkeleton extends StatelessWidget {
   }
 }
 
-class _TopValueCards extends ConsumerWidget {
-  const _TopValueCards({required this.narrow});
+class _TopValueCards extends StatelessWidget {
+  const _TopValueCards({
+    required this.narrow,
+    required this.showPharmacyValue,
+    required this.showExpectedExpenses,
+  });
+
+  final bool narrow;
+  final bool showPharmacyValue;
+  final bool showExpectedExpenses;
+
+  @override
+  Widget build(BuildContext context) {
+    final children = <Widget>[];
+    if (showPharmacyValue) {
+      children.add(Expanded(child: _PharmacyValueCard(narrow: narrow)));
+    }
+    if (showPharmacyValue && showExpectedExpenses) {
+      children.add(const SizedBox(width: 12));
+    }
+    if (showExpectedExpenses) {
+      children.add(Expanded(child: _ExpectedExpensesCard(narrow: narrow)));
+    }
+    if (children.isEmpty) return const SizedBox.shrink();
+    return Row(children: children);
+  }
+}
+
+class _PharmacyValueCard extends ConsumerWidget {
+  const _PharmacyValueCard({required this.narrow});
+
   final bool narrow;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pharmacy = ref.watch(dashboardPharmacyValueProvider);
+    return SizedBox(
+      height: narrow ? 132.0 : 148.0,
+      child: pharmacy.when(
+        loading: () => const Card(
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+        error: (e, _) => Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text('Pharmacy value',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                TextButton(
+                    onPressed: () =>
+                        ref.invalidate(dashboardPharmacyValueProvider),
+                    child: const Text('Try again')),
+              ],
+            ),
+          ),
+        ),
+        data: (v) => _BigTopCard(
+          title: 'Pharmacy value',
+          value: formatMoney(v.cost),
+          subtitle: 'Retail ${formatMoney(v.retail)}',
+          icon: Icons.account_balance_wallet_outlined,
+          color: AppColors.plum600,
+          onTap: () => context.go('/dashboard/pharmacy-value'),
+        ),
+      ),
+    );
+  }
+}
+
+class _ExpectedExpensesCard extends ConsumerWidget {
+  const _ExpectedExpensesCard({required this.narrow});
+
+  final bool narrow;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final expected = ref.watch(dashboardExpectedExpensesProvider);
-    final cardHeight = narrow ? 132.0 : 148.0;
-    return Row(
-      children: [
-        Expanded(
-          child: SizedBox(
-            height: cardHeight,
-            child: pharmacy.when(
-              loading: () => const Card(
-                  child:
-                      Center(child: CircularProgressIndicator(strokeWidth: 2))),
-              error: (e, _) => Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text('Pharmacy value',
-                          style: TextStyle(fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 8),
-                      TextButton(
-                          onPressed: () =>
-                              ref.invalidate(dashboardPharmacyValueProvider),
-                          child: const Text('Try again')),
-                    ],
-                  ),
-                ),
-              ),
-              data: (v) => _BigTopCard(
-                title: 'Pharmacy value',
-                value: formatMoney(v.cost),
-                subtitle: 'Retail ${formatMoney(v.retail)}',
-                icon: Icons.account_balance_wallet_outlined,
-                color: AppColors.plum600,
-                onTap: () => context.go('/dashboard/pharmacy-value'),
-              ),
+    return SizedBox(
+      height: narrow ? 132.0 : 148.0,
+      child: expected.when(
+        loading: () => const Card(
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+        error: (e, _) => Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text('Expected expenses',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                TextButton(
+                    onPressed: () =>
+                        ref.invalidate(dashboardExpectedExpensesProvider),
+                    child: const Text('Try again')),
+              ],
             ),
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: SizedBox(
-            height: cardHeight,
-            child: expected.when(
-              loading: () => const Card(
-                  child:
-                      Center(child: CircularProgressIndicator(strokeWidth: 2))),
-              error: (e, _) => Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text('Expected expenses',
-                          style: TextStyle(fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 8),
-                      TextButton(
-                          onPressed: () =>
-                              ref.invalidate(dashboardExpectedExpensesProvider),
-                          child: const Text('Try again')),
-                    ],
-                  ),
-                ),
-              ),
-              data: (v) => _BigTopCard(
-                title: 'Expected expenses',
-                value: formatMoney(v.total),
-                subtitle: 'Overdue ${formatMoney(v.overdue)}',
-                subtitleColor: v.overdue > 0 ? AppColors.danger : null,
-                icon: Icons.payments_outlined,
-                color: AppColors.warning,
-                onTap: () => context.go('/dashboard/expected-expenses'),
-              ),
-            ),
-          ),
+        data: (v) => _BigTopCard(
+          title: 'Expected expenses',
+          value: formatMoney(v.total),
+          subtitle: 'Overdue ${formatMoney(v.overdue)}',
+          subtitleColor: v.overdue > 0 ? AppColors.danger : null,
+          icon: Icons.payments_outlined,
+          color: AppColors.warning,
+          onTap: () => context.go('/dashboard/expected-expenses'),
         ),
-      ],
+      ),
     );
   }
 }
@@ -1344,7 +1403,12 @@ class _DashboardBody extends StatelessWidget {
         .where((item) => item.path != '/dashboard')
         .take(4)
         .toList();
+    final showSales = can(role, Modules.sales, PermAction.view);
     final showFinance = can(role, Modules.reports, PermAction.view);
+    final showStock = canSeeDashboardStock(role);
+    final showPrescriptions = can(role, Modules.prescriptions, PermAction.view);
+    final showPurchaseOrders = can(role, Modules.purchaseOrders, PermAction.view);
+    final showAlerts = showStock || showPurchaseOrders;
     final showStaff = role == AppRole.superAdmin || role == AppRole.admin;
     final narrow = MediaQuery.sizeOf(context).width < 600;
     final gridMin = narrow ? 150.0 : 260.0;
@@ -1357,15 +1421,16 @@ class _DashboardBody extends StatelessWidget {
           minTileWidth: gridMin,
           spacing: gridSpacing,
           children: [
-            StatCard(
-              compact: narrow,
-              title: ownOnly ? S.mySalesToday : S.todaySales,
-              value: money(data.todaySales),
-              icon: Icons.today_outlined,
-              color: AppColors.pink600,
-              subtitle:
-                  '${count(data.invoiceCount)} ${S.invoiceCount.toLowerCase()}',
-            ),
+            if (showSales)
+              StatCard(
+                compact: narrow,
+                title: ownOnly ? S.mySalesToday : S.todaySales,
+                value: money(data.todaySales),
+                icon: Icons.today_outlined,
+                color: AppColors.pink600,
+                subtitle:
+                    '${count(data.invoiceCount)} ${S.invoiceCount.toLowerCase()}',
+              ),
             if (showFinance)
               StatCard(
                 compact: narrow,
@@ -1382,16 +1447,15 @@ class _DashboardBody extends StatelessWidget {
                 icon: Icons.trending_up_outlined,
                 color: AppColors.success,
               ),
-            StatCard(
-              compact: narrow,
-              title: S.openShifts,
-              value: count(data.openShifts),
-              icon: Icons.access_time_outlined,
-              color: AppColors.pink700,
-              onTap: can(role, Modules.shifts, PermAction.view)
-                  ? () => context.go('/shifts')
-                  : null,
-            ),
+            if (can(role, Modules.shifts, PermAction.view))
+              StatCard(
+                compact: narrow,
+                title: S.openShifts,
+                value: count(data.openShifts),
+                icon: Icons.access_time_outlined,
+                color: AppColors.pink700,
+                onTap: () => context.go('/shifts'),
+              ),
             if (showStaff)
               StatCard(
                 compact: narrow,
@@ -1417,43 +1481,41 @@ class _DashboardBody extends StatelessWidget {
           minTileWidth: gridMin,
           spacing: gridSpacing,
           children: [
-            StatCard(
-              compact: narrow,
-              title: S.lowStock,
-              value: count(data.lowStock),
-              icon: Icons.inventory_outlined,
-              color: AppColors.warning,
-              onTap: can(role, Modules.stock, PermAction.view)
-                  ? () => context.go('/inventory/alerts')
-                  : null,
-            ),
-            StatCard(
-              compact: narrow,
-              title: S.expiringSoon,
-              value: count(data.expiringSoon),
-              icon: Icons.event_busy_outlined,
-              color: AppColors.warning,
-              onTap: can(role, Modules.stock, PermAction.view)
-                  ? () => context.go('/inventory/alerts')
-                  : null,
-            ),
-            StatCard(
-              compact: narrow,
-              title: S.expired,
-              value: count(data.expired),
-              icon: Icons.delete_forever_outlined,
-              color: AppColors.danger,
-            ),
-            StatCard(
-              compact: narrow,
-              title: S.pendingPrescriptions,
-              value: count(data.pendingPrescriptions),
-              icon: Icons.description_outlined,
-              color: AppColors.gold700,
-              onTap: can(role, Modules.prescriptions, PermAction.view)
-                  ? () => context.go('/prescriptions')
-                  : null,
-            ),
+            if (showStock)
+              StatCard(
+                compact: narrow,
+                title: S.lowStock,
+                value: count(data.lowStock),
+                icon: Icons.inventory_outlined,
+                color: AppColors.warning,
+                onTap: () => context.go('/inventory/alerts'),
+              ),
+            if (showStock)
+              StatCard(
+                compact: narrow,
+                title: S.expiringSoon,
+                value: count(data.expiringSoon),
+                icon: Icons.event_busy_outlined,
+                color: AppColors.warning,
+                onTap: () => context.go('/inventory/alerts'),
+              ),
+            if (showStock)
+              StatCard(
+                compact: narrow,
+                title: S.expired,
+                value: count(data.expired),
+                icon: Icons.delete_forever_outlined,
+                color: AppColors.danger,
+              ),
+            if (showPrescriptions)
+              StatCard(
+                compact: narrow,
+                title: S.pendingPrescriptions,
+                value: count(data.pendingPrescriptions),
+                icon: Icons.description_outlined,
+                color: AppColors.gold700,
+                onTap: () => context.go('/prescriptions'),
+              ),
           ],
         ),
         const SizedBox(height: 16),
@@ -1462,96 +1524,99 @@ class _DashboardBody extends StatelessWidget {
           runSpacing: 16,
           crossAxisAlignment: WrapCrossAlignment.start,
           children: [
-            _Panel(
-              width: 520,
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('${S.salesByDay} · ${range.label}',
-                          style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                          height: 200, child: _SalesChart(points: data.daily)),
-                    ],
+            if (showSales)
+              _Panel(
+                width: 520,
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${S.salesByDay} · ${range.label}',
+                            style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                            height: 200,
+                            child: _SalesChart(points: data.daily)),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            _Panel(
-              width: 300,
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(S.topMedicines,
-                          style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 12),
-                      if (data.topMedicines.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 24),
-                          child: Center(child: Text(S.noData)),
-                        )
-                      else
-                        ...data.topMedicines.take(5).map(
-                              (row) => ListTile(
-                                dense: true,
-                                contentPadding: EdgeInsets.zero,
-                                title: Text((row['name'] as String?) ?? '—'),
-                                trailing: Text(
-                                  '${row['qty'] ?? '—'}',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold),
+            if (showSales)
+              _Panel(
+                width: 300,
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(S.topMedicines,
+                            style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 12),
+                        if (data.topMedicines.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: Center(child: Text(S.noData)),
+                          )
+                        else
+                          ...data.topMedicines.take(5).map(
+                                (row) => ListTile(
+                                  dense: true,
+                                  contentPadding: EdgeInsets.zero,
+                                  title: Text((row['name'] as String?) ?? '—'),
+                                  trailing: Text(
+                                    '${row['qty'] ?? '—'}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold),
+                                  ),
                                 ),
                               ),
-                            ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            _Panel(
-              width: 300,
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(S.alerts,
-                          style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 12),
-                      _AlertLine(
-                          label: S.purchaseOrdersToReceive,
-                          value: data.pendingOrders,
-                          color: AppColors.gold700,
-                          onTap:
-                              can(role, Modules.purchaseOrders, PermAction.view)
-                                  ? () => context.go('/purchasing/orders')
-                                  : null),
-                      _AlertLine(
-                          label: S.lowStock,
-                          value: data.lowStock,
-                          color: AppColors.warning,
-                          onTap: can(role, Modules.stock, PermAction.view)
-                              ? () => context.go('/inventory/alerts')
-                              : null),
-                      _AlertLine(
-                          label: S.expiringSoon,
-                          value: data.expiringSoon,
-                          color: AppColors.danger,
-                          onTap: can(role, Modules.stock, PermAction.view)
-                              ? () => context.go('/inventory/alerts')
-                              : null),
-                    ],
+            if (showAlerts)
+              _Panel(
+                width: 300,
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(S.alerts,
+                            style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 12),
+                        if (showPurchaseOrders)
+                          _AlertLine(
+                            label: S.purchaseOrdersToReceive,
+                            value: data.pendingOrders,
+                            color: AppColors.gold700,
+                            onTap: () => context.go('/purchasing/orders'),
+                          ),
+                        if (showStock)
+                          _AlertLine(
+                            label: S.lowStock,
+                            value: data.lowStock,
+                            color: AppColors.warning,
+                            onTap: () => context.go('/inventory/alerts'),
+                          ),
+                        if (showStock)
+                          _AlertLine(
+                            label: S.expiringSoon,
+                            value: data.expiringSoon,
+                            color: AppColors.danger,
+                            onTap: () => context.go('/inventory/alerts'),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: 16),

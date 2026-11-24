@@ -20,7 +20,8 @@ the following additions, which are verified by the cited files:
 | Shared row actions | `lib/core/widgets/row_actions.dart:1-120`, `lib/core/widgets.dart:1-9` | One `⋮` menu per row; `allowed` hides actions by role/state, confirm dialog for destructive actions, `ref.applyMutation(...)` refreshes lists + dashboard through `lib/core/state/invalidation.dart`. |
 | Row-action audit coverage | `supabase/migrations/0026_row_actions_audit.sql:1-20` | Adds `audit_row()` triggers for `expected_expenses`, `stock_batches`, `stock_movements`, `sale_returns`; no RLS change (audit stays select-only; writes are trigger/RPC-only). |
 | Dashboard refresh on catalogue writes | `lib/core/state/invalidation.dart` (`saveCategory`, `saveSupplier`, `saveCustomer`, `saveUser`, `rowAction`) | These mutations now also bump `dashboardRefreshProvider` and the two drill-down providers. |
-| Updated architecture | `docs/ARCHITECTURE.md` (evidence map, §f, §g ADR-07/ADR-09) | Records the new function contract, deploy workflow and shared widget decision. |
+| Role-scoped dashboard | `lib/core/permissions.dart` (`canSeeDashboardPharmacyValue`, `canSeeDashboardExpectedExpenses`, `canSeeDashboardStock`), `lib/features/dashboard/dashboard_screen.dart`, `lib/core/router.dart` | Unauthorized roles never load/watch or see overall valuation, expected-expense/salary, stock-alert, sales-report or staff counters; direct drill-down URLs redirect to `/forbidden`. |
+| Updated architecture | `docs/ARCHITECTURE.md` (evidence map, §f, §g ADR-07/ADR-09/ADR-10) | Records the new function contract, deploy workflow, shared widget and dashboard role-scoping decisions. |
 
 ## 1. Summary
 

@@ -291,6 +291,17 @@ String? redirectFor(AuthState auth, String location) {
   if (auth.status != AuthStatus.authenticated) return '/login';
   if (auth.profile?.isActive != true) return '/forbidden';
 
+  // Dashboard drill-downs are narrower than the /dashboard module itself.
+  // Hide the entry points on the dashboard and block direct URL access too.
+  if (location == '/dashboard/pharmacy-value' &&
+      !canSeeDashboardPharmacyValue(auth.profile!.role)) {
+    return '/forbidden';
+  }
+  if (location == '/dashboard/expected-expenses' &&
+      !canSeeDashboardExpectedExpenses(auth.profile!.role)) {
+    return '/forbidden';
+  }
+
   final module = moduleForLocation(location);
   if (module != null && !can(auth.profile!.role, module, PermAction.view)) {
     return '/forbidden';

@@ -247,3 +247,15 @@ bool canManageUser(AppRole actor, AppRole target) {
   if (target == AppRole.superAdmin && actor != AppRole.superAdmin) return false;
   return true;
 }
+
+/// Dashboard overview visibility is deliberately narrower than raw module
+/// access: a cashier gets their own counters, a store keeper gets stock, and
+/// whole-pharmacy valuations stay with finance/admin roles.
+bool canSeeDashboardPharmacyValue(AppRole role) =>
+    can(role, Modules.reports, PermAction.view);
+
+bool canSeeDashboardExpectedExpenses(AppRole role) =>
+    role == AppRole.superAdmin || role == AppRole.admin;
+
+bool canSeeDashboardStock(AppRole role) =>
+    can(role, Modules.stock, PermAction.edit);
