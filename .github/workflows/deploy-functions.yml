@@ -37,7 +37,7 @@ jobs:
           version: 3.3.0
 
       - name: Deploy admin-create-user
-        run: supabase functions deploy admin-create-user --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy admin-create-user --remote="$SUPABASE_PROJECT_REF" --yes
 
       - name: Deploy admin-reset-password
-        run: supabase functions deploy admin-reset-password --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy admin-reset-password --remote="$SUPABASE_PROJECT_REF" --yes
