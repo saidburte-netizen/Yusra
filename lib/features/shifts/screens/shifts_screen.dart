@@ -5,6 +5,7 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/dates.dart';
 import '../../../core/money.dart';
 import '../../../core/permissions.dart';
+import '../../../core/state/invalidation.dart';
 import '../../../core/supabase_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets.dart';
@@ -401,6 +402,41 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
                                 icon: const Icon(Icons.print_outlined),
                                 onPressed: () => _xReport(shift),
                               ),
+                            RowActions(actions: [
+                              RowAction(
+                                label: 'View',
+                                icon: Icons.visibility_outlined,
+                                onSelected: () async {
+                                  showDialog<void>(
+                                    context: context,
+                                    builder: (_) => AlertDialog(
+                                      title: Text('Shift ${shift.id.substring(0, 8)}'),
+                                      content: Text(
+                                          '${shift.cashierName ?? '—'} · ${shift.status} · opened ${shift.openedAt == null ? '—' : formatDateTime(shift.openedAt!)}'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context),
+                                          child: const Text('Close'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  return null;
+                                },
+                              ),
+                              RowAction(
+                                label: 'Close shift',
+                                icon: Icons.lock_outline,
+                                allowed: shift.isOpen &&
+                                    can(role, Modules.shifts, PermAction.edit),
+                                danger: false,
+                                onSelected: () async {
+                                  await _closeShift(shift);
+                                  return null;
+                                },
+                                mutation: Mutation.closeShift,
+                              ),
+                            ]),
                           ],
                         ),
                     ],

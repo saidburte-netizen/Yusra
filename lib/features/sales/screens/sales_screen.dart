@@ -6,6 +6,7 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/dates.dart';
 import '../../../core/money.dart';
 import '../../../core/permissions.dart';
+import '../../../core/state/invalidation.dart';
 import '../../../core/supabase_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets.dart';
@@ -360,13 +361,41 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                                     onPressed: () =>
                                         context.go('/sales/${sale.id}'),
                                   ),
-                                  if (sale.status == 'completed' && showVoid)
-                                    IconButton(
-                                      tooltip: 'Void',
-                                      icon: const Icon(Icons.cancel_outlined,
-                                          color: AppColors.danger),
-                                      onPressed: () => _void(sale),
+                                  RowActions(actions: [
+                                    RowAction(
+                                      label: 'View',
+                                      icon: Icons.visibility_outlined,
+                                      onSelected: () async {
+                                        context.go('/sales/${sale.id}');
+                                        return null;
+                                      },
                                     ),
+                                    RowAction(
+                                      label: 'Return',
+                                      icon: Icons.assignment_return_outlined,
+                                      allowed: sale.status == 'completed' &&
+                                          showVoid,
+                                      danger: false,
+                                      onSelected: () async {
+                                        context.go('/sales/${sale.id}');
+                                        return null;
+                                      },
+                                    ),
+                                    RowAction(
+                                      label: 'Void',
+                                      icon: Icons.cancel_outlined,
+                                      allowed: sale.status == 'completed' &&
+                                          showVoid,
+                                      danger: true,
+                                      // _void collects the mandatory reason,
+                                      // which is the confirmation step.
+                                      onSelected: () async {
+                                        await _void(sale);
+                                        return null;
+                                      },
+                                      mutation: Mutation.voidSale,
+                                    ),
+                                  ]),
                                 ],
                               ),
                           ],

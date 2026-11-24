@@ -5,6 +5,7 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/dates.dart';
 import '../../../core/money.dart';
 import '../../../core/permissions.dart';
+import '../../../core/state/invalidation.dart';
 import '../../../core/widgets.dart';
 import '../data/inventory_providers.dart';
 import '../widgets/stock_widgets.dart';
@@ -90,16 +91,47 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                           ],
                           actions: [
                             expiryChip(batch, alertDays),
-                            if (canEdit)
-                              IconButton(
-                                tooltip: 'Adjust',
-                                icon: const Icon(Icons.tune, size: 18),
-                                onPressed: () => showAdjustStockDialog(
-                                  context,
-                                  ref,
-                                  batch: batch,
-                                ),
+                            RowActions(actions: [
+                              RowAction(
+                                label: 'View',
+                                icon: Icons.visibility_outlined,
+                                onSelected: () async {
+                                  showDialog<void>(
+                                    context: context,
+                                    builder: (_) => AlertDialog(
+                                      title: Text(batch.batchNo),
+                                      content: Text(
+                                          '${batch.medicineName ?? '—'} · qty ${batch.quantity} · expires ${formatDate(batch.expiryDate)}'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context),
+                                          child: const Text('Close'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  return null;
+                                },
                               ),
+                              RowAction(
+                                label: 'Adjust quantity',
+                                icon: Icons.tune,
+                                allowed: canEdit,
+                                confirmTitle: 'Adjust stock',
+                                confirmMessage:
+                                    'Adjust ${batch.batchNo}? A reason is required.',
+                                danger: false,
+                                onSelected: () async {
+                                  await showAdjustStockDialog(
+                                    context,
+                                    ref,
+                                    batch: batch,
+                                  );
+                                  return null;
+                                },
+                                mutation: Mutation.adjustStock,
+                              ),
+                            ]),
                           ],
                         ),
                     ],

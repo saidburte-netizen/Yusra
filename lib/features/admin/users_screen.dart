@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,10 +8,10 @@ import '../../core/auth/auth_controller.dart';
 import '../../core/errors/app_error.dart';
 import '../../core/permissions.dart';
 import '../../core/state/app_cache.dart';
+import '../../core/state/invalidation.dart';
 import '../../core/strings.dart';
 import '../../core/supabase_client.dart';
 import '../../core/widgets.dart';
-import '../dashboard/dashboard_screen.dart' show dashboardRefreshProvider;
 
 class UsersScreen extends ConsumerStatefulWidget {
   const UsersScreen({
@@ -167,14 +168,18 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
   }
 
   /// A 404 from functions.invoke usually means the Edge Function itself was
-  /// never deployed. Keep AppErrorMapper's wording and add the exact command
-  /// the operator needs, for both network and not-found failures.
+  /// never deployed. Show one clear instruction instead of the raw CLI text.
   String _functionErrorMessage(Object error, String functionName) {
     final mapped = AppErrorMapper.from(error);
-    if (mapped.kind == AppErrorKind.notFound ||
-        mapped.kind == AppErrorKind.network) {
-      return '${mapped.message} If $functionName is not deployed, run:\n'
-          'supabase functions deploy $functionName --project-ref <ref>';
+    final raw = error.toString().toLowerCase();
+    final missingFunction =
+        functionName == 'admin-create-user' &&
+            (mapped.kind == AppErrorKind.notFound ||
+                raw.contains('not found') ||
+                raw.contains('404'));
+    if (missingFunction) {
+      return 'Staff service is not deployed yet. Ask the owner to run Deploy '
+          'functions in GitHub Actions.';
     }
     return mapped.message;
   }
@@ -199,11 +204,22 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
     setState(() => _loading = true);
     try {
       if (!SupabaseService.isReady) throw const SupabaseNotConfigured();
-      final body = Map<String, dynamic>.from(result);
-      // Edge function compatibility: send both common password keys.
-      if ((body['temporary_password'] as String?)?.isNotEmpty == true) {
-        body['password'] = body['temporary_password'];
-      }
+      // The Edge Function generates the temporary password and accepts only
+      // these keys. Never send a client-generated password or unknown fields.
+      final salaryText = (result['monthly_salary'] ?? '').toString().trim();
+      final salary = salaryText.isEmpty ? null : num.tryParse(salaryText);
+      final hiringDate = (result['hiring_date'] ?? '').toString();
+      final body = <String, dynamic>{
+        'email': result['email'],
+        'full_name': result['full_name'],
+        'role': result['role'],
+        'branch_id': result['branch_id'],
+        'phone': (result['phone'] ?? '').toString().trim().isEmpty
+            ? null
+            : result['phone'],
+        'monthly_salary': salary,
+        'hiring_date': hiringDate.isEmpty ? null : hiringDate.split('T').first,
+      };
       final response = await SupabaseService.client.functions.invoke(
         'admin-create-user',
         body: body,
@@ -213,35 +229,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
           ? (data['temporary_password'] ?? data['temporaryPassword'])
               ?.toString()
           : null;
-      final userId = data is Map
-          ? (data['user_id'] ??
-                  data['id'] ??
-                  (data['user'] is Map ? (data['user'] as Map)['id'] : null))
-              ?.toString()
-          : null;
-      // Persist extra staff fields when possible.
-      if (userId != null) {
-        try {
-          final salaryText = (result['monthly_salary'] ?? '').toString().trim();
-          final salary = salaryText.isEmpty ? null : num.tryParse(salaryText);
-          final hiringDate = (result['hiring_date'] ?? '').toString();
-          await SupabaseService.client.rpc('update_staff_profile', params: {
-            'p_user': userId,
-            'p_full_name': result['full_name'],
-            'p_phone': (result['phone'] ?? '').toString().trim().isEmpty
-                ? null
-                : result['phone'],
-            'p_role': result['role'],
-            'p_branch': result['branch_id'],
-            'p_monthly_salary': salary,
-            'p_hiring_date':
-                hiringDate.isEmpty ? null : hiringDate.split('T').first,
-          });
-        } catch (_) {
-          // Best-effort; profile was created and user can be edited later.
-        }
-      }
       if (!mounted) return;
+
       setState(() => _loading = false);
       await _load();
       if (!mounted) return;
@@ -255,6 +244,10 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(S.copyOnce),
+                const SizedBox(height: 8),
+                const Text(
+                  'The staff member must change this password at first login.',
+                ),
                 const SizedBox(height: 12),
                 SelectableText(
                   tempPassword,
@@ -267,6 +260,16 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
               ],
             ),
             actions: [
+              TextButton.icon(
+                icon: const Icon(Icons.copy, size: 18),
+                label: const Text('Copy'),
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: tempPassword));
+                  if (context.mounted) {
+                    AppSnackbar.success(context, 'Password copied.');
+                  }
+                },
+              ),
               TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text(S.close),
@@ -276,7 +279,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
         );
       }
       if (!mounted) return;
-      ref.read(dashboardRefreshProvider.notifier).state++;
+      ref.applyMutation(Mutation.saveUser);
       AppSnackbar.success(context, 'Staff member created.');
     } catch (e) {
       if (!mounted) return;
@@ -285,11 +288,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
     }
   }
 
-  Future<void> _editUser(Map<String, dynamic> user) async {
-    if (!_canManage(user)) {
-      AppSnackbar.error(context, S.forbidden);
-      return;
-    }
+  Future<String?> _editUser(Map<String, dynamic> user) async {
+    if (!_canManage(user)) throw AppError(S.forbidden, kind: AppErrorKind.permission);
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) => _UserFormDialog(
@@ -298,76 +298,51 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
         initialRole: user['role'] as String?,
         initialBranch: user['branch_id'] as String?,
         initialName: user['full_name'] as String?,
-        showPasswordFields: false,
+        initialEmail: user['email'] as String?,
+        isEdit: true,
       ),
     );
-    if (result == null) return;
-    try {
-      // Privileged access changes go through the SECURITY DEFINER RPC.
-      // full_name is self-service only via update_my_profile; an admin edit
-      // must not silently rewrite it.
-      await SupabaseService.client.rpc('set_user_access', params: {
-        'p_user': user['id'],
-        'p_role': result['role'],
-        'p_branch': result['branch_id'],
-        'p_active': user['is_active'] == true,
-      });
-      if (!mounted) return;
-      await _afterUserMutation(user['id']);
-      if (!mounted) return;
-      ref.read(dashboardRefreshProvider.notifier).state++;
-      AppSnackbar.success(context, 'User access updated.');
-      await _load();
-    } catch (e) {
-      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
-    }
+    if (result == null) return null;
+    final salaryText = (result['monthly_salary'] ?? '').toString().trim();
+    final salary = salaryText.isEmpty ? null : num.tryParse(salaryText);
+    final hiringDate = (result['hiring_date'] ?? '').toString();
+    // One RPC updates every staff field; the profiles audit trigger records it.
+    await SupabaseService.client.rpc('update_staff_profile', params: {
+      'p_user': user['id'],
+      'p_full_name': result['full_name'],
+      'p_phone': (result['phone'] ?? '').toString().trim().isEmpty
+          ? null
+          : result['phone'],
+      'p_role': result['role'],
+      'p_branch': result['branch_id'],
+      'p_monthly_salary': salary,
+      'p_hiring_date': hiringDate.isEmpty ? null : hiringDate.split('T').first,
+    });
+    await _afterUserMutation(user['id']);
+    await _load();
+    return 'Staff details updated.';
   }
 
-  Future<void> _setActive(Map<String, dynamic> user, bool active) async {
+  Future<String?> _setActive(Map<String, dynamic> user, bool active) async {
     if (!_canDeactivate(user)) {
-      AppSnackbar.error(context, S.forbidden);
-      return;
+      throw AppError(S.forbidden, kind: AppErrorKind.permission);
     }
-    final confirm = await showConfirmDialog(
-      context,
-      title: active ? S.reactivate : S.deactivate,
-      message:
-          '${active ? S.reactivate : S.deactivate} ${user['full_name'] ?? ''}?',
-    );
-    if (confirm != true) return;
-    try {
-      await SupabaseService.client.rpc('set_user_access', params: {
-        'p_user': user['id'],
-        'p_role': user['role'],
-        'p_branch': user['branch_id'],
-        'p_active': active,
-      });
-      if (!mounted) return;
-      await _afterUserMutation(user['id']);
-      if (!mounted) return;
-      ref.read(dashboardRefreshProvider.notifier).state++;
-      AppSnackbar.success(
-          context, active ? 'User reactivated.' : 'User deactivated.');
-      await _load();
-    } catch (e) {
-      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
-    }
+    await SupabaseService.client.rpc('set_user_access', params: {
+      'p_user': user['id'],
+      'p_role': user['role'],
+      'p_branch': user['branch_id'],
+      'p_active': active,
+    });
+    await _afterUserMutation(user['id']);
+    await _load();
+    return active ? 'User reactivated.' : 'User deactivated.';
   }
 
-  Future<void> _resetPassword(Map<String, dynamic> user) async {
+  Future<String?> _resetPassword(Map<String, dynamic> user) async {
     if (!_canManage(user)) {
-      AppSnackbar.error(context, S.forbidden);
-      return;
+      throw AppError(S.forbidden, kind: AppErrorKind.permission);
     }
-    final confirm = await showConfirmDialog(
-      context,
-      title: S.resetPassword,
-      message:
-          'Send a new temporary password to ${user['email'] ?? 'this user'}?',
-      danger: false,
-    );
-    if (confirm != true) return;
-    try {
+    {
       if (!SupabaseService.isReady) throw const SupabaseNotConfigured();
       final response = await SupabaseService.client.functions.invoke(
         'admin-reset-password',
@@ -375,7 +350,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       );
       final data = _decodeEdgeResponse(response.data);
       final temp = data is Map ? data['temporary_password']?.toString() : null;
-      if (!mounted) return;
+      if (!mounted) return null;
       if (temp != null) {
         await showDialog<void>(
           context: context,
@@ -390,13 +365,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
           ),
         );
       }
-      if (!mounted) return;
-      AppSnackbar.success(context, 'Password reset.');
-    } catch (e) {
-      if (mounted) {
-        AppSnackbar.error(
-            context, _functionErrorMessage(e, 'admin-reset-password'));
-      }
+      return 'Password reset.';
     }
   }
 
@@ -516,46 +485,54 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                                         ? S.active
                                         : S.inactive,
                                   ],
+                                  // No hard delete: deactivation is the books-safe
+                                  // replacement and keeps sales/audit history intact.
                                   actions: [
-                                    IconButton(
-                                      tooltip: S.view,
-                                      icon: const Icon(
-                                          Icons.visibility_outlined,
-                                          size: 18),
-                                      onPressed: () => _viewUser(user),
-                                    ),
-                                    // Delete: n/a by design — deactivate instead.
-                                    // There is no delete-user RPC; removing an auth
-                                    // user would orphan sales and audit history.
-                                    if (canEdit && _canManage(user))
-                                      IconButton(
-                                        tooltip: S.edit,
-                                        icon: const Icon(Icons.edit_outlined,
-                                            size: 18),
-                                        onPressed: () => _editUser(user),
+                                    RowActions(actions: [
+                                      RowAction(
+                                        label: S.view,
+                                        icon: Icons.visibility_outlined,
+                                        onSelected: () async {
+                                          _viewUser(user);
+                                          return null;
+                                        },
                                       ),
-                                    if (canEdit && _canManage(user))
-                                      IconButton(
-                                        tooltip: S.resetPassword,
-                                        icon: const Icon(
-                                            Icons.lock_reset_outlined,
-                                            size: 18),
-                                        onPressed: () => _resetPassword(user),
+                                      RowAction(
+                                        label: S.edit,
+                                        icon: Icons.edit_outlined,
+                                        allowed: canEdit && _canManage(user),
+                                        onSelected: () => _editUser(user),
+                                        successMessage: 'Staff details updated.',
+                                        mutation: Mutation.saveUser,
                                       ),
-                                    if (canEdit && _canDeactivate(user))
-                                      IconButton(
-                                        tooltip: user['is_active'] == true
+                                      RowAction(
+                                        label: S.resetPassword,
+                                        icon: Icons.lock_reset_outlined,
+                                        allowed: canEdit && _canManage(user),
+                                        confirmTitle: S.resetPassword,
+                                        confirmMessage:
+                                            'Send a new temporary password to ${user['email'] ?? 'this user'}?',
+                                        danger: false,
+                                        onSelected: () => _resetPassword(user),
+                                      ),
+                                      RowAction(
+                                        label: user['is_active'] == true
                                             ? S.deactivate
                                             : S.reactivate,
-                                        icon: Icon(
-                                          user['is_active'] == true
-                                              ? Icons.person_off_outlined
-                                              : Icons.person_outline,
-                                          size: 18,
-                                        ),
-                                        onPressed: () => _setActive(
+                                        icon: user['is_active'] == true
+                                            ? Icons.person_off_outlined
+                                            : Icons.person_outline,
+                                        allowed: canEdit && _canDeactivate(user),
+                                        confirmTitle: user['is_active'] == true
+                                            ? S.deactivate
+                                            : S.reactivate,
+                                        confirmMessage:
+                                            '${user['is_active'] == true ? S.deactivate : S.reactivate} ${user['full_name'] ?? ''}?',
+                                        onSelected: () => _setActive(
                                             user, user['is_active'] != true),
+                                        mutation: Mutation.saveUser,
                                       ),
+                                    ]),
                                   ],
                                 ),
                             ],
@@ -594,7 +571,8 @@ class _UserFormDialog extends StatefulWidget {
     this.initialRole,
     this.initialBranch,
     this.initialName,
-    this.showPasswordFields = true,
+    this.initialEmail,
+    this.isEdit = false,
   });
 
   final List<AppRole> allowedRoles;
@@ -602,7 +580,8 @@ class _UserFormDialog extends StatefulWidget {
   final String? initialRole;
   final String? initialBranch;
   final String? initialName;
-  final bool showPasswordFields;
+  final String? initialEmail;
+  final bool isEdit;
 
   @override
   State<_UserFormDialog> createState() => _UserFormDialogState();
@@ -614,7 +593,6 @@ class _UserFormDialogState extends State<_UserFormDialog> {
   late final TextEditingController _name;
   late final TextEditingController _phone;
   late final TextEditingController _salary;
-  late final TextEditingController _password;
   DateTime? _hiringDate;
   String? _role;
   String? _branch;
@@ -622,11 +600,10 @@ class _UserFormDialogState extends State<_UserFormDialog> {
   @override
   void initState() {
     super.initState();
-    _email = TextEditingController();
+    _email = TextEditingController(text: widget.initialEmail ?? '');
     _name = TextEditingController(text: widget.initialName ?? '');
     _phone = TextEditingController();
     _salary = TextEditingController();
-    _password = TextEditingController();
     _hiringDate = null;
     _role = widget.initialRole;
     _branch = widget.initialBranch;
@@ -642,14 +619,13 @@ class _UserFormDialogState extends State<_UserFormDialog> {
     _name.dispose();
     _phone.dispose();
     _salary.dispose();
-    _password.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.showPasswordFields ? 'Add staff' : S.edit),
+      title: Text(widget.isEdit ? S.edit : 'Add staff'),
       content: SizedBox(
         width: 460,
         child: SingleChildScrollView(
@@ -723,7 +699,7 @@ class _UserFormDialogState extends State<_UserFormDialog> {
                   ],
                   onChanged: (v) => setState(() => _branch = v),
                 ),
-                if (widget.showPasswordFields) ...[
+                if (!widget.isEdit) ...[
                   const SizedBox(height: 12),
                   AppTextField(
                     label: S.email,
@@ -731,15 +707,6 @@ class _UserFormDialogState extends State<_UserFormDialog> {
                     keyboardType: TextInputType.emailAddress,
                     validator: (v) =>
                         v == null || !v.contains('@') ? S.emailInvalid : null,
-                  ),
-                  const SizedBox(height: 12),
-                  AppTextField(
-                    label: 'Temporary password',
-                    controller: _password,
-                    obscureText: true,
-                    validator: (v) => (v == null || v.trim().length < 6)
-                        ? 'Min 6 characters'
-                        : null,
                   ),
                 ],
               ],
@@ -762,7 +729,6 @@ class _UserFormDialogState extends State<_UserFormDialog> {
               'branch_id': _branch,
               'monthly_salary': _salary.text.trim(),
               'hiring_date': _hiringDate?.toIso8601String(),
-              'temporary_password': _password.text.trim(),
             });
           },
           child: const Text(S.save),

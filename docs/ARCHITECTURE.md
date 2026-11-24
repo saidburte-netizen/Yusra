@@ -6,11 +6,11 @@
 > from memory or from an unverified assumption.
 >
 > **Source of truth.** The Flutter client in `lib/`, the SQL migrations in
-> `supabase/migrations/0001_*.sql` … `0023_*.sql` (`all_owner_sql.sql:3671`
-> marks the last bundled file), the verification contract in
+> `supabase/migrations/0001_*.sql` … `0026_*.sql` (`all_owner_sql.sql:3671`
+> marks the last bundled mirror, through `0023_*.sql`), the verification contract in
 > `supabase/checks/schema_check.sql:232-391`, and the workflows in
 > `.github/workflows/` (entry points: `ci.yml:3-10`, `release.yml`,
-> `web-deploy.yml`). Companion indexes: `docs/README.md`, `docs/CONNECTIVITY.md`,
+> `web-deploy.yml`, `deploy-functions.yml`). Companion indexes: `docs/README.md`, `docs/CONNECTIVITY.md`,
 > `docs/SCREEN_MATRIX.md`, `docs/database.md`, `docs/test-plan.md`,
 > `docs/CICD.md`.
 
@@ -27,6 +27,9 @@
 | Database schema / enums / RLS / RPCs | SQL migrations | `supabase/migrations/0001_extensions_enums.sql:4-10`, `0002_*.sql:1-113`, `0003_*.sql:1-52`, `0004_*.sql:1-31`, `0005_*.sql:1-35`, `0006_*.sql:1-139`, `0007_functions.sql:1-319`, `0010_rls_storage.sql:1-14`, `0012_rls_hardening.sql:18-221`, `0014_report_views.sql`, `0016_profile_rpc.sql:9-31`, `0017_activity_audit.sql:6-22,94-130`, `0019_hardening_fixes.sql:17-557,781-831`, `0020_fix_sale_return.sql:14-98`, `0021_grants.sql:17-37`, `0022_opening_stock_reorder.sql:13-434`, `0023_review_fixes.sql:10-135,348-563` |
 | Verification | Schema check + CI | `supabase/checks/schema_check.sql:232-391`, CI jobs `toolchain`, `build`, `db-test`, `smoke-test`, `e2e-api`, `deploy-edge-functions` (`.github/workflows/ci.yml:32-627`) |
 | Server-side privileged code | Edge Functions | `supabase/functions/admin-create-user/index.ts:1-2,43-68`, `supabase/functions/admin-reset-password/index.ts:1-2,35-60`, `supabase/functions/_shared/http.ts:1-43` |
+| Shared row actions | Core widget + invalidation graph | `lib/core/widgets/row_actions.dart:1-120`, `lib/core/widgets.dart:1-9`, `lib/core/state/invalidation.dart:17-33,120-160` |
+| Staff creation / deployment | Edge Function + manual workflow | `supabase/functions/admin-create-user/index.ts:19-80,255-285`, `.github/workflows/deploy-functions.yml:1-40`, `lib/features/admin/users_screen.dart:198-250` |
+| Row-action audit coverage | Additive migration | `supabase/migrations/0026_row_actions_audit.sql:1-20`, `supabase/migrations/0009_triggers.sql:101-129` |
 
 ---
 
@@ -474,6 +477,7 @@ flowchart LR
 | Local Supabase config and owner runbook | `supabase/config.toml`, `supabase/README.md` |
 | Required PR jobs: `toolchain`, `build`, `db-test`, `smoke-test`, `e2e-api` | `.github/workflows/ci.yml:32-627`, CI job names `toolchain`, `build`, `db-test`, `smoke-test`, `e2e-api` |
 | Gated Edge Function deployment | CI job `deploy-edge-functions`, `.github/workflows/ci.yml:32-627` |
+| Manual Edge Function deployment | `workflow_dispatch` job `deploy`, `.github/workflows/deploy-functions.yml:1-40` (fails fast when `SUPABASE_ACCESS_TOKEN` / `SUPABASE_PROJECT_REF` are missing) |
 | CI artifacts | `yusra-pharmacy-apk`, `yusra-pharmacy-web` (`.github/workflows/ci.yml:315-329`); manual `Build APK` (`.github/workflows/build-apk.yml:149-155`) |
 | Release gate and artifacts | `production-approval`, `yusra-pharmacy-apk-${version}`, `yusra-pharmacy-web-${version}` (`.github/workflows/release.yml:261-303`) |
 | Web deploy with explicit base href | `.github/workflows/web-deploy.yml`, `docs/CICD.md:12` |
@@ -505,8 +509,9 @@ flowchart TB
 | ADR-04 | Branch scope is derived from the authenticated profile, not from client-selected state alone. | `lib/features/inventory/data/inventory_providers.dart:17-22`, `lib/core/nav/app_shell.dart:14-37` |
 | ADR-05 | A single Supabase client is used; only `SUPABASE_URL` / `SUPABASE_ANON_KEY` are compiled into the app. | `lib/core/supabase_client.dart:20-44`, `lib/core/env.dart:1-12` |
 | ADR-06 | A missing profile routes to `/profile_error` instead of inventing a `cashier` identity. | `lib/core/auth/auth_controller.dart:175-189`, `lib/core/router.dart:92-93` |
-| ADR-07 | Service-role operations live only in Edge Functions, with admin role checks and audit writes. | `supabase/functions/admin-create-user/index.ts:1-2,43-68`, `supabase/functions/admin-reset-password/index.ts:1-2,35-60` |
+| ADR-07 | Service-role operations live only in Edge Functions, with admin role checks and audit writes. `admin-create-user` accepts only `email`, `full_name`, `role`, `branch_id`, `phone`, `monthly_salary`, `hiring_date`; the password is always server-generated. | `supabase/functions/admin-create-user/index.ts:1-80,255-285`, `supabase/functions/admin-reset-password/index.ts:1-2,35-60`, `lib/features/admin/users_screen.dart:198-250` |
 | ADR-08 | Row audit and actor/role activity are append-only logs, written by triggers/helpers rather than clients. | `supabase/migrations/0017_activity_audit.sql:6-22,94-130`, `supabase/migrations/0019_hardening_fixes.sql:67-83` |
+| ADR-09 | Every record row uses one shared `RowActions` menu: role gating via `allowed`, confirmation, feedback and refresh via the central invalidation graph. Audit remains server-side: table writes fire `audit_row()`, RPCs write their own row, and `0026` extends trigger coverage to expected expenses, batches, movements and returns. | `lib/core/widgets/row_actions.dart:1-120`, `lib/core/state/invalidation.dart:17-33,120-160`, `supabase/migrations/0026_row_actions_audit.sql:1-20` |
 
 ---
 

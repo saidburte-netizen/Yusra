@@ -38,6 +38,8 @@ abstract final class Mutation {
   static const saveCustomer = 'save_customer';
   static const saveSupplier = 'save_supplier';
   static const savePrescription = 'save_prescription';
+  static const rowAction = 'row_action';
+  static const saveUser = 'save_user';
   static const createExpense = 'create_expense';
   static const deleteExpense = 'delete_expense';
 }
@@ -217,6 +219,9 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
     activityProvider,
   ],
   Mutation.saveCategory: <ProviderOrFamily>[
+    dashboardRefreshProvider,
+    dashboardPharmacyValueProvider,
+    dashboardExpectedExpensesProvider,
     categoriesProvider,
     medicinesProvider,
     activityProvider,
@@ -228,6 +233,9 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
     activityProvider,
   ],
   Mutation.saveCustomer: <ProviderOrFamily>[
+    dashboardRefreshProvider,
+    dashboardPharmacyValueProvider,
+    dashboardExpectedExpensesProvider,
     customersProvider,
     customerProvider,
     customerStatsProvider,
@@ -240,6 +248,25 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
   ],
   Mutation.savePrescription: <ProviderOrFamily>[
     prescriptionsProvider,
+    activityProvider,
+  ],
+  Mutation.rowAction: <ProviderOrFamily>[
+    dashboardRefreshProvider,
+    dashboardPharmacyValueProvider,
+    dashboardExpectedExpensesProvider,
+    activityProvider,
+    medicinesProvider,
+    categoriesProvider,
+    suppliersProvider,
+    customersProvider,
+    purchaseOrdersProvider,
+    salesProvider,
+    shiftsProvider,
+  ],
+  Mutation.saveUser: <ProviderOrFamily>[
+    dashboardRefreshProvider,
+    dashboardPharmacyValueProvider,
+    dashboardExpectedExpensesProvider,
     activityProvider,
   ],
   Mutation.createExpense: <ProviderOrFamily>[
@@ -274,6 +301,8 @@ final mutationCacheTags = <String, Set<String>>{
   Mutation.saveCustomer: <String>{CacheTag.customers},
   Mutation.saveSupplier: <String>{CacheTag.customers},
   Mutation.savePrescription: <String>{CacheTag.prescriptions},
+  Mutation.rowAction: <String>{CacheTag.catalogue, CacheTag.reports},
+  Mutation.saveUser: <String>{CacheTag.users, CacheTag.reports},
   Mutation.createExpense: <String>{CacheTag.reports},
   Mutation.deleteExpense: <String>{CacheTag.reports},
 };

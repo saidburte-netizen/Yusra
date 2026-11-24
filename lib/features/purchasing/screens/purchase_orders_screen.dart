@@ -6,6 +6,8 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/dates.dart';
 import '../../../core/money.dart';
 import '../../../core/permissions.dart';
+import '../../../core/state/invalidation.dart';
+import '../../../core/supabase_client.dart';
 import '../../../core/widgets.dart';
 import '../data/purchasing.dart';
 import '../../../core/errors/app_error.dart';
@@ -125,12 +127,54 @@ class _PurchaseOrdersScreenState extends ConsumerState<PurchaseOrdersScreen> {
                                 _ => StatusTone.neutral,
                               },
                             ),
-                            IconButton(
-                              tooltip: 'Open',
-                              icon: const Icon(Icons.open_in_new, size: 18),
-                              onPressed: () =>
-                                  context.go('/purchasing/orders/${order.id}'),
-                            ),
+                            RowActions(actions: [
+                              RowAction(
+                                label: 'View',
+                                icon: Icons.open_in_new,
+                                onSelected: () async {
+                                  context.go('/purchasing/orders/${order.id}');
+                                  return null;
+                                },
+                              ),
+                              RowAction(
+                                label: 'Edit',
+                                icon: Icons.edit_outlined,
+                                allowed: canEdit && order.status == 'draft',
+                                onSelected: () async {
+                                  context.go('/purchasing/orders/${order.id}');
+                                  return null;
+                                },
+                              ),
+                              RowAction(
+                                label: 'Cancel',
+                                icon: Icons.cancel_outlined,
+                                allowed: canEdit &&
+                                    (order.status == 'draft' ||
+                                        order.status == 'ordered'),
+                                confirmTitle: 'Cancel purchase order',
+                                confirmMessage:
+                                    'Cancel ${order.poNo}? This cannot be undone.',
+                                onSelected: () async {
+                                  await ref
+                                      .read(purchaseRepositoryProvider)
+                                      .setStatus(order.id, 'cancelled');
+                                  ref.invalidate(purchaseOrdersProvider);
+                                  ref.invalidate(purchaseOrderProvider(order.id));
+                                  return 'Purchase order cancelled.';
+                                },
+                                mutation: Mutation.receivePurchaseOrder,
+                              ),
+                              RowAction(
+                                label: 'Delete draft',
+                                icon: Icons.delete_outline,
+                                allowed: canEdit && order.status == 'draft',
+                                danger: true,
+                                confirmTitle: 'Delete draft',
+                                confirmMessage: 'Delete draft ${order.poNo}?',
+                                onSelected: () => _deleteDraft(ref, order.id),
+                                mutation: Mutation.receivePurchaseOrder,
+                              ),
+                            ]),
                           ],
                         ),
                     ],
@@ -143,5 +187,13 @@ class _PurchaseOrdersScreenState extends ConsumerState<PurchaseOrdersScreen> {
         ),
       ),
     );
+  }
+
+  Future<String?> _deleteDraft(WidgetRef ref, String id) async {
+    final client = SupabaseService.client;
+    await client.from('purchase_order_items').delete().eq('po_id', id);
+    await client.from('purchase_orders').delete().eq('id', id);
+    ref.invalidate(purchaseOrdersProvider);
+    return 'Draft deleted.';
   }
 }

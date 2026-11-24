@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/permissions.dart';
+import '../../../core/state/invalidation.dart';
+import '../../../core/supabase_client.dart';
 import '../../../core/widgets.dart';
 import '../data/inventory_models.dart';
 import '../data/inventory_providers.dart';
@@ -53,24 +55,40 @@ class CategoriesScreen extends ConsumerWidget {
                           '',
                         ],
                         actions: [
-                          if (canEdit)
-                            IconButton(
-                              tooltip: 'Edit',
-                              icon: const Icon(Icons.edit_outlined, size: 18),
-                              onPressed: () => _edit(context, ref, item),
+                          RowActions(actions: [
+                            RowAction(
+                              label: 'Edit',
+                              icon: Icons.edit_outlined,
+                              allowed: canEdit,
+                              onSelected: () => _edit(context, ref, item),
+                              mutation: Mutation.saveCategory,
                             ),
-                          if (canEdit)
-                            IconButton(
-                              tooltip:
-                                  item.isActive ? 'Deactivate' : 'Reactivate',
-                              icon: Icon(
-                                item.isActive
-                                    ? Icons.block_outlined
-                                    : Icons.check_circle_outline,
-                                size: 18,
-                              ),
-                              onPressed: () => _toggle(context, ref, item),
+                            RowAction(
+                              label: item.isActive ? 'Deactivate' : 'Reactivate',
+                              icon: item.isActive
+                                  ? Icons.block_outlined
+                                  : Icons.check_circle_outline,
+                              allowed: canEdit,
+                              confirmTitle: item.isActive
+                                  ? 'Deactivate category'
+                                  : 'Reactivate category',
+                              confirmMessage:
+                                  '${item.name} will ${item.isActive ? 'no longer' : 'again'} be available.',
+                              onSelected: () => _toggle(context, ref, item),
+                              mutation: Mutation.saveCategory,
                             ),
+                            RowAction(
+                              label: 'Delete',
+                              icon: Icons.delete_outline,
+                              allowed: canEdit,
+                              danger: true,
+                              confirmTitle: 'Delete category',
+                              confirmMessage:
+                                  'Delete ${item.name}? Categories in use cannot be deleted.',
+                              onSelected: () => _delete(context, ref, item),
+                              mutation: Mutation.saveCategory,
+                            ),
+                          ]),
                         ],
                       ),
                   ],
@@ -84,7 +102,7 @@ class CategoriesScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _edit(
+  Future<String?> _edit(
       BuildContext context, WidgetRef ref, Category? item) async {
     final name = TextEditingController(text: item?.name ?? '');
     final description = TextEditingController(text: item?.description ?? '');
@@ -128,7 +146,7 @@ class CategoriesScreen extends ConsumerWidget {
         ],
       ),
     );
-    if (saved != true) return;
+    if (saved != true) return null;
     try {
       await ref.read(inventoryRepositoryProvider).saveCategory(
         {
@@ -138,39 +156,36 @@ class CategoriesScreen extends ConsumerWidget {
         },
         id: item?.id,
       );
-      if (!context.mounted) return;
-      AppSnackbar.success(context, 'Category saved.');
       ref.invalidate(categoriesProvider);
+      return 'Category saved.';
     } catch (e) {
-      if (context.mounted) {
-        AppSnackbar.error(context, AppErrorMapper.from(e).message);
-      }
+      throw AppErrorMapper.from(e);
     }
   }
 
-  Future<void> _toggle(
+  Future<String?> _toggle(
       BuildContext context, WidgetRef ref, Category item) async {
-    final confirm = await showConfirmDialog(
-      context,
-      title: item.isActive ? 'Deactivate category' : 'Reactivate category',
-      message:
-          '${item.name} will ${item.isActive ? 'no longer' : 'again'} be available.',
-    );
-    if (confirm != true) return;
-    try {
-      await ref
-          .read(inventoryRepositoryProvider)
-          .setCategoryActive(item.id, !item.isActive);
-      if (!context.mounted) return;
-      ref.invalidate(categoriesProvider);
-      AppSnackbar.success(
-        context,
-        item.isActive ? 'Category deactivated.' : 'Category reactivated.',
-      );
-    } catch (e) {
-      if (context.mounted) {
-        AppSnackbar.error(context, AppErrorMapper.from(e).message);
-      }
+    await ref
+        .read(inventoryRepositoryProvider)
+        .setCategoryActive(item.id, !item.isActive);
+    ref.invalidate(categoriesProvider);
+    return item.isActive ? 'Category deactivated.' : 'Category reactivated.';
+  }
+
+  /// A category with medicines is in use: block the delete with a clear reason.
+  Future<String?> _delete(
+      BuildContext context, WidgetRef ref, Category item) async {
+    final rows = await SupabaseService.client
+        .from('medicines')
+        .select('id')
+        .eq('category_id', item.id)
+        .limit(1);
+    if ((rows as List).isNotEmpty) {
+      throw AppError(
+          'This category is in use by medicines. Deactivate it instead.');
     }
+    await SupabaseService.client.from('categories').delete().eq('id', item.id);
+    ref.invalidate(categoriesProvider);
+    return 'Category deleted.';
   }
 }

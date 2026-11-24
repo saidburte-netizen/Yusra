@@ -6,6 +6,7 @@ import '../../core/dates.dart';
 import '../../core/errors/app_error.dart';
 import '../../core/money.dart';
 import '../../core/permissions.dart';
+import '../../core/state/invalidation.dart';
 import '../../core/supabase_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets.dart';
@@ -238,18 +239,27 @@ class ExpectedExpensesScreen extends ConsumerWidget {
                               style:
                                   const TextStyle(fontWeight: FontWeight.w700)),
                           if (canManage && item.source == 'planned')
-                            PopupMenuButton<String>(
-                              onSelected: (v) async {
-                                if (v == 'edit') _edit(context, ref, item);
-                                if (v == 'delete') _delete(context, ref, item);
-                              },
-                              itemBuilder: (_) => const [
-                                PopupMenuItem(
-                                    value: 'edit', child: Text('Edit')),
-                                PopupMenuItem(
-                                    value: 'delete', child: Text('Delete')),
-                              ],
-                            ),
+                            RowActions(actions: [
+                              RowAction(
+                                label: 'Edit',
+                                icon: Icons.edit_outlined,
+                                onSelected: () async {
+                                  await _edit(context, ref, item);
+                                  return null;
+                                },
+                                mutation: Mutation.createExpense,
+                              ),
+                              RowAction(
+                                label: 'Delete',
+                                icon: Icons.delete_outline,
+                                danger: true,
+                                confirmTitle: 'Delete expected expense',
+                                confirmMessage:
+                                    'Remove ${item.name} from expected expenses?',
+                                onSelected: () => _delete(context, ref, item),
+                                mutation: Mutation.deleteExpense,
+                              ),
+                            ]),
                         ],
                       ),
                     ),
@@ -386,21 +396,17 @@ class ExpectedExpensesScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _delete(
+  Future<String?> _delete(
       BuildContext context, WidgetRef ref, _ExpectedItem item) async {
-    if (item.id == null) return;
+    if (item.id == null) return null;
     try {
       await SupabaseService.client
           .from('expected_expenses')
           .update({'is_active': false}).eq('id', item.id!);
       ref.invalidate(_expectedExpensesProvider);
-      if (context.mounted) {
-        AppSnackbar.success(context, 'Expected expense removed.');
-      }
+      return 'Expected expense removed.';
     } catch (e) {
-      if (context.mounted) {
-        AppSnackbar.error(context, AppErrorMapper.from(e).message);
-      }
+      throw AppErrorMapper.from(e);
     }
   }
 }

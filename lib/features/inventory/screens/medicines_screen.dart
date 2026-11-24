@@ -10,6 +10,8 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/money.dart';
 import '../../../core/permissions.dart';
+import '../../../core/state/invalidation.dart';
+import '../../../core/supabase_client.dart';
 import '../../../core/widgets.dart';
 import '../data/inventory_ids.dart';
 import '../data/inventory_models.dart';
@@ -203,30 +205,47 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
                             '',
                           ],
                           actions: [
-                            IconButton(
-                              tooltip: 'Details',
-                              icon: const Icon(Icons.open_in_new, size: 18),
-                              onPressed: () =>
-                                  context.go('/inventory/medicines/${item.id}'),
-                            ),
-                            if (canEdit)
-                              IconButton(
-                                tooltip: 'Edit',
-                                icon: const Icon(Icons.edit_outlined, size: 18),
-                                onPressed: () => _edit(item),
+                            RowActions(actions: [
+                              RowAction(
+                                label: 'Details',
+                                icon: Icons.open_in_new,
+                                onSelected: () async {
+                                  context.go('/inventory/medicines/${item.id}');
+                                  return null;
+                                },
                               ),
-                            if (canEdit)
-                              IconButton(
-                                tooltip:
-                                    item.isActive ? 'Deactivate' : 'Reactivate',
-                                icon: Icon(
-                                  item.isActive
-                                      ? Icons.block_outlined
-                                      : Icons.check_circle_outline,
-                                  size: 18,
-                                ),
-                                onPressed: () => _toggleActive(item),
+                              RowAction(
+                                label: 'Edit',
+                                icon: Icons.edit_outlined,
+                                allowed: canEdit,
+                                onSelected: () => _edit(item),
                               ),
+                              RowAction(
+                                label: item.isActive ? 'Deactivate' : 'Reactivate',
+                                icon: item.isActive
+                                    ? Icons.block_outlined
+                                    : Icons.check_circle_outline,
+                                allowed: canEdit,
+                                confirmTitle: item.isActive
+                                    ? 'Deactivate medicine'
+                                    : 'Reactivate medicine',
+                                confirmMessage:
+                                    '${item.name} will ${item.isActive ? 'no longer' : 'again'} be available.',
+                                onSelected: () => _toggleActive(item),
+                                mutation: Mutation.saveMedicine,
+                              ),
+                              RowAction(
+                                label: 'Delete',
+                                icon: Icons.delete_outline,
+                                allowed: canEdit,
+                                danger: true,
+                                confirmTitle: 'Delete medicine',
+                                confirmMessage:
+                                    'Delete ${item.name}? Medicines with stock or sales are deactivated instead.',
+                                onSelected: () => _deleteMedicine(item),
+                                mutation: Mutation.saveMedicine,
+                              ),
+                            ]),
                           ],
                         ),
                     ],
@@ -250,33 +269,46 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
     return categories?.where((item) => item.id == id).firstOrNull?.name ?? '—';
   }
 
-  Future<void> _edit(Medicine? medicine) async {
+  Future<String?> _edit(Medicine? medicine) async {
     final savedId =
         await showMedicineFormDialog(context, ref, initial: medicine);
-    if (savedId == null) return;
+    if (savedId == null) return null;
     ref.invalidate(medicinesProvider((query: _query, categoryId: _categoryId)));
     ref.invalidate(stockSummaryProvider);
+    return 'Medicine saved.';
   }
 
-  Future<void> _toggleActive(Medicine medicine) async {
-    final confirm = await showConfirmDialog(
-      context,
-      title: medicine.isActive ? 'Deactivate medicine' : 'Reactivate medicine',
-      message:
-          '${medicine.name} will ${medicine.isActive ? 'no longer' : 'again'} be available.',
-    );
-    if (confirm != true) return;
-    try {
+  Future<String?> _toggleActive(Medicine medicine) async {
+    await ref
+        .read(inventoryRepositoryProvider)
+        .setMedicineActive(medicine.id, !medicine.isActive);
+    ref.invalidate(medicinesProvider((query: _query, categoryId: _categoryId)));
+    return 'Medicine updated.';
+  }
+
+  /// Medicines with stock batches or sales lines are never hard deleted:
+  /// deactivate them so history and audit stay intact.
+  Future<String?> _deleteMedicine(Medicine medicine) async {
+    final client = SupabaseService.client;
+    final stock = await client
+        .from('stock_batches')
+        .select('id')
+        .eq('medicine_id', medicine.id)
+        .limit(1);
+    final sales = await client
+        .from('sale_items')
+        .select('id')
+        .eq('medicine_id', medicine.id)
+        .limit(1);
+    if ((stock as List).isNotEmpty || (sales as List).isNotEmpty) {
+      if (!medicine.isActive) return 'Already inactive; history kept.';
       await ref
           .read(inventoryRepositoryProvider)
-          .setMedicineActive(medicine.id, !medicine.isActive);
-      if (!mounted) return;
-      AppSnackbar.success(context, 'Medicine updated.');
-      ref.invalidate(
-          medicinesProvider((query: _query, categoryId: _categoryId)));
-    } catch (e) {
-      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
+          .setMedicineActive(medicine.id, false);
+      return 'Medicine has stock or sales history; deactivated instead of deleted.';
     }
+    await client.from('medicines').delete().eq('id', medicine.id);
+    return 'Medicine deleted.';
   }
 
   void _showTemplate() {

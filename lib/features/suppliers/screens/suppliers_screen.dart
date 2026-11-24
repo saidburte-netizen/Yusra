@@ -7,6 +7,8 @@ import '../../../core/dates.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/money.dart';
 import '../../../core/permissions.dart';
+import '../../../core/state/invalidation.dart';
+import '../../../core/supabase_client.dart';
 import '../../../core/widgets.dart';
 import '../../purchasing/data/purchasing.dart';
 import '../data/suppliers.dart';
@@ -119,36 +121,54 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
                                       item.isActive ? 'Active' : 'Inactive',
                                     ],
                                     actions: [
-                                      IconButton(
-                                        tooltip: 'View',
-                                        icon: const Icon(
-                                            Icons.receipt_long_outlined,
-                                            size: 18),
-                                        onPressed: () =>
-                                            context.go('/suppliers/${item.id}'),
-                                      ),
-                                      if (canEdit) ...[
-                                        IconButton(
-                                          tooltip: 'Edit',
-                                          icon: const Icon(Icons.edit_outlined,
-                                              size: 18),
-                                          onPressed: () =>
-                                              editSupplier(context, ref, item),
+                                      RowActions(actions: [
+                                        RowAction(
+                                          label: 'View',
+                                          icon: Icons.receipt_long_outlined,
+                                          onSelected: () async {
+                                            context.go('/suppliers/${item.id}');
+                                            return null;
+                                          },
                                         ),
-                                        IconButton(
-                                          tooltip: item.isActive
+                                        RowAction(
+                                          label: 'Edit',
+                                          icon: Icons.edit_outlined,
+                                          allowed: canEdit,
+                                          onSelected: () async {
+                                            await editSupplier(context, ref, item);
+                                            return null;
+                                          },
+                                          mutation: Mutation.saveSupplier,
+                                        ),
+                                        RowAction(
+                                          label: item.isActive
                                               ? 'Deactivate'
                                               : 'Reactivate',
-                                          icon: Icon(
-                                            item.isActive
-                                                ? Icons.block_outlined
-                                                : Icons.check_circle_outline,
-                                            size: 18,
-                                          ),
-                                          onPressed: () => setSupplierActive(
-                                              context, ref, item),
+                                          icon: item.isActive
+                                              ? Icons.block_outlined
+                                              : Icons.check_circle_outline,
+                                          allowed: canEdit,
+                                          confirmTitle: item.isActive
+                                              ? 'Deactivate supplier'
+                                              : 'Reactivate supplier',
+                                          confirmMessage:
+                                              '${item.name} will ${item.isActive ? 'no longer' : 'again'} be available for new orders.',
+                                          onSelected: () =>
+                                              _rowSetActive(ref, item),
+                                          mutation: Mutation.saveSupplier,
                                         ),
-                                      ],
+                                        RowAction(
+                                          label: 'Delete',
+                                          icon: Icons.delete_outline,
+                                          allowed: canEdit,
+                                          danger: true,
+                                          confirmTitle: 'Delete supplier',
+                                          confirmMessage:
+                                              'Delete ${item.name}? Suppliers with purchase orders cannot be deleted.',
+                                          onSelected: () => _deleteSupplier(ref, item),
+                                          mutation: Mutation.saveSupplier,
+                                        ),
+                                      ]),
                                     ],
                                   ),
                               ],
@@ -160,6 +180,30 @@ class _SuppliersScreenState extends ConsumerState<SuppliersScreen> {
       ),
     );
   }
+}
+
+Future<String?> _rowSetActive(WidgetRef ref, Supplier item) async {
+  final active = !item.isActive;
+  await ref.read(supplierRepositoryProvider).setActive(item.id, active);
+  ref.invalidate(suppliersProvider);
+  ref.invalidate(supplierProvider(item.id));
+  return active ? 'Supplier reactivated.' : 'Supplier deactivated.';
+}
+
+/// Suppliers referenced by purchase orders are in use and cannot be deleted.
+Future<String?> _deleteSupplier(WidgetRef ref, Supplier item) async {
+  final rows = await SupabaseService.client
+      .from('purchase_orders')
+      .select('id')
+      .eq('supplier_id', item.id)
+      .limit(1);
+  if ((rows as List).isNotEmpty) {
+    throw AppError(
+        'This supplier has purchase orders. Deactivate it instead.');
+  }
+  await SupabaseService.client.from('suppliers').delete().eq('id', item.id);
+  ref.invalidate(suppliersProvider);
+  return 'Supplier deleted.';
 }
 
 /// Shared create/edit entry point for the list and the detail screen.

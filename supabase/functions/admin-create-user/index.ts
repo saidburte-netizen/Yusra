@@ -22,7 +22,59 @@ const ALLOWED_ROLES = [
   'accountant',
 ] as const;
 type AllowedRole = (typeof ALLOWED_ROLES)[number];
-const BODY_KEYS = ['email', 'full_name', 'role', 'branch_id'] as const;
+const BODY_KEYS = [
+  'email',
+  'full_name',
+  'role',
+  'branch_id',
+  'phone',
+  'monthly_salary',
+  'hiring_date',
+] as const;
+
+/** Optional phone: text, at most 30 characters; blank becomes null. */
+function optionalPhone(value: unknown): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string') {
+    throw new ValidationError('phone must be text.');
+  }
+  const phone = value.trim();
+  if (phone.length === 0) return null;
+  if (phone.length > 30) {
+    throw new ValidationError('phone is too long (at most 30 characters).');
+  }
+  return phone;
+}
+
+/** Optional monthly salary: a non-negative finite number; blank becomes null. */
+function optionalSalary(value: unknown): number | null {
+  if (value === undefined || value === null || value === '') return null;
+  const salary = typeof value === 'string' && value.trim() !== ''
+    ? Number(value)
+    : value;
+  if (typeof salary !== 'number' || !Number.isFinite(salary) || salary < 0) {
+    throw new ValidationError('monthly_salary must be a number of 0 or more.');
+  }
+  return salary;
+}
+
+/** Optional hiring date, strictly YYYY-MM-DD and a real calendar date. */
+function optionalHiringDate(value: unknown): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new ValidationError('hiring_date must be in YYYY-MM-DD format.');
+  }
+  const [year, month, day] = value.split('-').map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    throw new ValidationError('hiring_date is not a valid date.');
+  }
+  return value;
+}
 
 type AdminClient = ReturnType<typeof createClient>;
 
@@ -126,6 +178,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     let fullName: string;
     let role: AllowedRole;
     let branchId: string | null;
+    let phone: string | null;
+    let monthlySalary: number | null;
+    let hiringDate: string | null;
     try {
       email = requiredString(body.email, 'email', 254).toLowerCase();
       if (!isEmail(email)) throw new ValidationError('Enter a valid email address.');
@@ -138,6 +193,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
       role = body.role as AllowedRole;
       branchId = optionalUuid(body.branch_id, 'branch_id') ?? actor.branch_id ?? null;
+      phone = optionalPhone(body.phone);
+      monthlySalary = optionalSalary(body.monthly_salary);
+      hiringDate = optionalHiringDate(body.hiring_date);
     } catch (error) {
       if (error instanceof ValidationError) return errors.validation(req, error.message);
       return errors.validation(req, 'The submitted details are not valid.');
@@ -207,6 +265,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       full_name: fullName,
       role,
       branch_id: branchId,
+      phone,
+      monthly_salary: monthlySalary,
+      hiring_date: hiringDate,
       is_active: true,
     });
     if (profileError) {
@@ -221,7 +282,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       record_id: created.id,
       branch_id: branchId,
       old_data: null,
-      new_data: { email, role, branch_id: branchId },
+      new_data: { email, role, branch_id: branchId, phone, monthly_salary: monthlySalary, hiring_date: hiringDate },
       created_at: new Date().toISOString(),
     });
 

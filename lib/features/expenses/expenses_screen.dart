@@ -12,6 +12,7 @@ import '../../core/dates.dart';
 import '../../core/errors/app_error.dart';
 import '../../core/money.dart';
 import '../../core/permissions.dart';
+import '../../core/state/invalidation.dart';
 import '../../core/strings.dart';
 import '../../core/supabase_client.dart';
 import '../../core/theme/app_colors.dart';
@@ -292,25 +293,13 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     }
   }
 
-  Future<void> _delete(Map<String, dynamic> expense) async {
-    final confirm = await showConfirmDialog(
-      context,
-      title: S.delete,
-      message: '${S.confirmDelete}\n${expense['category'] ?? ''}',
-    );
-    if (confirm != true) return;
-    try {
-      await SupabaseService.client
-          .from('expenses')
-          .delete()
-          .eq('id', expense['id']);
-      if (!mounted) return;
-      ref.read(dashboardRefreshProvider.notifier).state++;
-      AppSnackbar.success(context, 'Expense deleted.');
-      await _load();
-    } catch (e) {
-      if (mounted) AppSnackbar.error(context, AppErrorMapper.from(e).message);
-    }
+  Future<String?> _delete(Map<String, dynamic> expense) async {
+    await SupabaseService.client
+        .from('expenses')
+        .delete()
+        .eq('id', expense['id']);
+    await _load();
+    return 'Expense deleted.';
   }
 
   Future<void> _setStatus(Map<String, dynamic> expense, String status) async {
@@ -571,19 +560,27 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                               _setStatus(expense, 'rejected'),
                                         ),
                                       if (canEdit)
-                                        IconButton(
-                                          tooltip: S.edit,
-                                          icon: const Icon(Icons.edit_outlined,
-                                              size: 18),
-                                          onPressed: () => _edit(expense),
-                                        ),
-                                      if (canEdit)
-                                        IconButton(
-                                          tooltip: S.delete,
-                                          icon: const Icon(Icons.delete_outline,
-                                              size: 18),
-                                          onPressed: () => _delete(expense),
-                                        ),
+                                        RowActions(actions: [
+                                          RowAction(
+                                            label: S.edit,
+                                            icon: Icons.edit_outlined,
+                                            onSelected: () async {
+                                              await _edit(expense);
+                                              return null;
+                                            },
+                                            mutation: Mutation.createExpense,
+                                          ),
+                                          RowAction(
+                                            label: S.delete,
+                                            icon: Icons.delete_outline,
+                                            danger: true,
+                                            confirmTitle: S.delete,
+                                            confirmMessage:
+                                                '${S.confirmDelete}\n${expense['category'] ?? ''}',
+                                            onSelected: () => _delete(expense),
+                                            mutation: Mutation.deleteExpense,
+                                          ),
+                                        ]),
                                     ],
                                   ),
                               ],

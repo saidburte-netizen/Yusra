@@ -7,6 +7,8 @@ import '../../../core/dates.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/money.dart';
 import '../../../core/permissions.dart';
+import '../../../core/state/invalidation.dart';
+import '../../../core/supabase_client.dart';
 import '../../../core/strings.dart';
 import '../../../core/widgets.dart';
 import '../data/customers.dart';
@@ -124,35 +126,54 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                                             : 'Inactive',
                                       ],
                                       actions: [
-                                        IconButton(
-                                          tooltip: 'View',
-                                          icon: const Icon(
-                                              Icons.visibility_outlined),
-                                          onPressed: () => context
-                                              .go('/customers/${customer.id}'),
-                                        ),
-                                        if (canEdit) ...[
-                                          IconButton(
-                                            tooltip: S.edit,
-                                            icon:
-                                                const Icon(Icons.edit_outlined),
-                                            onPressed: () => editCustomer(
-                                                context, ref, customer),
+                                        RowActions(actions: [
+                                          RowAction(
+                                            label: 'View',
+                                            icon: Icons.visibility_outlined,
+                                            onSelected: () async {
+                                              context.go('/customers/${customer.id}');
+                                              return null;
+                                            },
                                           ),
-                                          IconButton(
-                                            tooltip: customer.isActive
+                                          RowAction(
+                                            label: S.edit,
+                                            icon: Icons.edit_outlined,
+                                            allowed: canEdit,
+                                            onSelected: () async {
+                                              await editCustomer(context, ref, customer);
+                                              return null;
+                                            },
+                                            mutation: Mutation.saveCustomer,
+                                          ),
+                                          RowAction(
+                                            label: customer.isActive
                                                 ? 'Deactivate'
                                                 : 'Reactivate',
-                                            icon: Icon(customer.isActive
+                                            icon: customer.isActive
                                                 ? Icons.person_off_outlined
-                                                : Icons.person_outline),
-                                            onPressed: () => setCustomerActive(
-                                              context,
-                                              ref,
-                                              customer,
-                                            ),
+                                                : Icons.person_outline,
+                                            allowed: canEdit,
+                                            confirmTitle: customer.isActive
+                                                ? 'Deactivate customer'
+                                                : 'Reactivate customer',
+                                            confirmMessage:
+                                                '${customer.name} will ${customer.isActive ? 'no longer' : 'again'} be available.',
+                                            onSelected: () =>
+                                                _rowSetActive(ref, customer),
+                                            mutation: Mutation.saveCustomer,
                                           ),
-                                        ],
+                                          RowAction(
+                                            label: 'Delete',
+                                            icon: Icons.delete_outline,
+                                            allowed: canEdit,
+                                            danger: true,
+                                            confirmTitle: 'Delete customer',
+                                            confirmMessage:
+                                                'Delete ${customer.name}? Customers with sales cannot be deleted.',
+                                            onSelected: () => _deleteCustomer(ref, customer),
+                                            mutation: Mutation.saveCustomer,
+                                          ),
+                                        ]),
                                       ],
                                     ),
                                 ],
@@ -166,6 +187,30 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
       ),
     );
   }
+}
+
+Future<String?> _rowSetActive(WidgetRef ref, Customer customer) async {
+  final active = !customer.isActive;
+  await ref.read(customersRepositoryProvider).setActive(customer.id, active);
+  ref.invalidate(customersProvider);
+  ref.invalidate(customerProvider(customer.id));
+  return active ? 'Customer reactivated.' : 'Customer deactivated.';
+}
+
+/// Customers with sales history are in use: block deletion with a clear reason.
+Future<String?> _deleteCustomer(WidgetRef ref, Customer customer) async {
+  final rows = await SupabaseService.client
+      .from('sales')
+      .select('id')
+      .eq('customer_id', customer.id)
+      .limit(1);
+  if ((rows as List).isNotEmpty) {
+    throw AppError('This customer has sales history. Deactivate them instead.');
+  }
+  await SupabaseService.client.from('customers').delete().eq('id', customer.id);
+  ref.invalidate(customersProvider);
+  ref.invalidate(customerStatsProvider);
+  return 'Customer deleted.';
 }
 
 /// Shared create/edit entry point used by the list and the detail screen.
