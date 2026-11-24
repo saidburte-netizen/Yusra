@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../core/errors/app_error.dart';
@@ -167,21 +168,49 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
     return AppRoleX.fromDb(user['role'] as String?) != AppRole.superAdmin;
   }
 
-  /// A 404 from functions.invoke usually means the Edge Function itself was
-  /// never deployed. Show one clear instruction instead of the raw CLI text.
-  String _functionErrorMessage(Object error, String functionName) {
-    final mapped = AppErrorMapper.from(error);
-    final raw = error.toString().toLowerCase();
-    final missingFunction =
-        functionName == 'admin-create-user' &&
-            (mapped.kind == AppErrorKind.notFound ||
-                raw.contains('not found') ||
-                raw.contains('404'));
-    if (missingFunction) {
-      return 'Staff service is not deployed yet. Ask the owner to run Deploy '
-          'functions in GitHub Actions.';
-    }
-    return mapped.message;
+  /// Shows the real server reason with a copyable diagnostic block. The
+  /// "not deployed" hint is reserved for the exact missing-function body so a
+  /// 404 caused by a bad staff profile is never hidden.
+  void _showCreateUserError(Object error) {
+    final failure = _describeFunctionFailure(error, 'admin-create-user');
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Create user failed'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(failure.message),
+              const SizedBox(height: 12),
+              const Text('Details:'),
+              const SizedBox(height: 4),
+              SelectableText(
+                failure.details,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.copy, size: 18),
+            label: const Text('Copy details'),
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: failure.details));
+              if (context.mounted) {
+                AppSnackbar.success(context, 'Details copied.');
+              }
+            },
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(S.close),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Keeps the signed-in user's own permissions fresh and drops cached users.
@@ -284,7 +313,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      AppSnackbar.error(context, _functionErrorMessage(e, 'admin-create-user'));
+      _showCreateUserError(e);
     }
   }
 
@@ -549,6 +578,110 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
   }
 }
 
+class _FunctionFailure {
+  const _FunctionFailure({required this.message, required this.details});
+
+  final String message;
+  final String details;
+}
+
+class _FunctionBodyInfo {
+  const _FunctionBodyInfo({this.message, this.code, required this.raw});
+
+  final String? message;
+  final String? code;
+  final String raw;
+}
+
+/// Describes an invoke failure from the server body, not from exception text.
+/// A 404 only means "not deployed" when the body itself says the function was
+/// missing; every other 404 keeps its real message and HTTP status.
+_FunctionFailure _describeFunctionFailure(Object error, String functionName) {
+  final action = functionName == 'admin-create-user'
+      ? 'Create user failed'
+      : 'Staff request failed';
+  final mapped = AppErrorMapper.from(error);
+  if (error is! FunctionException) {
+    return _FunctionFailure(
+      message: '$action: ${mapped.message}',
+      details: <String>[
+        'Function: $functionName',
+        'Message: ${mapped.message}',
+        if (mapped.code != null) 'Error code: ${mapped.code}',
+      ].join('\n'),
+    );
+  }
+
+  final body = _functionBodyInfo(error.details);
+  final serverMessage = body.message?.trim();
+  final hasMessage = serverMessage != null && serverMessage.isNotEmpty;
+  final message = hasMessage ? serverMessage : mapped.message;
+  final missingFunction = error.status == 404 &&
+      hasMessage &&
+      serverMessage.toLowerCase().contains('requested function was not found');
+  final code = _shortFunctionCode(body.code);
+  final headline = '$action (${error.status}): $message';
+  final displayMessage = missingFunction
+      ? 'Staff service is not deployed yet. Ask the owner to run Deploy '
+          'functions in GitHub Actions.'
+      : code == null
+          ? headline
+          : '$headline\nError code: $code';
+  return _FunctionFailure(
+    message: displayMessage,
+    details: <String>[
+      'Function: $functionName',
+      'HTTP status: ${error.status}',
+      if (error.reasonPhrase != null) 'Reason: ${error.reasonPhrase}',
+      'Message: $message',
+      if (code != null) 'Error code: $code',
+      'Body: ${body.raw}',
+    ].join('\n'),
+  );
+}
+
+_FunctionBodyInfo _functionBodyInfo(Object? details) {
+  if (details == null) return const _FunctionBodyInfo(raw: '<empty>');
+  if (details is! String) return _functionBodyInfoFromValue(details);
+
+  final text = details.trim();
+  try {
+    return _functionBodyInfoFromValue(jsonDecode(text));
+  } on FormatException {
+    return _FunctionBodyInfo(message: text, raw: text);
+  }
+}
+
+_FunctionBodyInfo _functionBodyInfoFromValue(Object? decoded) {
+  if (decoded is Map) {
+    final nested = decoded['error'];
+    final errorMap = nested is Map ? nested : null;
+    final message = errorMap?['message']?.toString() ??
+        decoded['message']?.toString() ??
+        decoded['error_description']?.toString() ??
+        (nested is String ? nested : null);
+    final code = errorMap?['code']?.toString() ??
+        decoded['code']?.toString() ??
+        decoded['error_code']?.toString();
+    var raw = '<empty>';
+    try {
+      raw = jsonEncode(decoded);
+    } on Object {
+      raw = decoded.toString();
+    }
+    return _FunctionBodyInfo(message: message, code: code, raw: raw);
+  }
+  final text = decoded?.toString() ?? '<empty>';
+  return _FunctionBodyInfo(message: text, raw: text);
+}
+
+String? _shortFunctionCode(Object? raw) {
+  final code = raw?.toString().trim();
+  if (code == null || code.isEmpty || code.length > 64) return null;
+  if (!RegExp(r'^[A-Za-z0-9_.:-]+$').hasMatch(code)) return null;
+  return code;
+}
+
 /// Edge Functions return typed `{error:{code,message}}` bodies. Decode both
 /// raw JSON strings and already-decoded maps, and turn typed errors into a
 /// mapped AppError so no raw function exception reaches the UI.
@@ -559,6 +692,7 @@ Object _decodeEdgeResponse(Object? raw) {
     throw AppError(
       error['message']?.toString() ?? S.somethingWrong,
       kind: AppErrorKind.server,
+      code: error['code']?.toString(),
     );
   }
   return data ?? const <String, dynamic>{};
