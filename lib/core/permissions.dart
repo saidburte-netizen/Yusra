@@ -128,7 +128,7 @@ const Map<String, Map<AppRole, Perm>> permissionMatrix = {
     AppRole.admin: _e,
     AppRole.pharmacist: _e,
     AppRole.cashier: _v,
-    AppRole.storeKeeper: _v,
+    AppRole.storeKeeper: _e,
     AppRole.accountant: _v,
   },
   Modules.stock: {

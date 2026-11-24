@@ -86,9 +86,10 @@
       "roles": [
         "admin",
         "pharmacist",
+        "store_keeper",
         "super_admin"
       ],
-      "evidence": "supabase/migrations/0012_rls_hardening.sql:126",
+      "evidence": "supabase/migrations/0027_staff_catalogue_and_shift_close.sql:5",
       "all_authenticated": false,
       "internal": false,
       "note": "categories ALL"
@@ -97,9 +98,10 @@
       "roles": [
         "admin",
         "pharmacist",
+        "store_keeper",
         "super_admin"
       ],
-      "evidence": "supabase/migrations/0012_rls_hardening.sql:130",
+      "evidence": "supabase/migrations/0027_staff_catalogue_and_shift_close.sql:10",
       "all_authenticated": false,
       "internal": false,
       "note": "medicines ALL"
@@ -350,6 +352,7 @@
     "rpc.close_shift": {
       "roles": [
         "admin",
+        "cashier",
         "super_admin"
       ],
       "evidence": "supabase/migrations/0007_functions.sql:149",

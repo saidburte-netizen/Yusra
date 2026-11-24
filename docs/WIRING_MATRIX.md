@@ -21,7 +21,9 @@ the following additions, which are verified by the cited files:
 | Row-action audit coverage | `supabase/migrations/0026_row_actions_audit.sql:1-20` | Adds `audit_row()` triggers for `expected_expenses`, `stock_batches`, `stock_movements`, `sale_returns`; no RLS change (audit stays select-only; writes are trigger/RPC-only). |
 | Dashboard refresh on catalogue writes | `lib/core/state/invalidation.dart` (`saveCategory`, `saveSupplier`, `saveCustomer`, `saveUser`, `rowAction`) | These mutations now also bump `dashboardRefreshProvider` and the two drill-down providers. |
 | Role-scoped dashboard | `lib/core/permissions.dart` (`canSeeDashboardPharmacyValue`, `canSeeDashboardExpectedExpenses`, `canSeeDashboardStock`), `lib/features/dashboard/dashboard_screen.dart`, `lib/core/router.dart` | Unauthorized roles never load/watch or see overall valuation, expected-expense/salary, stock-alert, sales-report or staff counters; direct drill-down URLs redirect to `/forbidden`. |
-| Updated architecture | `docs/ARCHITECTURE.md` (evidence map, §f, §g ADR-07/ADR-09/ADR-10) | Records the new function contract, deploy workflow, shared widget and dashboard role-scoping decisions. |
+| Staff catalogue writes | `lib/core/permissions.dart`, `supabase/migrations/0027_staff_catalogue_and_shift_close.sql`, `supabase/role_permissions.json` | Store keeper can add stock and create a medicine/category from the Add stock and Opening stock pickers; client matrix and RLS policies now agree. |
+| Cashier shift close | `lib/features/shifts/screens/shifts_screen.dart`, `supabase/role_permissions.json` | `/shifts` row action now allows an owning cashier to close their own open shift, matching `close_shift` and the POS control. |
+| Updated architecture | `docs/ARCHITECTURE.md` (evidence map, §f, §g ADR-07/ADR-09/ADR-10/ADR-11) | Records the new function contract, deploy workflow, shared widget, dashboard role-scoping and staff-flow decisions. |
 
 ## 1. Summary
 

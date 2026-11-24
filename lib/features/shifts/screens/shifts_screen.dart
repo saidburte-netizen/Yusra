@@ -428,7 +428,9 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
                                 label: 'Close shift',
                                 icon: Icons.lock_outline,
                                 allowed: shift.isOpen &&
-                                    can(role, Modules.shifts, PermAction.edit),
+                                    (can(role, Modules.shifts, PermAction.edit) ||
+                                        (isOwnOnly(role, Modules.shifts) &&
+                                            shift.cashierId == profile?.id)),
                                 danger: false,
                                 onSelected: () async {
                                   await _closeShift(shift);
