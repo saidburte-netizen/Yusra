@@ -84,6 +84,44 @@ interface Actor {
   branch_id: string | null;
 }
 
+type CreateStage =
+  | 'profile_lookup'
+  | 'branch_lookup'
+  | 'auth_create'
+  | 'auth_no_id'
+  | 'profile_save'
+  | 'unexpected';
+
+function limitText(value: string, max = 200): string {
+  return value.length <= max ? value : `${value.slice(0, max - 3)}...`;
+}
+
+/** Removes known secrets and token-shaped values from any server detail. */
+function redactSecrets(value: string, secrets: string[]): string {
+  let result = value;
+  for (const secret of secrets) {
+    if (secret) result = result.split(secret).join('[redacted]');
+  }
+  return result
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[redacted]')
+    .replace(
+      /("(?:access_token|refresh_token|apikey|service_role|service_key|token)"\s*:\s*")[^"]*(")/gi,
+      '$1[redacted]$2',
+    );
+}
+
+/** One safe, single-line, truncated fragment for an admin-facing error. */
+function safeDetail(value: unknown, secrets: string[]): string {
+  const raw = value == null ? '' : String(value);
+  const clean = redactSecrets(raw, secrets).replace(/\s+/g, ' ').trim();
+  return limitText(clean || '<empty>');
+}
+
+function stageMessage(stage: CreateStage, detail: string): string {
+  return `Create user failed at ${stage}: ${detail}`;
+}
+
 async function writeAudit(admin: unknown, entry: Record<string, unknown>) {
   // The Supabase client's generated table types differ between releases, so
   // keep the audit helper generic and let the client validate at runtime.
@@ -96,6 +134,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const preflightResponse = preflight(req);
   if (preflightResponse) return preflightResponse;
   if (req.method !== 'POST') return errors.methodNotAllowed(req);
+
+  // Populated after secrets are read so unexpected-error details can be
+  // redacted before they reach the admin or the logs.
+  const sensitiveValues: string[] = [];
 
   try {
     const missing = missingSecrets([
@@ -118,8 +160,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const url = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    sensitiveValues.push(serviceKey, anonKey);
 
     const authHeader = req.headers.get('Authorization');
+    if (authHeader) sensitiveValues.push(authHeader);
     if (!authHeader || !/^Bearer\s+\S+$/i.test(authHeader)) {
       return errors.unauthenticated(req);
     }
@@ -152,8 +196,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .eq('id', identity.user.id)
       .maybeSingle();
     if (actorError) {
-      console.error('admin-create-user: profile lookup failed:', actorError.message);
-      return errors.internal(req);
+      const detail = safeDetail(actorError.message, sensitiveValues);
+      console.error('admin-create-user:', stageMessage('profile_lookup', detail));
+      return errors.internal(req, stageMessage('profile_lookup', detail));
     }
     if (!actorRow) {
       return errors.notFound(req, 'Your staff profile was not found.');
@@ -220,8 +265,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
         .eq('id', branchId)
         .maybeSingle();
       if (branchError) {
-        console.error('admin-create-user: branch lookup failed:', branchError.message);
-        return errors.internal(req);
+        const detail = safeDetail(branchError.message, sensitiveValues);
+        console.error('admin-create-user:', stageMessage('branch_lookup', detail));
+        return errors.internal(req, stageMessage('branch_lookup', detail));
       }
       if (!branch) {
         return errors.validation(req, 'The selected branch does not exist.');
@@ -229,6 +275,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     const password = temporaryPassword();
+    sensitiveValues.push(password);
     const response = await fetch(`${url}/auth/v1/admin/users`, {
       method: 'POST',
       headers: {
@@ -247,16 +294,57 @@ Deno.serve(async (req: Request): Promise<Response> => {
     });
     if (!response.ok) {
       const status = response.status;
-      console.error('admin-create-user: Auth admin API failed with status', status);
-      if (status === 409 || status === 422) {
+      const bodyText = await response.text().catch(() => '');
+      let authCode: string | undefined;
+      let authMessage: string | undefined;
+      try {
+        const parsed = JSON.parse(bodyText) as Record<string, unknown>;
+        const nestedError = parsed.error;
+        authCode = typeof parsed.code === 'string'
+          ? parsed.code
+          : nestedError && typeof nestedError === 'object' && 'code' in nestedError &&
+              typeof (nestedError as { code?: unknown }).code === 'string'
+            ? (nestedError as { code: string }).code
+            : undefined;
+        authMessage = typeof parsed.message === 'string'
+          ? parsed.message
+          : typeof parsed.msg === 'string'
+            ? parsed.msg
+            : nestedError && typeof nestedError === 'object' && 'message' in nestedError &&
+                typeof (nestedError as { message?: unknown }).message === 'string'
+              ? (nestedError as { message: string }).message
+              : undefined;
+      } catch {
+        // Keep the raw body text below; some Auth versions return plain text.
+      }
+      const combined = `${authCode ?? ''} ${authMessage ?? ''} ${bodyText}`;
+      const weakPassword = status === 422 &&
+        (authCode === 'weak_password' || /weak[_ -]?password/i.test(combined));
+      const emailExists = status === 409 ||
+        authCode === 'email_exists' ||
+        authCode === 'email_address_exists' ||
+        /\b(email|user)\b.*\b(already|exists|registered|in use)\b/i.test(combined);
+      if (weakPassword) {
+        const detail = safeDetail(authMessage ?? bodyText, sensitiveValues);
+        console.error('admin-create-user:', stageMessage('auth_create', detail));
+        return errors.validation(req, detail);
+      }
+      if (emailExists) {
         return errors.conflict(req, 'A user with that email already exists.');
       }
-      return errors.internal(req);
+      const underlying = safeDetail(
+        authMessage ?? bodyText ?? '<empty>',
+        sensitiveValues,
+      );
+      const detail = `HTTP ${status}: ${underlying}; body: ${safeDetail(bodyText, sensitiveValues)}`;
+      console.error('admin-create-user:', stageMessage('auth_create', detail));
+      return errors.internal(req, stageMessage('auth_create', detail));
     }
     const created = (await response.json()) as { id?: unknown };
     if (typeof created.id !== 'string' || created.id.length === 0) {
-      console.error('admin-create-user: Auth admin API returned no user id');
-      return errors.internal(req);
+      const detail = 'Auth admin API returned no user id.';
+      console.error('admin-create-user:', stageMessage('auth_no_id', detail));
+      return errors.internal(req, stageMessage('auth_no_id', detail));
     }
 
     const { error: profileError } = await admin.from('profiles').upsert({
@@ -271,8 +359,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       is_active: true,
     });
     if (profileError) {
-      console.error('admin-create-user: profile upsert failed:', profileError.message);
-      return errors.internal(req);
+      const detail = safeDetail(profileError.message, sensitiveValues);
+      console.error('admin-create-user:', stageMessage('profile_save', detail));
+      return errors.internal(req, stageMessage('profile_save', detail));
     }
 
     await writeAudit(admin, {
@@ -288,10 +377,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     return json(req, { user_id: created.id, temporary_password: password });
   } catch (error) {
-    console.error(
-      'admin-create-user: unexpected error:',
+    const detail = safeDetail(
       error instanceof Error ? error.message : String(error),
+      sensitiveValues,
     );
-    return errors.internal(req);
+    console.error('admin-create-user:', stageMessage('unexpected', detail));
+    return errors.internal(req, stageMessage('unexpected', detail));
   }
 });
