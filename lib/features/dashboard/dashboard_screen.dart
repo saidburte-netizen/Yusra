@@ -764,6 +764,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   /// loading state so the dashboard never flickers or loses its last snapshot.
   Future<void> _refreshQuiet() async {
     final auth = ref.read(authProvider);
+    // Realtime stock/price changes must refresh derived value cards too, not
+    // just the snapshot counter cards.
+    ref.invalidate(dashboardPharmacyValueProvider);
+    ref.invalidate(dashboardExpectedExpensesProvider);
     try {
       final data = await DashboardSnapshot.load(
         role: auth.profile?.role ?? AppRole.cashier,
@@ -1389,8 +1393,8 @@ class _PharmacyValueCard extends ConsumerWidget {
         ),
         data: (v) => _BigTopCard(
           title: 'Pharmacy value',
-          value: formatMoney(v.cost),
-          subtitle: 'Retail ${formatMoney(v.retail)}',
+          value: formatMoney(v.retail),
+          subtitle: 'Cost ${formatMoney(v.cost)}',
           icon: Icons.account_balance_wallet_outlined,
           color: AppColors.plum600,
           onTap: () => context.go('/dashboard/pharmacy-value'),

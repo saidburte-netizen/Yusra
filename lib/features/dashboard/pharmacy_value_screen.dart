@@ -56,9 +56,9 @@ class PharmacyValueScreen extends ConsumerWidget {
                   runSpacing: 12,
                   children: [
                     _SummaryChip(
-                        label: 'Cost value', value: formatMoney(totalCost)),
-                    _SummaryChip(
                         label: 'Retail value', value: formatMoney(totalRetail)),
+                    _SummaryChip(
+                        label: 'Cost value', value: formatMoney(totalCost)),
                     _SummaryChip(label: 'Products', value: '${stock.length}'),
                   ],
                 ),

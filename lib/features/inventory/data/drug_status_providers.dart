@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/supabase_client.dart';
+import '../../dashboard/dashboard_screen.dart';
 import 'inventory_models.dart';
 import 'inventory_providers.dart';
 
@@ -164,6 +165,7 @@ final stockAlertRealtimeProvider = Provider<void>((ref) {
       reorderSuggestionsProvider,
       drugStatusProvider,
       lowStockAlertsProvider,
+      dashboardPharmacyValueProvider,
     ]) {
       ref.invalidate(provider);
     }

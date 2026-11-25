@@ -585,20 +585,26 @@ class _BottomNavItem extends StatelessWidget {
                   : Colors.transparent,
             ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(item.icon, size: 22, color: fg),
-              const SizedBox(height: 4),
-              Text(
-                item.label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: fg,
+          child: SizedBox(
+            width: 88,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(item.icon, size: 22, color: fg),
+                const SizedBox(height: 4),
+                Text(
+                  item.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: fg,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

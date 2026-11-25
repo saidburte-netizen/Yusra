@@ -412,7 +412,9 @@ and the RPC-only-writer rule (`docs/database.md:46-67`) apply to every flow.
    which feeds `activityProvider` and the dashboard activity panel.
 8. **Dashboard tile** — role-gated `Drug status` card and admin-only banner in
    `lib/features/dashboard/dashboard_screen.dart`; the bell uses the same
-   `lowStockAlertCountProvider` for super admin/admin.
+   `lowStockAlertCountProvider` for super admin/admin. The pharmacy value card
+   fronts the retail sum (cost in its subtitle) and is invalidated by both the
+   central mutation graph and the stock realtime channel.
 9. **Order path** — each Low/Out card calls the existing 0022 draft-PO RPC with
    one line (`supplier_id`, `medicine_id`, `quantity`, `unit_cost`) and opens
    `/purchasing/orders/:id`.
