@@ -31,6 +31,11 @@ const List<MenuItem> allMenuItems = [
       path: '/pos',
       module: Modules.pos),
   MenuItem(
+      label: 'Drug status',
+      icon: Icons.monitor_heart_outlined,
+      path: '/inventory/drug-status',
+      module: Modules.stock),
+  MenuItem(
       label: S.inventory,
       icon: Icons.inventory_2_outlined,
       path: '/inventory',

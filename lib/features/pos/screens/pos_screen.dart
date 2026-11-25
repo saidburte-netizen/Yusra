@@ -406,6 +406,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     setState(() => _busy = true);
     try {
       await ref.read(salesRepositoryProvider).openShift(branchId, amount);
+      ref.applyMutation(Mutation.openShift);
       ref.invalidate(myOpenShiftProvider);
       ref.invalidate(shiftsProvider(true));
       if (mounted) AppSnackbar.success(context, 'Shift started.');

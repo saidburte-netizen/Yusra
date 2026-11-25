@@ -6,6 +6,7 @@ import '../../features/dashboard/dashboard_screen.dart'
         dashboardExpectedExpensesProvider,
         dashboardPharmacyValueProvider,
         dashboardRefreshProvider;
+import '../../features/inventory/data/drug_status_providers.dart';
 import '../../features/inventory/data/inventory_providers.dart';
 import '../../features/prescriptions/data/prescriptions.dart';
 import '../../features/purchasing/data/purchasing.dart';
@@ -42,6 +43,7 @@ abstract final class Mutation {
   static const saveUser = 'save_user';
   static const createExpense = 'create_expense';
   static const deleteExpense = 'delete_expense';
+  static const dismissLowStockAlert = 'dismiss_low_stock_alert';
 }
 
 typedef InvalidateFn = void Function(ProviderOrFamily provider);
@@ -52,11 +54,14 @@ final sessionScopedProviders = <ProviderOrFamily>[
   categoriesProvider,
   medicinesProvider,
   stockSummaryProvider,
+  drugStatusProvider,
+  lowStockAlertsProvider,
   lowStockProvider,
   expiringBatchesProvider,
   batchesProvider,
   movementsProvider,
   reorderSuggestionsProvider,
+  lowStockAlertThresholdProvider,
   expiryAlertDaysProvider,
   settingsVersionProvider,
   receiptSettingsProvider,
@@ -83,6 +88,8 @@ final sessionScopedProviders = <ProviderOrFamily>[
 /// Subset that depends on the branch currently selected in the top bar.
 final branchScopedProviders = <ProviderOrFamily>[
   stockSummaryProvider,
+  drugStatusProvider,
+  lowStockAlertsProvider,
   lowStockProvider,
   expiringBatchesProvider,
   batchesProvider,
@@ -118,6 +125,8 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
     myOpenShiftProvider,
     shiftsProvider,
     stockSummaryProvider,
+    drugStatusProvider,
+    lowStockAlertsProvider,
     batchesProvider,
     lowStockProvider,
     movementsProvider,
@@ -133,6 +142,8 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
     saleProvider,
     saleItemsProvider,
     stockSummaryProvider,
+    drugStatusProvider,
+    lowStockAlertsProvider,
     batchesProvider,
     movementsProvider,
     activityProvider,
@@ -146,6 +157,8 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
     saleReturnsProvider,
     myOpenShiftProvider,
     stockSummaryProvider,
+    drugStatusProvider,
+    lowStockAlertsProvider,
     activityProvider,
   ],
   Mutation.receivePurchaseOrder: <ProviderOrFamily>[
@@ -156,6 +169,8 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
     purchaseOrderProvider,
     purchaseItemsProvider,
     stockSummaryProvider,
+    drugStatusProvider,
+    lowStockAlertsProvider,
     batchesProvider,
     lowStockProvider,
     movementsProvider,
@@ -174,6 +189,8 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
     dashboardPharmacyValueProvider,
     dashboardExpectedExpensesProvider,
     stockSummaryProvider,
+    drugStatusProvider,
+    lowStockAlertsProvider,
     batchesProvider,
     lowStockProvider,
     expiringBatchesProvider,
@@ -203,6 +220,8 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
     dashboardPharmacyValueProvider,
     dashboardExpectedExpensesProvider,
     stockSummaryProvider,
+    drugStatusProvider,
+    lowStockAlertsProvider,
     batchesProvider,
     lowStockProvider,
     expiringBatchesProvider,
@@ -216,6 +235,8 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
     medicinesProvider,
     categoriesProvider,
     stockSummaryProvider,
+    drugStatusProvider,
+    lowStockAlertsProvider,
     activityProvider,
   ],
   Mutation.saveCategory: <ProviderOrFamily>[
@@ -228,6 +249,8 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
   ],
   Mutation.saveSetting: <ProviderOrFamily>[
     receiptSettingsProvider,
+    lowStockAlertThresholdProvider,
+    drugStatusProvider,
     expiryAlertDaysProvider,
     settingsVersionProvider,
     activityProvider,
@@ -267,6 +290,7 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
     dashboardRefreshProvider,
     dashboardPharmacyValueProvider,
     dashboardExpectedExpensesProvider,
+    cashiersProvider,
     activityProvider,
   ],
   Mutation.createExpense: <ProviderOrFamily>[
@@ -279,6 +303,11 @@ final mutationDependents = <String, List<ProviderOrFamily>>{
     dashboardRefreshProvider,
     dashboardPharmacyValueProvider,
     dashboardExpectedExpensesProvider,
+    activityProvider,
+  ],
+  Mutation.dismissLowStockAlert: <ProviderOrFamily>[
+    lowStockAlertsProvider,
+    drugStatusProvider,
     activityProvider,
   ],
 };
@@ -302,6 +331,7 @@ final mutationCacheTags = <String, Set<String>>{
   Mutation.saveSupplier: <String>{CacheTag.customers},
   Mutation.savePrescription: <String>{CacheTag.prescriptions},
   Mutation.rowAction: <String>{CacheTag.catalogue, CacheTag.reports},
+  Mutation.dismissLowStockAlert: <String>{CacheTag.stock},
   Mutation.saveUser: <String>{CacheTag.users, CacheTag.reports},
   Mutation.createExpense: <String>{CacheTag.reports},
   Mutation.deleteExpense: <String>{CacheTag.reports},

@@ -4,6 +4,7 @@ import 'screens/adjustments_screen.dart';
 import 'screens/alerts_screen.dart';
 import 'screens/batches_screen.dart';
 import 'screens/categories_screen.dart';
+import 'screens/drug_status_screen.dart';
 import 'screens/medicine_detail_screen.dart';
 import 'screens/medicines_screen.dart';
 import 'screens/movements_screen.dart';
@@ -17,6 +18,10 @@ final List<RouteBase> inventoryRoutes = [
   GoRoute(
     path: '/inventory',
     builder: (context, state) => const StockOverviewScreen(),
+  ),
+  GoRoute(
+    path: '/inventory/drug-status',
+    builder: (context, state) => const DrugStatusScreen(),
   ),
   GoRoute(
     path: '/inventory/medicines',

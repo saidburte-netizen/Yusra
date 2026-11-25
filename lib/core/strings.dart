@@ -181,6 +181,9 @@ abstract final class S {
   static const last14Days = 'Last 14 days';
   static const topMedicines = 'Top medicines';
   static const alerts = 'Alerts';
+  static const dismiss = 'Dismiss';
+  static const clearAll = 'Clear all';
+  static const order = 'Order';
   static const pendingPrescriptions = 'Pending prescriptions';
   static const shortcuts = 'Shortcuts';
   static const currentShift = 'Current shift';

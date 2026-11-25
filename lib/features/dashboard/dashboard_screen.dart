@@ -12,10 +12,12 @@ import '../../core/errors/app_error.dart';
 import '../../core/money.dart';
 import '../../core/nav/menu_items.dart';
 import '../../core/permissions.dart';
+import '../../core/state/invalidation.dart';
 import '../../core/strings.dart';
 import '../../core/supabase_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets.dart';
+import '../inventory/data/drug_status_providers.dart';
 import '../inventory/data/inventory_providers.dart';
 import 'dashboard_metrics.dart';
 
@@ -841,6 +843,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       if (previous != next && !_loading) _load();
     });
     final role = auth.profile?.role ?? AppRole.cashier;
+    final alertState = ref.watch(lowStockAlertsProvider);
     final ownOnly = isOwnOnly(role, Modules.sales);
     final screenWidth = MediaQuery.sizeOf(context).width;
     final rangeWidth = screenWidth < 600 ? screenWidth - 40 : 190.0;
@@ -1075,6 +1078,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if ((role == AppRole.superAdmin || role == AppRole.admin) &&
+                      (alertState.valueOrNull?.isNotEmpty ?? false))
+                    _LowStockAlertBanner(
+                      alerts: alertState.valueOrNull!,
+                      branchId: _branchId,
+                    ),
                   if (!_loading &&
                       _error == null &&
                       _data?.failedSections.isNotEmpty == true)
@@ -1193,6 +1202,129 @@ class _DashboardSkeleton extends StatelessWidget {
                           ])))),
         ),
       ],
+    );
+  }
+}
+
+class _LowStockAlertBanner extends ConsumerStatefulWidget {
+  const _LowStockAlertBanner({required this.alerts, required this.branchId});
+
+  final List<LowStockAlert> alerts;
+  final String? branchId;
+
+  @override
+  ConsumerState<_LowStockAlertBanner> createState() =>
+      _LowStockAlertBannerState();
+}
+
+class _LowStockAlertBannerState extends ConsumerState<_LowStockAlertBanner> {
+  String? _busy;
+
+  Future<void> _dismiss(LowStockAlert alert) async {
+    if (_busy != null) return;
+    setState(() => _busy = alert.medicineId);
+    try {
+      await ref.read(inventoryRepositoryProvider).dismissLowStockAlert(
+            medicineId: alert.medicineId,
+            branchId: alert.branchId,
+          );
+      if (!mounted) return;
+      ref.applyMutation(Mutation.dismissLowStockAlert);
+    } catch (e) {
+      if (!mounted) return;
+      AppSnackbar.error(context, AppErrorMapper.from(e).message);
+    } finally {
+      if (mounted) setState(() => _busy = null);
+    }
+  }
+
+  Future<void> _clearAll() async {
+    final branch = widget.branchId;
+    if (branch == null || branch.isEmpty) {
+      AppSnackbar.error(context, S.chooseBranchFirst);
+      return;
+    }
+    if (_busy != null) return;
+    setState(() => _busy = 'all');
+    try {
+      await ref
+          .read(inventoryRepositoryProvider)
+          .dismissAllLowStockAlerts(branch);
+      if (!mounted) return;
+      ref.applyMutation(Mutation.dismissLowStockAlert);
+    } catch (e) {
+      if (!mounted) return;
+      AppSnackbar.error(context, AppErrorMapper.from(e).message);
+    } finally {
+      if (mounted) setState(() => _busy = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final alerts = widget.alerts;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.danger.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.danger.withOpacity(0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded,
+                  size: 18, color: AppColors.danger),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '${alerts.length} medicines are low or out of stock',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...alerts.map(
+            (alert) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                        '${alert.name} — ${alert.availableQty}',
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                  TextButton(
+                    onPressed: _busy == null ? () => _dismiss(alert) : null,
+                    child: const Text(S.dismiss),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _busy == null ? _clearAll : null,
+                icon: const Icon(Icons.done_all, size: 18),
+                label: const Text(S.clearAll),
+              ),
+              ElevatedButton.icon(
+                onPressed: () => context.go('/inventory/drug-status'),
+                icon: const Icon(Icons.shopping_cart_outlined, size: 18),
+                label: const Text(S.order),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1481,6 +1613,15 @@ class _DashboardBody extends StatelessWidget {
           minTileWidth: gridMin,
           spacing: gridSpacing,
           children: [
+            if (can(role, Modules.stock, PermAction.view))
+              StatCard(
+                compact: narrow,
+                title: 'Drug status',
+                value: 'Live',
+                icon: Icons.monitor_heart_outlined,
+                color: AppColors.pink600,
+                onTap: () => context.go('/inventory/drug-status'),
+              ),
             if (showStock)
               StatCard(
                 compact: narrow,

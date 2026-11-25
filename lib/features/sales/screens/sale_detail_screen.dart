@@ -200,6 +200,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
             idempotencyKey: _returnKey,
           );
       ref.applyMutation(Mutation.processSaleReturn);
+      if (!mounted) return;
       setState(() =>
           _returnKey = WriteIdempotency.newKey(Mutation.processSaleReturn));
       final settings = await ref.read(receiptSettingsProvider.future);

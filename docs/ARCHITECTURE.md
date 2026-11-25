@@ -6,7 +6,7 @@
 > from memory or from an unverified assumption.
 >
 > **Source of truth.** The Flutter client in `lib/`, the SQL migrations in
-> `supabase/migrations/0001_*.sql` … `0026_*.sql` (`all_owner_sql.sql:3671`
+> `supabase/migrations/0001_*.sql` … `0028_*.sql` (`all_owner_sql.sql:3671`
 > marks the last bundled mirror, through `0023_*.sql`), the verification contract in
 > `supabase/checks/schema_check.sql:232-391`, and the workflows in
 > `.github/workflows/` (entry points: `ci.yml:3-10`, `release.yml`,
@@ -30,6 +30,9 @@
 | Shared row actions | Core widget + invalidation graph | `lib/core/widgets/row_actions.dart:1-120`, `lib/core/widgets.dart:1-9`, `lib/core/state/invalidation.dart:17-33,120-160` |
 | Staff creation / deployment | Edge Function + manual workflow | `supabase/functions/admin-create-user/index.ts:19-80,255-285`, `.github/workflows/deploy-functions.yml:1-40`, `lib/features/admin/users_screen.dart:198-250` |
 | Row-action audit coverage | Additive migration | `supabase/migrations/0026_row_actions_audit.sql:1-20`, `supabase/migrations/0009_triggers.sql:101-129` |
+| Live drug status / low-stock alerts | Inventory providers + screen + dashboard banner | `lib/features/inventory/data/drug_status_providers.dart:1-165`, `lib/features/inventory/screens/drug_status_screen.dart:1-250`, `lib/features/dashboard/dashboard_screen.dart:1210-1320`, `lib/core/nav/app_shell.dart:504-557`, `supabase/migrations/0028_low_stock_alerts.sql:1-160` |
+| Realtime stock invalidation | Core shell subscription + invalidation graph | `lib/features/inventory/data/drug_status_providers.dart:130-165`, `lib/core/state/invalidation.dart:25-50,53-104,109-320` |
+| Threshold setting | Settings screen + app_settings key | `lib/features/admin/settings_screen.dart:50-75,481-491`, `lib/features/inventory/data/drug_status_providers.dart:28-56`, `supabase/migrations/0028_low_stock_alerts.sql:4-8` |
 
 ---
 
@@ -514,6 +517,7 @@ flowchart TB
 | ADR-09 | Every record row uses one shared `RowActions` menu: role gating via `allowed`, confirmation, feedback and refresh via the central invalidation graph. Audit remains server-side: table writes fire `audit_row()`, RPCs write their own row, and `0026` extends trigger coverage to expected expenses, batches, movements and returns. | `lib/core/widgets/row_actions.dart:1-120`, `lib/core/state/invalidation.dart:17-33,120-160`, `supabase/migrations/0026_row_actions_audit.sql:1-20` |
 | ADR-10 | The dashboard overview is narrower than raw module access: cashiers see their own counters, store keepers get stock alerts, finance/admin roles get whole-pharmacy valuations, and only admins get expected expenses/salaries. Guards cover both rendering/data loading and direct drill-down URLs. | `lib/core/permissions.dart`, `lib/features/dashboard/dashboard_screen.dart`, `lib/core/router.dart` |
 | ADR-11 | Staff write paths must agree end to end: store keepers may create medicines/categories from stock pickers (client matrix + `0027` RLS), and cashiers may close only their own open shift from both POS and `/shifts`. | `lib/core/permissions.dart`, `lib/features/inventory/widgets/stock_widgets.dart`, `supabase/migrations/0027_staff_catalogue_and_shift_close.sql`, `lib/features/shifts/screens/shifts_screen.dart`, `supabase/migrations/0007_functions.sql:149-165` |
+| ADR-12 | Drug status is derived from `v_stock_summary.available_qty` (unexpired batches after sales/returns/voids), not a cached count. The global `low_stock_alert_threshold` (default 5) drives Low/Out chips and the admin-only dismissible banner; dismissals reopen on a further drop and are deleted once restock reaches the threshold. `0028` owns the table, view, RPCs, guard trigger and activity entries. | `lib/features/inventory/data/drug_status_providers.dart`, `lib/features/inventory/screens/drug_status_screen.dart`, `lib/features/dashboard/dashboard_screen.dart`, `lib/core/nav/app_shell.dart`, `lib/core/state/invalidation.dart`, `supabase/migrations/0028_low_stock_alerts.sql` |
 
 ---
 

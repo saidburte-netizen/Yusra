@@ -24,6 +24,10 @@ the following additions, which are verified by the cited files:
 | Staff catalogue writes | `lib/core/permissions.dart`, `supabase/migrations/0027_staff_catalogue_and_shift_close.sql`, `supabase/role_permissions.json` | Store keeper can add stock and create a medicine/category from the Add stock and Opening stock pickers; client matrix and RLS policies now agree. |
 | Cashier shift close | `lib/features/shifts/screens/shifts_screen.dart`, `supabase/role_permissions.json` | `/shifts` row action now allows an owning cashier to close their own open shift, matching `close_shift` and the POS control. |
 | Updated architecture | `docs/ARCHITECTURE.md` (evidence map, §f, §g ADR-07/ADR-09/ADR-10/ADR-11) | Records the new function contract, deploy workflow, shared widget, dashboard role-scoping and staff-flow decisions. |
+| Drug status screen | `lib/features/inventory/data/drug_status_providers.dart`, `lib/features/inventory/screens/drug_status_screen.dart`, `lib/features/inventory/inventory_routes.dart` | `/inventory/drug-status` shows live available qty, target progress, Low/Out chips, search/filter and a one-line draft-PO action via 0022 RPC. |
+| Dismissible stock alerts | `supabase/migrations/0028_low_stock_alerts.sql`, `lib/features/dashboard/dashboard_screen.dart`, `lib/core/nav/app_shell.dart` | Admin-only banner, bell count and two admin RPCs; `v_low_stock_alerts` and the restock trigger control re-alerting; all dismissals write `activity_log`. |
+| Realtime + threshold | `lib/features/inventory/data/drug_status_providers.dart`, `lib/core/state/invalidation.dart`, `lib/features/admin/settings_screen.dart` | `stock_batches`/`sales` channels invalidate stock providers; `low_stock_alert_threshold` defaults to 5 and is super-admin editable. |
+| Updated architecture (ADR-12) | `docs/ARCHITECTURE.md`, `docs/CONNECTIVITY.md` §12 | Records the derived-stock contract, threshold rule, alert lifecycle, realtime fan-out and admin-only banner wiring. |
 
 ## 1. Summary
 

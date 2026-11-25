@@ -382,6 +382,43 @@ and the RPC-only-writer rule (`docs/database.md:46-67`) apply to every flow.
 
 ---
 
+## 12. Live drug status + dismissible low-stock alerts
+
+1. **Screen** — `/inventory/drug-status` `DrugStatusScreen`
+   (`lib/features/inventory/inventory_routes.dart`); reached from the Inventory
+   chips, drawer, dashboard card and bell/dashboard alert banner.
+2. **Provider** — `drugStatusProvider`, `lowStockAlertThresholdProvider`,
+   `lowStockAlertsProvider`, `lowStockAlertCountProvider`,
+   `stockAlertRealtimeProvider`
+   (`lib/features/inventory/data/drug_status_providers.dart`). It joins
+   `stockSummaryProvider` + `medicinesProvider` + `reorderSuggestionsProvider`,
+   sorts lowest first and subscribes to `stock_batches` and `sales` via
+   Supabase realtime; the shell watches the subscription once.
+3. **Repository** — `InventoryRepository.createDraftPurchaseOrders` and the new
+   `dismissLowStockAlert` / `dismissAllLowStockAlerts`
+   (`lib/features/inventory/data/inventory_repository.dart`); every mutation is
+   routed through `lib/core/state/invalidation.dart`.
+4. **RPC / table** — `dismiss_low_stock_alert(p_medicine, p_branch)` and
+   `dismiss_all_low_stock_alerts(p_branch)` are admin/security-definer RPCs;
+   `stock_alert_dismissals` stores `medicine_id`, `branch_id`, `dismissed_by`,
+   `dismissed_at`, `qty_at_dismiss` with branch-scoped admin RLS
+   (`supabase/migrations/0028_low_stock_alerts.sql`).
+5. **View / trigger** — `v_low_stock_alerts` reopens an alert when quantity
+   drops below `qty_at_dismiss`; `trg_stock_batches_clear_low_stock_alert`
+   deletes the dismissal once available stock reaches the global threshold.
+6. **Settings** — `app_settings.low_stock_alert_threshold` defaults to 5 and is
+   super-admin editable in `lib/features/admin/settings_screen.dart`.
+7. **Activity** — both RPCs insert actor/role/summary rows into `activity_log`,
+   which feeds `activityProvider` and the dashboard activity panel.
+8. **Dashboard tile** — role-gated `Drug status` card and admin-only banner in
+   `lib/features/dashboard/dashboard_screen.dart`; the bell uses the same
+   `lowStockAlertCountProvider` for super admin/admin.
+9. **Order path** — each Low/Out card calls the existing 0022 draft-PO RPC with
+   one line (`supplier_id`, `medicine_id`, `quantity`, `unit_cost`) and opens
+   `/purchasing/orders/:id`.
+
+---
+
 ## Cross-cutting observations
 
 - **Write authority is centralised in SQL, not Dart.** Every stock/money

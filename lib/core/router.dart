@@ -225,10 +225,12 @@ const Set<String> _publicPaths = {
 String? moduleForLocation(String location) {
   // Most specific routes first; the generic menu-prefix loop below is only a
   // fallback for screens that live directly under a module path.
+  if (location == '/activity') return Modules.audit;
   if (location == '/sales/returns' || location.startsWith('/sales/returns/')) {
     return Modules.saleReturns;
   }
   const stockPaths = [
+    '/inventory/drug-status',
     '/inventory/batches',
     '/inventory/adjustments',
     '/inventory/movements',
@@ -299,6 +301,11 @@ String? redirectFor(AuthState auth, String location) {
   }
   if (location == '/dashboard/expected-expenses' &&
       !canSeeDashboardExpectedExpenses(auth.profile!.role)) {
+    return '/forbidden';
+  }
+  if ((location == '/inventory/opening-stock' ||
+          location == '/inventory/needs-ordering') &&
+      !can(auth.profile!.role, Modules.stock, PermAction.edit)) {
     return '/forbidden';
   }
 

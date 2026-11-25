@@ -272,6 +272,23 @@ class InventoryRepository {
     );
   }
 
+  Future<bool> dismissLowStockAlert({
+    required String medicineId,
+    required String branchId,
+  }) async {
+    final result = await _db.rpc('dismiss_low_stock_alert', params: {
+      'p_medicine': medicineId,
+      'p_branch': branchId,
+    });
+    return result == true;
+  }
+
+  Future<int> dismissAllLowStockAlerts(String branchId) async {
+    final result =
+        await _db.rpc('dismiss_all_low_stock_alerts', params: {'p_branch': branchId});
+    return result is num ? result.toInt() : 0;
+  }
+
   Future<void> adjustStock({
     required String batchId,
     required int change,

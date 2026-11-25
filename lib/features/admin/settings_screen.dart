@@ -49,7 +49,7 @@ const List<String> _textKeys = [
 
 const List<String> _numberKeys = [
   'vat_rate',
-  'low_stock_default',
+  'low_stock_alert_threshold',
   'expiry_alert_days',
   'max_cashier_discount_pct',
 ];
@@ -69,7 +69,8 @@ String? validateSettingNumber(String key, String? value) {
   if (parsed < 0) return _negativeNumber;
   final isPercentage = key == 'vat_rate' || key == 'max_cashier_discount_pct';
   if (isPercentage && parsed > 100) return _percentageRange;
-  final isWhole = key == 'low_stock_default' || key == 'expiry_alert_days';
+  final isWhole = key == 'low_stock_alert_threshold' ||
+      key == 'expiry_alert_days';
   if (isWhole && parsed != parsed.roundToDouble()) return _wholeNumber;
   return null;
 }
@@ -479,8 +480,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                                 number: true)),
                                         SizedBox(
                                             width: 200,
-                                            child: _field(S.lowStockDefault,
-                                                'low_stock_default', canEdit,
+                                            child: _field(
+                                                S.lowStockDefault,
+                                                'low_stock_alert_threshold',
+                                                canEdit &&
+                                                    role == AppRole.superAdmin,
                                                 keyboard: TextInputType.number,
                                                 number: true)),
                                         SizedBox(

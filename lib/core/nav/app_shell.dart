@@ -8,6 +8,7 @@ import '../strings.dart';
 import '../supabase_client.dart';
 import '../theme/app_colors.dart';
 import '../widgets.dart';
+import '../../features/inventory/data/drug_status_providers.dart';
 import 'menu_items.dart';
 
 /// Branch selected in the top bar by a super_admin (null = all branches).
@@ -43,6 +44,7 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(stockAlertRealtimeProvider);
     final dark = Theme.of(context).brightness == Brightness.dark;
     final auth = ref.watch(authProvider);
     final role = auth.profile?.role ?? AppRole.cashier;
@@ -264,6 +266,9 @@ class _AppDrawer extends ConsumerWidget {
                 visible: _can(Modules.dashboard)),
             item('New sale', Icons.point_of_sale, '/pos',
                 visible: _can(Modules.pos)),
+            item('Drug status', Icons.monitor_heart_outlined,
+                '/inventory/drug-status',
+                visible: _can(Modules.stock)),
             item('Inventory', Icons.inventory_2_outlined, '/inventory',
                 visible: _can(Modules.medicines) || _can(Modules.stock)),
             item('Purchasing', Icons.shopping_cart_outlined,
@@ -496,7 +501,7 @@ class _BranchSwitcherState extends ConsumerState<_BranchSwitcher> {
   }
 }
 
-class _NotificationBell extends StatelessWidget {
+class _NotificationBell extends ConsumerWidget {
   const _NotificationBell();
 
   Future<int> _count() async {
@@ -508,7 +513,21 @@ class _NotificationBell extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final role = ref.watch(authProvider).profile?.role ?? AppRole.cashier;
+    final isAdmin = role == AppRole.superAdmin || role == AppRole.admin;
+    if (isAdmin) {
+      final count = ref.watch(lowStockAlertCountProvider);
+      return IconButton(
+        tooltip: S.alerts,
+        onPressed: () => context.go('/dashboard'),
+        icon: Badge(
+          isLabelVisible: count > 0,
+          label: Text('$count'),
+          child: const Icon(Icons.notifications_none_outlined),
+        ),
+      );
+    }
     return FutureBuilder<int>(
       future: _count(),
       builder: (context, snapshot) {

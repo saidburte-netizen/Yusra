@@ -70,6 +70,7 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
     setState(() => _busy = true);
     try {
       await ref.read(salesRepositoryProvider).openShift(branchId, amount);
+      ref.applyMutation(Mutation.openShift);
       ref.invalidate(myOpenShiftProvider);
       ref.invalidate(shiftsProvider);
       if (mounted) AppSnackbar.success(context, 'Shift started.');

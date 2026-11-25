@@ -53,6 +53,11 @@ class _StockOverviewScreenState extends ConsumerState<StockOverviewScreen> {
           onPressed: () => context.go('/inventory/needs-ordering'),
         ),
       ActionChip(
+        avatar: const Icon(Icons.monitor_heart_outlined, size: 18),
+        label: const Text('Drug status'),
+        onPressed: () => context.go('/inventory/drug-status'),
+      ),
+      ActionChip(
         avatar: const Icon(Icons.medication_outlined, size: 18),
         label: const Text('Medicines'),
         onPressed: () => context.go('/inventory/medicines'),
